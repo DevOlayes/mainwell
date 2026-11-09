@@ -65,7 +65,6 @@ export function recoverPersonalSignAddress(message: string, signature: string): 
   if (mod(y * y, P) !== alpha) throw new Error("Wallet signature recovery point is invalid.");
   if (Number(y & 1n) !== recovery) y = P - y;
   const R: Point = { x, y };
-  if (multiply(R, N) !== null) throw new Error("Wallet signature recovery point is invalid.");
   const q = multiply(add(multiply(R, s), multiply(G, -digest)), inv(r, N));
   if (!q) throw new Error("Wallet signature could not be recovered.");
   const publicKey = "0x" + q.x.toString(16).padStart(64, "0") + q.y.toString(16).padStart(64, "0");
