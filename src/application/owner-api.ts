@@ -110,7 +110,11 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     `).bind(wallet.id).all<Record<string, unknown>>();
     if (!assetRows.success) return reply({ error: "Unable to load the wallet asset inventory." }, 503);
     const policyRows = await env.DB.prepare(`
-      SELECT p.asset_id AS assetId, d.id AS destinationId, d.address AS destinationAddress
+      SELECT p.asset_id AS assetId, d.id AS destinationId, d.address AS destinationAddress,
+             p.max_amount_raw AS maxAmountRaw,
+             p.automatic_priority_enabled AS automaticPriorityEnabled,
+             p.admin_initiated_enabled AS adminInitiatedEnabled,
+             p.expires_in_seconds AS expiresInSeconds
       FROM recovery_asset_destination_policies p
       INNER JOIN recovery_destinations d ON d.id = p.destination_id
       WHERE p.network = ? AND d.locked = 1 AND d.is_active = 1
@@ -126,16 +130,25 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       adminOperatorConfigured: Boolean(env.MAINWELL_ADMIN_OPERATOR),
       executorArtifactAvailable: false
     };
+    const assetPolicyMap = new Map(policyRows.results.map(row => [String(row.assetId), row]));
+    const scopedAssets = assetRows.results.map(asset => {
+      const policy = assetPolicyMap.get(String(asset.assetId));
+      const isToken = typeof asset.tokenAddress === "string" && ADDRESS.test(asset.tokenAddress);
+      const cap = typeof policy?.maxAmountRaw === "string" && /^[1-9][0-9]{0,77}$/.test(policy.maxAmountRaw);
+      const modes = Boolean(Number(policy?.automaticPriorityEnabled) || Number(policy?.adminInitiatedEnabled));
+      return { ...asset, policy: policy ?? null, authorizationEligible: Boolean(isToken && policy && cap && modes) };
+    });
     const blockers: string[] = [];
     if (!readiness.sourceWalletLocked) blockers.push("The administrator has not locked this exact source wallet and network.");
     if (!readiness.rpcConfigured) blockers.push("The trusted RPC endpoint is not configured for this network.");
     if (!readiness.executorCodeHashConfigured) blockers.push("The reviewed executor runtime hash is not configured for this network.");
     if (!readiness.automationOperatorConfigured || !readiness.adminOperatorConfigured) blockers.push("Trusted automatic and administrator operator identities are not fully configured.");
+    if (scopedAssets.some(asset => !asset.authorizationEligible)) blockers.push("One or more monitored assets do not have a valid ERC-20 cap, locked destination, and at least one enabled execution mode.");
     blockers.push("The reviewed, reproducible executor deployment artifact and independent security review are still outstanding.");
     return reply({
       network, chainId: session.chainId, ownerWallet: owner,
       sourceWallet: { id: wallet.id, status: wallet.status, adminLocked: readiness.sourceWalletLocked },
-      assets: assetRows.results,
+      assets: scopedAssets,
       policies: policyRows.results,
       readiness, blockers
     });
