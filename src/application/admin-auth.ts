@@ -49,14 +49,14 @@ export async function verifyTotp(secret:Uint8Array,code:string,now=Date.now()):P
 function base32Encode(bytes:Uint8Array):string{const alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";let bits=0,value=0,out="";for(const byte of bytes){value=(value<<8)|byte;bits+=8;while(bits>=5){out+=alphabet[(value>>(bits-5))&31];bits-=5;value&=(1<<bits)-1;}}if(bits)out+=alphabet[(value<<(5-bits))&31];return out;}
 async function encryptTotpSecret(secret:string,keyText:string):Promise<string>{const keyBytes=b64(keyText);if(keyBytes.length!==32)throw new Error("MFA encryption key must be 32 bytes.");const key=await crypto.subtle.importKey("raw",keyBytes,{name:"AES-GCM"},false,["encrypt"]);const iv=new Uint8Array(12);crypto.getRandomValues(iv);const encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(secret));const enc=(x:Uint8Array)=>btoa(String.fromCharCode(...x));return "v1:"+enc(iv)+":"+enc(new Uint8Array(encrypted));}
 async function passwordHash(password:string):Promise<string>{const salt=new Uint8Array(16);crypto.getRandomValues(salt);const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveBits"]);const bits=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt,iterations:310000},key,256);const enc=(x:Uint8Array)=>btoa(String.fromCharCode(...x));return "pbkdf2-sha256$310000$"+enc(salt)+"$"+enc(new Uint8Array(bits));}
-\nexport async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promise<Response|null>{
+export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promise<Response|null>{
  const url=new URL(request.url),now=new Date().toISOString();
 
  if(url.pathname==="/api/admin/auth/bootstrap"&&request.method==="POST"){
   if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
   if(!env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN||!env.ADMIN_MFA_ENCRYPTION_KEY)return json({error:"First-admin bootstrap secrets are not configured."},503);
   const b=await read(request),token=typeof b?.bootstrapToken==="string"?b.bootstrapToken:"",email=typeof b?.email==="string"?b.email.trim().toLowerCase():"",password=typeof b?.password==="string"?b.password:"";
-  if(!(await equal(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(token))),new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN)))))||!/^\\S+@\\S+\\.\\S+$/.test(email)||email.length>254||password.length<14||password.length>1024)return json({error:"Bootstrap credentials are invalid."},401);
+  if(!(await equal(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(token))),new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN)))))||!email.includes("@")||!email.includes(".")||email.length>254||password.length<14||password.length>1024)return json({error:"Bootstrap credentials are invalid."},401);
   const count=await env.DB.prepare("SELECT COUNT(*) AS total FROM admin_accounts").first<{total:number}>();
   if((count?.total??0)!==0)return json({error:"Initial administrator has already been created."},409);
   const secretBytes=new Uint8Array(20);crypto.getRandomValues(secretBytes);const secret=base32Encode(secretBytes),id=crypto.randomUUID(),now=new Date().toISOString();
@@ -77,7 +77,7 @@ async function passwordHash(password:string):Promise<string>{const salt=new Uint
   await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'admin.mfa.enabled','admin_account',?,'{}',?)").bind(account.id,account.id,now).run();
   return json({mfaEnabled:true,loginRequired:true});
  }
-\n if(url.pathname==="/api/admin/auth/login"&&request.method==="POST"){
+ if(url.pathname==="/api/admin/auth/login"&&request.method==="POST"){
   if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
   const b=await read(request),email=typeof b?.email==="string"?b.email.trim().toLowerCase():"",password=typeof b?.password==="string"?b.password:"",otp=typeof b?.otp==="string"?b.otp:"";
   if(email.length>254||password.length>1024||!/^\S+@\S+\.\S+$/.test(email))return json({error:"Invalid administrator credentials."},401);
