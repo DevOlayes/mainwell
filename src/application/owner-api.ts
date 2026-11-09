@@ -106,11 +106,13 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       WHERE owner_address = ? AND network = ?
       LIMIT 1
     `).bind(owner, network).first<Record<string, unknown>>();
+    const missingWalletHashName = GRANT_HASH[network];
+    const missingWalletConfiguredHash = missingWalletHashName ? env[missingWalletHashName] as string | undefined : undefined;
     if (!wallet) return reply({
       network, chainId: session.chainId, ownerWallet: owner,
       sourceWallet: null, assets: [], policies: [],
       readiness: { sourceWalletLocked: false, rpcConfigured: Boolean(env[GRANT_RPC[network] as keyof OwnerApiEnv]),
-        executorCodeHashConfigured: !env[GRANT_HASH[network] as keyof OwnerApiEnv] || env[GRANT_HASH[network] as keyof OwnerApiEnv]?.toLowerCase() === EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase(),
+        executorCodeHashConfigured: !missingWalletConfiguredHash || missingWalletConfiguredHash.toLowerCase() === EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase(),
         automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
         adminOperatorConfigured: Boolean(env.MAINWELL_ADMIN_OPERATOR),
         executorArtifactAvailable: true },
