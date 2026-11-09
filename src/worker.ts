@@ -1,10 +1,11 @@
 import { recoverPersonalSignAddress } from "./adapters/evm-signature";
 import { handleOwnerApi, type OwnerApiEnv } from "./application/owner-api";
 import { handleAdminDestinationApi } from "./application/admin-destination-api";
+import { handleAdminAuthApi } from "./application/admin-auth";
 interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]; meta?: { changes?: number } }
 interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
 interface D1Database { prepare(query: string): D1Statement; batch<T = unknown>(statements: D1Statement[]): Promise<D1Result<T>[]> }
-interface Env extends OwnerApiEnv {}
+interface Env extends OwnerApiEnv { ADMIN_MFA_ENCRYPTION_KEY?: string }
 const SESSION_SECONDS = 604800, CHALLENGE_SECONDS = 300;
 const CHAINS = new Set([1, 137, 56, 43114, 42161, 10, 8453]);
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
@@ -59,6 +60,10 @@ export default { async fetch(request: Request,env: Env): Promise<Response> {
     return json({authenticated:true,wallet:c.wallet_address,chainId,expiresAt:expires},200,{"set-cookie":"mw_owner_session="+token+"; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age="+SESSION_SECONDS});
   }
   if(url.pathname==="/api/auth/me"&&request.method==="GET"){const s=await session(request,env);return s?json({authenticated:true,...s}):json({authenticated:false},401);}
+  if(url.pathname.startsWith("/api/admin/auth/")){
+    const authResponse=await handleAdminAuthApi(request,env);
+    if(authResponse)return authResponse;
+  }
   if(url.pathname.startsWith("/api/admin/")){
     const token=cookie(request,"mw_admin_session");
     if(!token||!/^[0-9a-f]{64}$/.test(token))return json({error:"MFA-verified administrator session required."},401);
