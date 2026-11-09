@@ -28,6 +28,90 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{max-width:1180px;m
 @media(max-width:1050px){.admin-nav{left:12px;width:180px}.console-head,#overviewView,.placeholder-view,.console-grid{margin-left:194px}.destination-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:850px){.admin-nav{position:static;width:auto;display:flex;overflow-x:auto;white-space:nowrap;margin:0 0 18px}.admin-nav button{flex:0 0 auto}.console-head,#overviewView,.placeholder-view,.console-grid{margin-left:0}.overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.destination-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.overview-grid{grid-template-columns:1fr 1fr}.metric{padding:13px}.metric strong{font-size:22px}.destination-grid{grid-template-columns:1fr}.admin-nav{gap:4px}.admin-nav button{padding:8px 10px;font-size:11px}}
 
+
+/* Compact, responsive admin density */
+.admin-nav{top:88px;left:max(12px,calc((100vw - 1440px)/2));width:184px;gap:2px;padding:7px;border-radius:11px}
+.admin-nav button{min-height:34px;padding:7px 9px;font-size:11.5px;line-height:1.25;border-radius:7px}
+.shell{max-width:1440px;padding:18px 22px 36px}
+.topbar{margin-bottom:24px}
+.brand{gap:9px;font-size:13px}
+.mark{width:32px;height:32px;border-radius:9px;font-size:16px}
+.secure{padding:6px 9px;font-size:11px}
+.console{margin-top:4px}
+.console-head,#overviewView,.placeholder-view,.console-grid{margin-left:202px}
+.console-head{gap:12px;margin-bottom:16px}
+.console-head h1{font-size:25px;line-height:1.15;margin:3px 0}
+.console-head .muted,.view-head .muted{font-size:12px;line-height:1.45}
+.view-head{gap:12px;margin-bottom:13px}
+.view-head h2{font-size:19px;margin:3px 0}
+.eyebrow{font-size:9px;letter-spacing:.16em}
+.muted{font-size:12px;line-height:1.5}
+.console-grid{gap:12px}
+.panel{padding:15px;border-radius:12px}
+.panel h2{font-size:14px;margin-bottom:5px}
+.panel .muted{margin-bottom:11px}
+.panel .field{margin:9px 0}
+.field{margin:11px 0}
+.field label{font-size:11px;margin-bottom:5px}
+.field input,.field select{min-height:38px;padding:9px 11px;font-size:12px;border-radius:8px}
+.primary{min-height:38px;padding:9px 13px;font-size:12px;border-radius:8px;margin-top:5px}
+.secondary{min-height:34px;padding:7px 10px;font-size:11.5px;border-radius:8px}
+.status{font-size:11px;min-height:17px;margin:8px 0 0}
+.item{padding:10px 0;font-size:12px;gap:10px}
+.tag{font-size:9px;padding:4px 7px}
+.empty{font-size:12px;padding:9px 0}
+.overview-grid{gap:9px;margin-bottom:13px}
+.metric{padding:12px;border-radius:11px}
+.metric small{font-size:9px;margin-bottom:6px;letter-spacing:.035em}
+.metric strong{font-size:22px}
+.metric span{font-size:10px;margin-top:3px}
+.destination-grid{gap:10px}
+.destination-card{padding:12px;border-radius:11px}
+.destination-card h3{font-size:13px;margin-bottom:4px}
+.destination-card .network-meta{font-size:10px;margin-bottom:9px}
+.destination-card input{min-height:36px;padding:8px 9px;font-size:11px;border-radius:7px}
+.destination-card .current-address{font-size:10px;margin:7px 0;min-height:24px}
+.destination-card .secondary{margin-top:7px}
+.destination-card .status{font-size:10px;min-height:15px}
+.section-note{padding:12px 14px;border-radius:10px;font-size:11.5px;line-height:1.5;margin-bottom:12px}
+.setup-steps{gap:8px;margin:10px 0 13px}
+.setup-step{padding:10px;border-radius:9px}
+.setup-step .step-no{font-size:9px}
+.setup-step b{font-size:11.5px;margin:5px 0 4px}
+.setup-step p{font-size:10px;line-height:1.4}
+.setup-step a{font-size:10px;margin-top:7px}
+@media(max-width:1050px){
+ .admin-nav{left:10px;width:164px}
+ .console-head,#overviewView,.placeholder-view,.console-grid{margin-left:178px}
+ .destination-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:850px){
+ .shell{padding:14px 14px 28px}
+ .topbar{margin-bottom:18px}
+ .admin-nav{position:static;width:auto;display:flex;overflow-x:auto;white-space:nowrap;margin:0 0 14px;scrollbar-width:thin}
+ .admin-nav button{flex:0 0 auto;min-height:32px;padding:7px 9px}
+ .console-head,#overviewView,.placeholder-view,.console-grid{margin-left:0}
+ .console-head{margin-bottom:14px}
+ .console-head h1{font-size:23px}
+ .console-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .wide{grid-column:1/-1}
+ .overview-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+ .destination-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:600px){
+ .console-grid{grid-template-columns:1fr}
+ .wide{grid-column:auto}
+ .overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .setup-steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .console-head{align-items:flex-start}
+ .console-head>div:last-child{width:100%}
+}
+@media(max-width:420px){
+ .destination-grid,.setup-steps{grid-template-columns:1fr}
+ .secure{font-size:10px}
+ .overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
 </style></head><body><div class="shell">
 <header class="topbar"><div class="brand"><div class="mark">M</div><div>MAINWELL<small>RECOVERY INFRASTRUCTURE</small></div></div><div class="secure"><i class="dot"></i> Secure administrator access</div></header>
 <section id="loginView" class="layout">
