@@ -34,6 +34,22 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.asset_destination_policy.set','recovery_asset_destination_policy',?,?,?)").bind(admin.adminId,network+":"+assetId,JSON.stringify({destinationId,address:dest.address}),now).run();
   return response({updated:true,network,assetId,destinationId,address:dest.address,ownerApprovalRequired:true});
  }
+ if(path==="/api/admin/recovery-destination-policies"&&request.method==="GET"){
+  const network=url.searchParams.get("network");
+  if(network&&!(network in NETWORK_CHAIN))return response({error:"Unsupported network."},400);
+  const sql="SELECT p.network,p.asset_id AS assetId,p.destination_id AS destinationId,d.address AS destinationAddress,p.updated_at AS updatedAt FROM recovery_asset_destination_policies p INNER JOIN recovery_destinations d ON d.id=p.destination_id"+(network?" WHERE p.network=?":"")+" ORDER BY p.network,p.asset_id";
+  const stmt=env.DB.prepare(sql),rows=await (network?stmt.bind(network):stmt).all<Record<string,unknown>>();
+  return rows.success?response({policies:rows.results}):response({error:"Unable to load asset destination policies."},503);
+ }
+ const clearPolicy=path.match(/^\/api\/admin\/recovery-destination-policies\/([a-z-]+)\/([^/]+)$/);
+ if(clearPolicy&&request.method==="DELETE"){
+  if(!originOk(request,url))return response({error:"Origin check failed."},403);
+  let assetId:string;try{assetId=decodeURIComponent(clearPolicy[2]);}catch{return response({error:"Invalid asset identifier."},400);}
+  const removed=await env.DB.prepare("DELETE FROM recovery_asset_destination_policies WHERE network=? AND asset_id=?").bind(clearPolicy[1],assetId).run();
+  if(!removed.success)return response({error:"Unable to clear destination policy."},503);
+  await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.asset_destination_policy.clear','recovery_asset_destination_policy',?,'{}',?)").bind(admin.adminId,clearPolicy[1]+":"+assetId,now).run();
+  return response({cleared:true});
+ }
  if(path==="/api/admin/recovery-destinations"&&request.method==="GET"){
   const rows=await env.DB.prepare("SELECT id,network,address,locked,is_active,updated_by,updated_at FROM recovery_destinations ORDER BY network,is_active DESC,updated_at DESC").all<Record<string,unknown>>();
   return rows.success?response({destinations:rows.results}):response({error:"Unable to load recovery destinations."},503);
