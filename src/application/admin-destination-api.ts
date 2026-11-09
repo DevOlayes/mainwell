@@ -9,7 +9,7 @@ const RPC_BY_NETWORK = {
  ethereum:"EVM_RPC_ETHEREUM", polygon:"EVM_RPC_POLYGON", bsc:"EVM_RPC_BSC",
  avalanche:"EVM_RPC_AVALANCHE", arbitrum:"EVM_RPC_ARBITRUM", optimism:"EVM_RPC_OPTIMISM", base:"EVM_RPC_BASE"
 } as const;
-async function verifyRegisteredToken(env:OwnerApiEnv,network:keyof typeof NETWORK_CHAIN,address:string,decimals:number):Promise<void>{
+async function verifyRegisteredToken(env:OwnerApiEnv,network:keyof typeof RPC_BY_NETWORK,address:string,decimals:number):Promise<void>{
  const rpcName=RPC_BY_NETWORK[network],rpcUrl=env[rpcName];
  if(!rpcUrl)throw new Error("RPC_NOT_CONFIGURED");
  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);
