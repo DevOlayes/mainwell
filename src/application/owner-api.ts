@@ -85,6 +85,19 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     return rows.success ? reply({ destinations: rows.results }) : reply({ error: "Unable to load locked destinations." }, 503);
   }
 
+  if (path === "/api/owner/recovery-destination-policies" && request.method === "GET") {
+    const network = url.searchParams.get("network");
+    if (!network || !NETWORKS.has(network)) return reply({ error: "A supported network is required." }, 400);
+    const rows = await env.DB.prepare(`
+      SELECT p.asset_id AS assetId, d.id AS destinationId, d.address AS destinationAddress
+      FROM recovery_asset_destination_policies p
+      INNER JOIN recovery_destinations d ON d.id = p.destination_id
+      WHERE p.network = ? AND d.locked = 1 AND d.is_active = 1
+      ORDER BY p.asset_id
+    `).bind(network).all<Record<string, unknown>>();
+    return rows.success ? reply({ network, policies: rows.results }) : reply({ error: "Unable to load asset destination policies." }, 503);
+  }
+
   if (path === "/api/owner/profile" && request.method === "GET") {
     const result = await env.DB.prepare(`
       SELECT COUNT(*) AS wallet_count FROM recovery_wallets WHERE owner_address = ?
@@ -301,7 +314,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     if (ids.length) {
       const placeholders = ids.map(() => "?").join(",");
       const assets = await env.DB.prepare(`
-        SELECT a.grant_id, a.asset_id, a.token_address, a.amount_kind, a.max_amount_raw, a.owner_acknowledged, a.revoked_at, d.id AS selected_destination_id, d.address AS selected_destination_address
+        SELECT a.grant_id, a.asset_id, a.token_address, a.amount_kind, a.max_amount_raw, a.owner_acknowledged, a.revoked_at, a.destination_address, d.id AS selected_destination_id, d.address AS selected_destination_address
         FROM recovery_grant_assets a
         LEFT JOIN recovery_asset_destinations x ON x.grant_id = a.grant_id AND x.asset_id = a.asset_id
         LEFT JOIN recovery_destinations d ON d.id = x.destination_id AND d.is_active = 1
@@ -314,6 +327,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
         assetsByGrant.get(key)!.push({
           assetId: a.asset_id, tokenAddress: a.token_address, amountKind: a.amount_kind,
           maxAmountRaw: a.max_amount_raw, ownerAcknowledged: Boolean(a.owner_acknowledged), revokedAt: a.revoked_at,
+          destinationAddress: a.destination_address,
           selectedDestinationId: a.selected_destination_id ?? null, selectedDestinationAddress: a.selected_destination_address ?? null
         });
       }
