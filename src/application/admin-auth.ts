@@ -12,13 +12,35 @@ function sameOrigin(req:Request,url:URL):boolean{return req.headers.get("origin"
 async function read(req:Request):Promise<Record<string,unknown>|null>{try{if(Number(req.headers.get("content-length")??"0")>4096)return null;const raw=await req.text();if(raw.length>4096)return null;const v:unknown=JSON.parse(raw);return v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:null;}catch{return null;}}
 function cookie(req:Request):string|null{for(const p of (req.headers.get("cookie")??"").split(";")){const [k,...v]=p.trim().split("=");if(k==="mw_admin_session")return v.join("=")||null;}return null;}
 function equal(a:Uint8Array,b:Uint8Array):boolean{if(a.length!==b.length)return false;let d=0;for(let i=0;i<a.length;i++)d|=a[i]^b[i];return d===0;}
+async function pbkdf2Stage(passwordBytes:Uint8Array,salt:Uint8Array,iterations:number):Promise<Uint8Array>{
+ const key=await crypto.subtle.importKey("raw",passwordBytes,"PBKDF2",false,["deriveBits"]);
+ const bits=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt,iterations},key,256);
+ return new Uint8Array(bits);
+}
+const HASH_STAGE_ITERATIONS=[100000,100000,100000,10000] as const;
+function stageSalt(salt:Uint8Array,index:number):Uint8Array{
+ const label=new TextEncoder().encode("Mainwell admin password hash stage "+index+"\\0");
+ const out=new Uint8Array(salt.length+label.length);out.set(salt);out.set(label,salt.length);return out;
+}
+export async function hashAdminPassword(password:string):Promise<string>{
+ const salt=new Uint8Array(16);crypto.getRandomValues(salt);
+ let derived=new TextEncoder().encode(password);
+ for(let i=0;i<HASH_STAGE_ITERATIONS.length;i++)derived=await pbkdf2Stage(derived,stageSalt(salt,i+1),HASH_STAGE_ITERATIONS[i]);
+ const enc=(x:Uint8Array)=>btoa(String.fromCharCode(...x));
+ return "pbkdf2-sha256-chain$310000$"+enc(salt)+"$"+enc(derived);
+}
 export async function verifyAdminPassword(stored:string,password:string):Promise<boolean>{
- const p=stored.split("$");if(p.length!==4||p[0]!=="pbkdf2-sha256")return false;
- const iterations=Number(p[1]);if(!Number.isInteger(iterations)||iterations<100000||iterations>600000)return false;
- try{const salt=b64(p[2]),expected=b64(p[3]);if(salt.length<16||expected.length!==32)return false;
-  const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveBits"]);
-  const bits=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt,iterations},key,256);
-  return equal(new Uint8Array(bits),expected);
+ const p=stored.split("$");if(p.length!==4)return false;
+ try{
+  const salt=b64(p[2]),expected=b64(p[3]);if(salt.length<16||expected.length!==32)return false;
+  if(p[0]==="pbkdf2-sha256-chain"&&p[1]==="310000"){
+   let derived=new TextEncoder().encode(password);
+   for(let i=0;i<HASH_STAGE_ITERATIONS.length;i++)derived=await pbkdf2Stage(derived,stageSalt(salt,i+1),HASH_STAGE_ITERATIONS[i]);
+   return equal(derived,expected);
+  }
+  if(p[0]!=="pbkdf2-sha256")return false;
+  const iterations=Number(p[1]);if(!Number.isInteger(iterations)||iterations!==100000)return false;
+  return equal(await pbkdf2Stage(new TextEncoder().encode(password),salt,iterations),expected);
  }catch{return false;}
 }
 function base32(s:string):Uint8Array{
@@ -48,7 +70,7 @@ export async function verifyTotp(secret:Uint8Array,code:string,now=Date.now()):P
 
 function base32Encode(bytes:Uint8Array):string{const alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";let bits=0,value=0,out="";for(const byte of bytes){value=(value<<8)|byte;bits+=8;while(bits>=5){out+=alphabet[(value>>(bits-5))&31];bits-=5;value&=(1<<bits)-1;}}if(bits)out+=alphabet[(value<<(5-bits))&31];return out;}
 async function encryptTotpSecret(secret:string,keyText:string):Promise<string>{const keyBytes=b64(keyText);if(keyBytes.length!==32)throw new Error("MFA encryption key must be 32 bytes.");const key=await crypto.subtle.importKey("raw",keyBytes,{name:"AES-GCM"},false,["encrypt"]);const iv=new Uint8Array(12);crypto.getRandomValues(iv);const encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(secret));const enc=(x:Uint8Array)=>btoa(String.fromCharCode(...x));return "v1:"+enc(iv)+":"+enc(new Uint8Array(encrypted));}
-async function passwordHash(password:string):Promise<string>{const salt=new Uint8Array(16);crypto.getRandomValues(salt);const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveBits"]);const bits=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt,iterations:310000},key,256);const enc=(x:Uint8Array)=>btoa(String.fromCharCode(...x));return "pbkdf2-sha256$310000$"+enc(salt)+"$"+enc(new Uint8Array(bits));}
+const passwordHash=hashAdminPassword;
 export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promise<Response|null>{
  const url=new URL(request.url),now=new Date().toISOString();
 
