@@ -159,7 +159,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     if (!readiness.rpcConfigured) blockers.push("The trusted RPC endpoint is not configured for this network.");
 
     if (!readiness.automationOperatorConfigured || !readiness.adminOperatorConfigured) blockers.push("Trusted automatic and administrator operator identities are not fully configured.");
-    if (!readiness.securityReviewPassed) blockers.push("Independent executor security review has not been approved.");\n    if (!readiness.securityReviewPassed) blockers.push("Independent executor security review has not been approved.");
+    if (!readiness.securityReviewPassed) blockers.push("Independent executor security review has not been approved.");
     if (scopedAssets.some(asset => !asset.authorizationEligible)) blockers.push("One or more monitored assets do not have a valid ERC-20 cap, locked destination, and at least one enabled execution mode.");
     if (!readiness.executorArtifactAvailable) blockers.push("The reproducible executor deployment artifact is unavailable.");
     return reply({
