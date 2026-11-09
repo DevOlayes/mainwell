@@ -17,7 +17,8 @@ export interface OwnerApiEnv extends Omit<MonitorEnv, "DB"> {
   MAINWELL_EXECUTOR_CODE_HASH_ARBITRUM?: string; MAINWELL_EXECUTOR_CODE_HASH_OPTIMISM?: string;
   MAINWELL_EXECUTOR_CODE_HASH_BASE?: string;
   MAINWELL_AUTOMATION_OPERATOR?: string;
-  MAINWELL_ADMIN_OPERATOR?: string;\n  MAINWELL_EXECUTOR_SECURITY_REVIEW_APPROVED?: string;
+  MAINWELL_ADMIN_OPERATOR?: string;
+  MAINWELL_EXECUTOR_SECURITY_REVIEW_APPROVED?: string;
 }
 export interface OwnerSession { wallet: string; chainId: number }
 const NETWORK_CHAIN: Partial<Record<NetworkId, number>> = {
@@ -142,6 +143,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
       adminOperatorConfigured: Boolean(env.MAINWELL_ADMIN_OPERATOR),
       executorArtifactAvailable: true,
+      securityReviewPassed: env.MAINWELL_EXECUTOR_SECURITY_REVIEW_APPROVED === "true",
       executionOperators: { automation: env.MAINWELL_AUTOMATION_OPERATOR ?? "0x0000000000000000000000000000000000000000", administrator: env.MAINWELL_ADMIN_OPERATOR ?? "0x0000000000000000000000000000000000000000" }
     };
     const assetPolicyMap = new Map(policyRows.results.map(row => [String(row.assetId), row]));
@@ -156,7 +158,8 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     if (!readiness.sourceWalletLocked) blockers.push("The administrator has not locked this exact source wallet and network.");
     if (!readiness.rpcConfigured) blockers.push("The trusted RPC endpoint is not configured for this network.");
 
-    if (!readiness.automationOperatorConfigured || !readiness.adminOperatorConfigured) blockers.push("Trusted automatic and administrator operator identities are not fully configured.");\n    if (!readiness.securityReviewPassed) blockers.push("Independent executor security review has not been approved.");
+    if (!readiness.automationOperatorConfigured || !readiness.adminOperatorConfigured) blockers.push("Trusted automatic and administrator operator identities are not fully configured.");
+    if (!readiness.securityReviewPassed) blockers.push("Independent executor security review has not been approved.");\n    if (!readiness.securityReviewPassed) blockers.push("Independent executor security review has not been approved.");
     if (scopedAssets.some(asset => !asset.authorizationEligible)) blockers.push("One or more monitored assets do not have a valid ERC-20 cap, locked destination, and at least one enabled execution mode.");
     if (!readiness.executorArtifactAvailable) blockers.push("The reproducible executor deployment artifact is unavailable.");
     return reply({
