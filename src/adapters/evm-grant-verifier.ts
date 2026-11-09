@@ -18,6 +18,9 @@ export interface EvmGrantVerifierConfig {
   trustedExecutorCodeHash: string;
   /** Chain ID pinned to this RPC endpoint and executor hash configuration. */
   expectedChainId: number;
+  /** Trusted service identities that must match immutable executor constructor values. */
+  expectedAutomationOperator: string;
+  expectedAdminOperator: string;
   /** Optional fetch injection for deterministic tests. */
   fetcher?: typeof fetch;
 }
@@ -48,6 +51,7 @@ export class EvmGrantVerifier {
     if (!/^https:\/\//i.test(config.rpcUrl)) throw new Error("A server-configured HTTPS RPC URL is required.");
     if (!HASH.test(config.trustedExecutorCodeHash)) throw new Error("Trusted executor code hash is invalid.");
     if (!Number.isSafeInteger(config.expectedChainId) || config.expectedChainId <= 0) throw new Error("Expected EVM chain ID must be configured.");
+    if (!ADDRESS.test(config.expectedAutomationOperator) || !ADDRESS.test(config.expectedAdminOperator)) throw new Error("Trusted execution operator addresses must be configured.");
   }
 
   private async rpc(method: string, params: unknown[]): Promise<unknown> {
@@ -131,6 +135,14 @@ export class EvmGrantVerifier {
     if (automaticEnabled !== grant.executionModes.includes("automatic-priority") ||
         adminEnabled !== grant.executionModes.includes("admin-initiated")) {
       throw new Error("On-chain execution modes do not match the owner's declared authorization.");
+    }
+    const automationOperator = this.decodeAddress(await this.call(grant.executorAddress, "automationOperator()"));
+    const adminOperator = this.decodeAddress(await this.call(grant.executorAddress, "adminOperator()"));
+    if (automationOperator !== grant.executionOperators.automation.toLowerCase() ||
+        adminOperator !== grant.executionOperators.administrator.toLowerCase() ||
+        automationOperator !== this.config.expectedAutomationOperator.toLowerCase() ||
+        adminOperator !== this.config.expectedAdminOperator.toLowerCase()) {
+      throw new Error("Immutable executor operators do not match the owner grant and trusted Mainwell service identities.");
     }
     const authorizedCount = BigInt("0x" + (await this.call(grant.executorAddress,"authorizedAssetCount()")).slice(-64));
     if (authorizedCount !== BigInt(grant.assets.length)) throw new Error("On-chain authorized asset count does not match the grant.");
