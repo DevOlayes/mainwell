@@ -80,6 +80,67 @@ function ownerFilter(session: OwnerSession): string { return session.wallet.toLo
 export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session: OwnerSession): Promise<Response | null> {
   const url = new URL(request.url), path = url.pathname, owner = ownerFilter(session);
 
+  // Build a read-only authorization plan from the authenticated wallet and admin-locked policy.
+  // This is a preflight only: it never deploys contracts or requests token approvals.
+  if (path === "/api/owner/authorization-plan" && request.method === "GET") {
+    const network = Object.entries(NETWORK_CHAIN).find(([, chain]) => chain === session.chainId)?.[0] as NetworkId | undefined;
+    if (!network) return reply({ error: "Unsupported wallet network." }, 400);
+    const wallet = await env.DB.prepare(`
+      SELECT id, network, chain_id, status, admin_locked
+      FROM recovery_wallets
+      WHERE owner_address = ? AND network = ?
+      LIMIT 1
+    `).bind(owner, network).first<Record<string, unknown>>();
+    if (!wallet) return reply({
+      network, chainId: session.chainId, ownerWallet: owner,
+      sourceWallet: null, assets: [], policies: [],
+      readiness: { sourceWalletLocked: false, rpcConfigured: Boolean(env[GRANT_RPC[network] as keyof OwnerApiEnv]),
+        executorCodeHashConfigured: Boolean(env[GRANT_HASH[network] as keyof OwnerApiEnv]),
+        automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
+        adminOperatorConfigured: Boolean(env.MAINWELL_ADMIN_OPERATOR),
+        executorArtifactAvailable: false },
+      blockers: ["This exact wallet and network have not yet been registered by an administrator."]
+    });
+    const assetRows = await env.DB.prepare(`
+      SELECT asset_ref AS assetId, token_address AS tokenAddress, symbol, name,
+             amount_raw AS balanceRaw, decimals, observed_at AS observedAt
+      FROM wallet_assets
+      WHERE wallet_id = ?
+      ORDER BY symbol, asset_ref
+    `).bind(wallet.id).all<Record<string, unknown>>();
+    if (!assetRows.success) return reply({ error: "Unable to load the wallet asset inventory." }, 503);
+    const policyRows = await env.DB.prepare(`
+      SELECT p.asset_id AS assetId, d.id AS destinationId, d.address AS destinationAddress
+      FROM recovery_asset_destination_policies p
+      INNER JOIN recovery_destinations d ON d.id = p.destination_id
+      WHERE p.network = ? AND d.locked = 1 AND d.is_active = 1
+      ORDER BY p.asset_id
+    `).bind(network).all<Record<string, unknown>>();
+    if (!policyRows.success) return reply({ error: "Unable to load locked asset destination policies." }, 503);
+    const rpcName = GRANT_RPC[network], hashName = GRANT_HASH[network];
+    const readiness = {
+      sourceWalletLocked: Number(wallet.admin_locked) === 1 && wallet.status !== "revoked",
+      rpcConfigured: Boolean(rpcName && env[rpcName]),
+      executorCodeHashConfigured: Boolean(hashName && env[hashName]),
+      automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
+      adminOperatorConfigured: Boolean(env.MAINWELL_ADMIN_OPERATOR),
+      executorArtifactAvailable: false
+    };
+    const blockers: string[] = [];
+    if (!readiness.sourceWalletLocked) blockers.push("The administrator has not locked this exact source wallet and network.");
+    if (!readiness.rpcConfigured) blockers.push("The trusted RPC endpoint is not configured for this network.");
+    if (!readiness.executorCodeHashConfigured) blockers.push("The reviewed executor runtime hash is not configured for this network.");
+    if (!readiness.automationOperatorConfigured || !readiness.adminOperatorConfigured) blockers.push("Trusted automatic and administrator operator identities are not fully configured.");
+    blockers.push("The reviewed, reproducible executor deployment artifact and independent security review are still outstanding.");
+    return reply({
+      network, chainId: session.chainId, ownerWallet: owner,
+      sourceWallet: { id: wallet.id, status: wallet.status, adminLocked: readiness.sourceWalletLocked },
+      assets: assetRows.results,
+      policies: policyRows.results,
+      readiness, blockers
+    });
+  }
+
   if (path === "/api/owner/recovery-destinations" && request.method === "GET") {
     const network = url.searchParams.get("network");
     if (network && !NETWORKS.has(network)) return reply({ error: "Unsupported network." }, 400);
