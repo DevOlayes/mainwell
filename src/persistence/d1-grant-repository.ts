@@ -52,6 +52,7 @@ interface GrantAssetRow {
   max_amount_raw: string | null;
   owner_acknowledged: number;
   revoked_at: string | null;
+  destination_address: string;
 }
 
 function parseModes(value: string): RecoveryAuthorizationGrant["executionModes"] {
@@ -66,6 +67,7 @@ function mapAsset(row: GrantAssetRow): RecoveryGrantAsset {
   return {
     assetId: row.asset_id,
     ...(row.token_address ? { tokenAddress: row.token_address } : {}),
+    destinationAddress: row.destination_address,
     amount: row.amount_kind === "capped"
       ? { kind: "capped", maxAmountRaw: row.max_amount_raw ?? "" }
       : { kind: "unlimited-allowance", ownerAcknowledged: true },
@@ -125,7 +127,7 @@ export class D1GrantRepository {
         asset.amount.kind,
         asset.amount.kind === "capped" ? asset.amount.maxAmountRaw : null,
         asset.amount.kind === "unlimited-allowance" && asset.amount.ownerAcknowledged ? 1 : 0,
-        grant.grantId
+        asset.destinationAddress.toLowerCase(), grant.grantId
       ));
     }
 
@@ -148,7 +150,7 @@ export class D1GrantRepository {
     if (!row || row.verification_status !== "verified") return null;
 
     const assets = await this.db.prepare(`
-      SELECT asset_id, token_address, amount_kind, max_amount_raw, owner_acknowledged, revoked_at
+      SELECT asset_id, token_address, amount_kind, max_amount_raw, owner_acknowledged, revoked_at, destination_address
       FROM recovery_grant_assets WHERE grant_id = ? ORDER BY asset_id
     `).bind(grantId).all<GrantAssetRow>();
 
