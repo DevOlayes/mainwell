@@ -10,6 +10,42 @@ function originOk(req:Request,url:URL):boolean{return req.headers.get("origin")=
 async function body(req:Request):Promise<Record<string,unknown>|null>{try{if(Number(req.headers.get("content-length")??"0")>2048)return null;const raw=await req.text();if(raw.length>2048)return null;const v:unknown=JSON.parse(raw);return v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:null;}catch{return null;}}
 export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,admin:AdminSession):Promise<Response|null>{
  const url=new URL(request.url),path=url.pathname,now=new Date().toISOString();
+ // Administrator-managed ERC-20 registry. JSON-RPC cannot enumerate arbitrary wallet tokens.
+ if(path==="/api/admin/supported-assets"&&request.method==="GET"){
+  const network=url.searchParams.get("network");
+  if(network&&!(network in NETWORK_CHAIN))return response({error:"Unsupported network."},400);
+  const stmt=env.DB.prepare("SELECT id,network,token_address AS tokenAddress,symbol,name,decimals,is_active AS isActive,created_at AS createdAt,updated_at AS updatedAt FROM recovery_supported_assets"+(network?" WHERE network=?":"")+" ORDER BY network,symbol");
+  const rows=await (network?stmt.bind(network):stmt).all<Record<string,unknown>>();
+  return rows.success?response({assets:rows.results}):response({error:"Unable to load supported assets."},503);
+ }
+ if(path==="/api/admin/supported-assets"&&request.method==="POST"){
+  if(!originOk(request,url))return response({error:"Origin check failed."},403);
+  const b=await body(request),network=typeof b?.network==="string"?b.network:"";
+  const address=typeof b?.address==="string"?b.address:"";
+  const symbol=typeof b?.symbol==="string"?b.symbol.trim():"";
+  const name=typeof b?.name==="string"?b.name.trim():"";
+  const decimals=Number(b?.decimals);
+  if(!(network in NETWORK_CHAIN)||!ADDRESS.test(address)||!/^[A-Za-z0-9._-]{1,16}$/.test(symbol)||
+     !name||name.length>64||!Number.isInteger(decimals)||decimals<0||decimals>36){
+    return response({error:"Provide a supported network, token contract address, symbol, name and decimals from 0 to 36."},400);
+  }
+  const normalized=address.toLowerCase(),id=network+":erc20:"+normalized;
+  const saved=await env.DB.prepare("INSERT INTO recovery_supported_assets(id,network,token_address,symbol,name,decimals,is_active,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,1,?,?,?) ON CONFLICT(network,token_address) DO UPDATE SET symbol=excluded.symbol,name=excluded.name,decimals=excluded.decimals,is_active=1,updated_at=excluded.updated_at").bind(id,network,normalized,symbol,name,decimals,admin.adminId,now,now).run();
+  if(!saved.success)return response({error:"Unable to register supported token."},503);
+  await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.supported_asset.add','recovery_supported_asset',?,?,?)").bind(admin.adminId,id,JSON.stringify({network,address:normalized,symbol,name,decimals}),now).run();
+  return response({created:true,asset:{id,network,tokenAddress:normalized,symbol,name,decimals,isActive:true,createdAt:now,updatedAt:now}});
+ }
+ const supportedAssetMatch=path.match(/^\\/api\\/admin\\/supported-assets\\/([a-z-]+)\\/(0x[0-9a-fA-F]{40})$/);
+ if(supportedAssetMatch&&request.method==="DELETE"){
+  if(!originOk(request,url))return response({error:"Origin check failed."},403);
+  const network=supportedAssetMatch[1],address=supportedAssetMatch[2].toLowerCase();
+  if(!(network in NETWORK_CHAIN))return response({error:"Unsupported network."},400);
+  const id=network+":erc20:"+address;
+  const removed=await env.DB.prepare("UPDATE recovery_supported_assets SET is_active=0,updated_at=? WHERE network=? AND token_address=? AND is_active=1").bind(now,network,address).run();
+  if(!removed.success)return response({error:"Unable to deactivate supported asset."},503);
+  await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.supported_asset.deactivate','recovery_supported_asset',?,?,?)").bind(admin.adminId,id,JSON.stringify({network,address}),now).run();
+  return response({deactivated:true,id});
+ }
  // Admin-managed source wallets: registration alone never makes a wallet recovery-eligible.
  if(path==="/api/admin/recovery-wallets"&&request.method==="GET"){
   const rows=await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id,status,admin_locked AS adminLocked,locked_by AS lockedBy,locked_at AS lockedAt,created_at AS createdAt,updated_at AS updatedAt FROM recovery_wallets ORDER BY admin_locked DESC,updated_at DESC").all<Record<string,unknown>>();
