@@ -197,6 +197,31 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
  }
 
 
+
+ const jobAction=path.match(/^\\/api\\/admin\\/recovery-jobs\\/([A-Za-z0-9_-]{1,128})\\/(retry|cancel)$/);
+ if(jobAction&&request.method==="POST"){
+  if(!originOk(request,url))return response({error:"Origin check failed."},403);
+  const jobId=jobAction[1],action=jobAction[2];
+  const activeTx=await env.DB.prepare("SELECT id,status FROM recovery_transactions WHERE job_id=? AND status IN ('prepared','submitted','pending','unknown') LIMIT 1").bind(jobId).first<{id:string;status:string}>();
+  if(activeTx)return response({error:"This job has a transaction that may still be on-chain. Reconcile it before retrying or cancelling."},409);
+  const now=new Date().toISOString(),eventId=crypto.randomUUID();
+  const update=action==="retry"
+   ? env.DB.prepare("UPDATE recovery_jobs SET status='queued',next_attempt_at=?,last_error_code=NULL,last_error_at=NULL,completed_at=NULL,cancelled_at=NULL,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE id=? AND status IN ('blocked','failed','ready')").bind(now,now,jobId)
+   : env.DB.prepare("UPDATE recovery_jobs SET status='cancelled',cancelled_at=?,completed_at=?,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE id=? AND status IN ('queued','ready','blocked')").bind(now,now,now,jobId);
+  const actionName=action==="retry"?"recovery.job.requeued":"recovery.job.cancelled";
+  const eventName=action==="retry"?"recovery.job.requeued":"recovery.job.cancelled";
+  const results=await env.DB.batch([
+   update,
+   env.DB.prepare("INSERT INTO recovery_job_events(id,job_id,event_type,actor_type,actor_id,details_json,created_at) SELECT ?,?,?,'admin',?,?,? WHERE changes()=1")
+    .bind(eventId,jobId,eventName,admin.adminId,JSON.stringify({previousAllowedStates:action==="retry"?["blocked","failed","ready"]:["queued","ready","blocked"]}),now),
+   env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) SELECT ?,'admin',?,?, 'recovery_job',?,?,? WHERE changes()=1")
+    .bind(crypto.randomUUID(),admin.adminId,actionName,jobId,JSON.stringify({action}),now)
+  ]);
+  if(results.some(result=>!result.success))return response({error:"The recovery job state and audit records could not be committed."},503);
+  if((results[0]?.meta?.changes??0)!==1)return response({error:"The job is not in a state that permits this action."},409);
+  return response({updated:true,jobId,status:action==="retry"?"queued":"cancelled",executionEnabled:env.MAINWELL_EXECUTION_ENABLED==="true"});
+ }
+
  if(path==="/api/admin/recovery-grants"&&request.method==="GET"){
   const rows=await env.DB.prepare(`
    SELECT g.grant_id AS grantId,g.owner_wallet AS ownerWallet,g.network,g.execution_modes_json AS executionModesJson,
