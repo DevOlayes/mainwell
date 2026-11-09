@@ -222,7 +222,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
      Number(row.destinationLocked)===1&&Number(row.destinationActive)===1&&Boolean(row.symbol);}
    catch{return false;}
   }).map(row=>({...row,executionModes:JSON.parse(String(row.executionModesJson))}));
-  return response({grants,executionEnabled:false});
+  return response({grants,executionEnabled:env.MAINWELL_EXECUTION_ENABLED==="true"});
  }
 \n // Queue an administrator-initiated recovery for an already verified, owner-authorized ERC-20 grant.
  // Queueing never signs or submits a blockchain transaction.
@@ -241,7 +241,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   const prior=await env.DB.prepare("SELECT id,grant_id,asset_id,requested_amount_raw,status FROM recovery_jobs WHERE idempotency_key=? LIMIT 1").bind(idempotencyKey).first<Record<string,unknown>>();
   if(prior){
    if(prior.grant_id!==grantId||prior.asset_id!==assetId||prior.requested_amount_raw!==amountRaw)return response({error:"This idempotency key was already used for a different recovery request."},409);
-   return response({queued:true,duplicate:true,job:prior,executionEnabled:false},200);
+   return response({queued:true,duplicate:true,job:prior,executionEnabled:env.MAINWELL_EXECUTION_ENABLED==="true"},200);
   }
   const scope=await env.DB.prepare(`
    SELECT g.network,g.owner_wallet,g.execution_modes_json,g.expires_at,g.revoked_at,g.verification_status,
@@ -289,7 +289,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
     return response({error:"The idempotency key conflicts with another recovery request."},409);
    return response({queued:true,duplicate:true,job:raced,executionEnabled:false},200);
   }
-  return response({queued:true,executionEnabled:false,job:{id,grantId,assetId,network:scope.network,executionMode:"admin-initiated",status:"queued",amountRaw,destinationAddress:scope.destination_address,createdAt:now}});
+  return response({queued:true,executionEnabled:env.MAINWELL_EXECUTION_ENABLED==="true",job:{id,grantId,assetId,network:scope.network,executionMode:"admin-initiated",status:"queued",amountRaw,destinationAddress:scope.destination_address,createdAt:now}});
  }
  return null;
 }
