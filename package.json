@@ -15,10 +15,15 @@
     "db:migrate:remote": "wrangler d1 migrations apply mainwell --remote",
     "db:status:remote": "wrangler d1 migrations list mainwell --remote"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "typescript": "^5.7.3",
     "wrangler": "^4.158.0"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
   }
 }
