@@ -108,7 +108,14 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
   const rate=await env.DB.prepare("SELECT attempts,window_started_at,locked_until FROM admin_auth_rate_limits WHERE identifier_hash=?").bind(rateKey).first<{attempts:number;window_started_at:number;locked_until:number}>();
   if(rate&&rate.locked_until>epoch)return json({error:"Too many sign-in attempts. Try again after the temporary lockout."},429);
   const account=await env.DB.prepare("SELECT id,password_hash,mfa_enabled,mfa_secret_ciphertext,status FROM admin_accounts WHERE email=? COLLATE NOCASE LIMIT 1").bind(email).first<{id:string;password_hash:string;mfa_enabled:number;mfa_secret_ciphertext:string|null;status:string}>();
-  if(!account||account.status!=="active"||account.mfa_enabled!==1||!account.mfa_secret_ciphertext||!env.ADMIN_MFA_ENCRYPTION_KEY||!(await verifyAdminPassword(account.password_hash,password))){
+  let loginFailureReason:string|null=null;
+  if(!account)loginFailureReason="account_not_found";
+  else if(account.status!=="active")loginFailureReason="account_inactive";
+  else if(account.mfa_enabled!==1||!account.mfa_secret_ciphertext)loginFailureReason="mfa_not_configured";
+  else if(!env.ADMIN_MFA_ENCRYPTION_KEY)loginFailureReason="mfa_encryption_key_missing";
+  else if(!(await verifyAdminPassword(account.password_hash,password)))loginFailureReason="password_verification_failed";
+  if(loginFailureReason){
+  console.warn("admin_login_rejected",{reason:loginFailureReason});
   await env.DB.prepare("INSERT INTO admin_auth_rate_limits(identifier_hash,attempts,window_started_at,locked_until) VALUES(?,1,?,0) ON CONFLICT(identifier_hash) DO UPDATE SET attempts=CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END,window_started_at=CASE WHEN ?-window_started_at>900 THEN ? ELSE window_started_at END,locked_until=CASE WHEN (CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END)>=5 THEN ?+900 ELSE locked_until END").bind(rateKey,epoch,epoch,epoch,epoch,epoch,epoch).run();
   return json({error:"Invalid administrator credentials or MFA configuration."},401);
 }
