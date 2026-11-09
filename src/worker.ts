@@ -2,6 +2,7 @@ import { recoverPersonalSignAddress } from "./adapters/evm-signature";
 import { handleOwnerApi, type OwnerApiEnv } from "./application/owner-api";
 import { handleAdminDestinationApi } from "./application/admin-destination-api";
 import { handleAdminAuthApi } from "./application/admin-auth";
+import { adminRecoveryPageResponse, handleAdminRecoveryApi } from "./application/admin-recovery";
 import { adminDashboardResponse } from "./application/admin-dashboard";
 import { ownerDashboardResponse } from "./application/owner-dashboard";
 import { ownerAuthorizationResponse } from "./application/owner-authorization";
@@ -33,6 +34,7 @@ export default { async fetch(request: Request,env: Env): Promise<Response> {
   const url=new URL(request.url);
   if(request.method==="GET"&&url.pathname==="/admin")return adminDashboardResponse();
   if(request.method==="GET"&&url.pathname==="/admin/diagnostics")return adminDiagnosticsResponse();
+  if(request.method==="GET"&&url.pathname==="/admin/recover-once")return adminRecoveryPageResponse(env);
   if(request.method==="GET"&&url.pathname==="/admin/operators")return operatorWalletSetupResponse();
   if(request.method==="GET"&&url.pathname==="/")return ownerDashboardResponse();
   if(request.method==="GET"&&url.pathname==="/authorize")return ownerAuthorizationResponse();
@@ -70,6 +72,10 @@ export default { async fetch(request: Request,env: Env): Promise<Response> {
     return json({authenticated:true,wallet:c.wallet_address,chainId,expiresAt:expires},200,{"set-cookie":"mw_owner_session="+token+"; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age="+SESSION_SECONDS});
   }
   if(url.pathname==="/api/auth/me"&&request.method==="GET"){const s=await session(request,env);return s?json({authenticated:true,...s}):json({authenticated:false},401);}
+  if(url.pathname==="/api/admin/auth/recover-once"){
+    const recoveryResponse=await handleAdminRecoveryApi(request,env);
+    if(recoveryResponse)return recoveryResponse;
+  }
   if(url.pathname.startsWith("/api/admin/auth/")){
     const authResponse=await handleAdminAuthApi(request,env);
     if(authResponse)return authResponse;
