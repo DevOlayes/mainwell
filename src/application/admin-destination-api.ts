@@ -1,7 +1,7 @@
 import type { OwnerApiEnv } from "./owner-api";
 
 interface Statement { bind(...values: unknown[]): Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<{success:boolean;results:T[]}>; run<T = Record<string, unknown>>(): Promise<{success:boolean;meta?:{changes?:number}}> }
-interface Database { prepare(sql:string):Statement }
+interface Database { prepare(sql:string):Statement; batch(statements:Statement[]):Promise<Array<{success:boolean;meta?:{changes?:number}}>> }
 interface AdminSession { id:string; adminId:string }
 const NETWORK_CHAIN: Record<string,number> = { ethereum:1, polygon:137, bsc:56, avalanche:43114, arbitrum:42161, optimism:10, base:8453 };
 const ADDRESS=/^0x[0-9a-fA-F]{40}$/;
