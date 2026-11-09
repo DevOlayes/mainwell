@@ -39,7 +39,7 @@ test("rejects expired, revoked, or evidence-free grants", () => {
 });
 
 test("requires explicit owner acknowledgement for unlimited token allowance", () => {
-  const unlimited = { ...base, assets: [{ assetId: "usdc", tokenAddress: base.assets[0].tokenAddress, amount: { kind: "unlimited-allowance", ownerAcknowledged: true } }] };
+  const unlimited = { ...base, assets: [{ assetId: "usdc", tokenAddress: base.assets[0].tokenAddress, destinationAddress: base.destinationAddress, amount: { kind: "unlimited-allowance", ownerAcknowledged: true } }] };
   assert.doesNotThrow(() => validateRecoveryGrant(unlimited, base.ownerWallet, "ethereum", now));
   const unacknowledged = { ...unlimited, assets: [{ ...unlimited.assets[0], amount: { kind: "unlimited-allowance", ownerAcknowledged: false } }] };
   assert.throws(() => validateRecoveryGrant(unacknowledged, base.ownerWallet, "ethereum", now), /acknowledgement/);
