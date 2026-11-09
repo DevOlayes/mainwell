@@ -12,6 +12,7 @@ export interface RecoveryGrantAsset {
   /** Token contract for fungible EVM assets; omitted for native assets. */
   tokenAddress?: string;
   amount: AuthorizedAmount;
+  revokedAt?: string;
 }
 
 export interface RecoveryAuthorizationGrant {
