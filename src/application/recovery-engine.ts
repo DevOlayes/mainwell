@@ -88,7 +88,7 @@ async function queueAutomaticJobs(env:EngineEnv):Promise<number>{
   for(const row of rows.results){
     let modes:unknown;try{modes=JSON.parse(String(row.execution_modes_json));}catch{continue;}
     if(!Array.isArray(modes)||!modes.includes("automatic-priority")||!row.token_address||!ADDRESS.test(String(row.token_address)))continue;
-    const active=await env.DB.prepare("SELECT id FROM recovery_jobs WHERE grant_id=? AND asset_id=? AND status IN ('queued','simulating','ready','submitted') LIMIT 1")
+    const active=await env.DB.prepare("SELECT id FROM recovery_jobs WHERE grant_id=? AND asset_id=? AND status IN ('queued','simulating','ready','submitted','blocked','failed') LIMIT 1")
       .bind(row.grant_id,row.asset_id).first<{id:string}>();
     if(active)continue;
     const valuation=await env.DB.prepare("SELECT estimated_value_usd,valuation_confidence,price_observed_at FROM wallet_assets WHERE wallet_id=? AND asset_ref=? LIMIT 1")
