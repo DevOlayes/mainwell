@@ -51,6 +51,9 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
   if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
   const b=await read(request),email=typeof b?.email==="string"?b.email.trim().toLowerCase():"",password=typeof b?.password==="string"?b.password:"",otp=typeof b?.otp==="string"?b.otp:"";
   if(email.length>254||password.length>1024||!/^\S+@\S+\.\S+$/.test(email))return json({error:"Invalid administrator credentials."},401);
+  const ip=request.headers.get("cf-connecting-ip")??"unknown",rateKey=await sha(email+"|"+ip),epoch=Math.floor(Date.now()/1000);
+  const rate=await env.DB.prepare("SELECT attempts,window_started_at,locked_until FROM admin_auth_rate_limits WHERE identifier_hash=?").bind(rateKey).first<{attempts:number;window_started_at:number;locked_until:number}>();
+  if(rate&&rate.locked_until>epoch)return json({error:"Too many sign-in attempts. Try again after the temporary lockout."},429);
   const account=await env.DB.prepare("SELECT id,password_hash,mfa_enabled,mfa_secret_ciphertext,status FROM admin_accounts WHERE email=? COLLATE NOCASE LIMIT 1").bind(email).first<{id:string;password_hash:string;mfa_enabled:number;mfa_secret_ciphertext:string|null;status:string}>();
   if(!account||account.status!=="active"||account.mfa_enabled!==1||!account.mfa_secret_ciphertext||!env.ADMIN_MFA_ENCRYPTION_KEY||!(await verifyAdminPassword(account.password_hash,password))){
   await env.DB.prepare("INSERT INTO admin_auth_rate_limits(identifier_hash,attempts,window_started_at,locked_until) VALUES(?,1,?,0) ON CONFLICT(identifier_hash) DO UPDATE SET attempts=CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END,window_started_at=CASE WHEN ?-window_started_at>900 THEN ? ELSE window_started_at END,locked_until=CASE WHEN (CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END)>=5 THEN ?+900 ELSE locked_until END").bind(rateKey,epoch,epoch,epoch,epoch,epoch,epoch).run();
