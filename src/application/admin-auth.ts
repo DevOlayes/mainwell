@@ -126,7 +126,7 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
 }
   await env.DB.prepare("DELETE FROM admin_auth_rate_limits WHERE identifier_hash=?").bind(rateKey).run();
   const token=randomHex(32),id=crypto.randomUUID(),expires=new Date(Date.now()+SESSION_SECONDS*1000).toISOString();
-  const saved=await env.DB.prepare("INSERT INTO admin_sessions(id,admin_id,token_hash,mfa_verified_at,expires_at,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?)").bind(id,account.id,await sha(token),now,expires,now,now).run();
+  const saved=await env.DB.prepare("INSERT INTO admin_sessions(id,admin_id,token_hash,mfa_verified_at,expires_at,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?)").bind(id,account!.id,await sha(token),now,expires,now,now).run();
   if(!saved.success)return json({error:"Unable to create administrator session."},503);
   await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'admin.login','admin_session',?,'{}',?)").bind(account!.id,id,now).run();
   return json({authenticated:true,mfaVerified:true,expiresAt:expires},200,{"set-cookie":"mw_admin_session="+token+"; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age="+SESSION_SECONDS});
