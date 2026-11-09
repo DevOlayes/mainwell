@@ -32,8 +32,19 @@ test("grant verification refuses a network different from the authenticated wall
   assert.equal(response.status, 400);
 });
 
-test("grant verification fails closed when trusted RPC and executor hash are not configured", async () => {
-  const env = { DB: { prepare() { throw new Error("must not persist unverified grant"); } } };
+test("grant verification requires an admin-locked source wallet before checking chain configuration", async () => {
+  const env = { DB: { prepare(sql) {
+    return { bind() { return this; }, async first() { return null; } };
+  } } };
+  const response = await handleOwnerApi(request("/api/owner/grants/verify", { grant }), env, session);
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).code, "source_wallet_not_locked");
+});
+
+test("grant verification fails closed when trusted RPC, executor hash, or service operators are not configured", async () => {
+  const env = { DB: { prepare(sql) {
+    return { bind() { return this; }, async first() { return { id: "locked-wallet" }; } };
+  } } };
   const response = await handleOwnerApi(request("/api/owner/grants/verify", { grant }), env, session);
   assert.equal(response.status, 503);
   assert.equal((await response.json()).code, "grant_verifier_not_configured");
