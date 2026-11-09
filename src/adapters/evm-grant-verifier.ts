@@ -2,6 +2,7 @@ import type { RecoveryAuthorizationGrant } from "../domain/recovery-grant";
 import type { NetworkId } from "../domain/types";
 import { validateRecoveryGrant } from "../policy/recovery-grant";
 import { keccak256Hex } from "./keccak";
+import { EXECUTOR_IMMUTABLE_RANGES } from "../application/executor-artifact";
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const HASH = /^0x[0-9a-fA-F]{64}$/;
@@ -26,6 +27,18 @@ export interface EvmGrantVerifierConfig {
 }
 
 interface RpcEnvelope { jsonrpc?: string; id?: number; result?: unknown; error?: { code: number; message: string } }
+/** Hash the compiler runtime template after zeroing constructor-patched immutable values. */
+export function normalizedExecutorRuntimeHash(code: string): string {
+  if (!/^0x(?:[0-9a-fA-F]{2})+$/.test(code)) throw new Error("Malformed executor runtime bytecode.");
+  const bytes = code.slice(2).toLowerCase().split("");
+  for (const range of EXECUTOR_IMMUTABLE_RANGES) {
+    const start = range.start * 2, end = (range.start + range.length) * 2;
+    if (end > bytes.length) throw new Error("Executor immutable reference is outside runtime bytecode.");
+    for (let i = start; i < end; i++) bytes[i] = "0";
+  }
+  return keccak256Hex("0x" + bytes.join(""));
+}
+
 interface Receipt {
   status?: string;
   from?: string;
@@ -103,7 +116,7 @@ export class EvmGrantVerifier {
 
     const code=await this.rpc("eth_getCode",[grant.executorAddress,"latest"]);
     if (typeof code!=="string" || !/^0x[0-9a-fA-F]+$/.test(code) || code==="0x") throw new Error("Executor contract is not deployed.");
-    const observedExecutorCodeHash=keccak256Hex(code);
+    const observedExecutorCodeHash=normalizedExecutorRuntimeHash(code);
     if (observedExecutorCodeHash.toLowerCase()!==this.config.trustedExecutorCodeHash.toLowerCase()) {
       throw new Error("Deployed executor runtime bytecode hash is not trusted.");
     }
@@ -197,7 +210,7 @@ export class EvmGrantVerifier {
       throw new Error("Asset revocation RPC chain does not match the stored grant.");
     }
     const code = await this.rpc("eth_getCode", [grant.executorAddress, "latest"]);
-    if (typeof code !== "string" || code === "0x" || keccak256Hex(code).toLowerCase() !== this.config.trustedExecutorCodeHash.toLowerCase()) {
+    if (typeof code !== "string" || code === "0x" || normalizedExecutorRuntimeHash(code).toLowerCase() !== this.config.trustedExecutorCodeHash.toLowerCase()) {
       throw new Error("Executor runtime bytecode is no longer trusted.");
     }
     const executorOwner = this.decodeAddress(await this.call(grant.executorAddress, "owner()"));
