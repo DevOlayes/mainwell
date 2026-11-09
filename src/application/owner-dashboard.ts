@@ -33,5 +33,5 @@ $("switchNetwork").addEventListener("click",async()=>{try{const p=await provider
 $("logout").addEventListener("click",async()=>{try{await api("/api/auth/logout",{method:"POST",body:"{}"})}finally{location.reload()}});
 api("/api/auth/me").then(async s=>{account=s.wallet;chainId=s.chainId;await showDashboard()}).catch(()=>{});
 if(window.ethereum){window.ethereum.on?.("chainChanged",()=>setStatus("dashboardStatus","Wallet network changed. Reconnect to refresh the authenticated session."));window.ethereum.on?.("accountsChanged",()=>setStatus("dashboardStatus","Wallet account changed. Disconnect and reconnect to refresh your session."))}
-</script></main></body></html>;
+</script></main></body></html>`;
 export function ownerDashboardResponse():Response{return new Response(HTML,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}});}
