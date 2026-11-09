@@ -17,7 +17,8 @@ export const EVM_NETWORKS: Record<string, { chainId: number; nativeSymbol: strin
   base: { chainId: 8453, nativeSymbol: "ETH", nativeName: "Ether" }
 };
 type EvmNetwork = "ethereum" | "polygon" | "bsc" | "avalanche" | "arbitrum" | "optimism" | "base";
-const RPC_ENV: Record<EvmNetwork, keyof MonitorEnv> = {
+type RpcBinding = "EVM_RPC_ETHEREUM" | "EVM_RPC_POLYGON" | "EVM_RPC_BSC" | "EVM_RPC_AVALANCHE" | "EVM_RPC_ARBITRUM" | "EVM_RPC_OPTIMISM" | "EVM_RPC_BASE";
+const RPC_ENV: Record<EvmNetwork, RpcBinding> = {
   ethereum: "EVM_RPC_ETHEREUM", polygon: "EVM_RPC_POLYGON", bsc: "EVM_RPC_BSC",
   avalanche: "EVM_RPC_AVALANCHE", arbitrum: "EVM_RPC_ARBITRUM", optimism: "EVM_RPC_OPTIMISM", base: "EVM_RPC_BASE"
 };
@@ -41,15 +42,16 @@ function toAssetConfig(env: MonitorEnv, network: string): AssetConfig {
   return item;
 }
 export async function refreshEvmWallet(env: MonitorEnv, wallet: { id: string; address: string; network: string; chain_id: number | null }): Promise<{ assets: AssetPosition[]; permissions: PermissionRecord[]; observedAt: string }> {
-  const network = EVM_NETWORKS[wallet.network];
+  const networkName = wallet.network as EvmNetwork;
+  const network = EVM_NETWORKS[networkName];
   if (!network || wallet.chain_id !== network.chainId) throw new Error("Wallet network and chain ID are inconsistent.");
-  const rpcName = RPC_ENV[wallet.network];
+  const rpcName = RPC_ENV[networkName];
   const rpcUrl = rpcName ? env[rpcName] as string | undefined : undefined;
   if (!rpcUrl) throw new Error("RPC_NOT_CONFIGURED");
-  const config = toAssetConfig(env, wallet.network);
+  const config = toAssetConfig(env, networkName);
   const now = new Date().toISOString();
   const adapter = new EvmReadOnlyAdapter({
-    network: wallet.network as EvmNetwork,
+    network: networkName,
     chainId: network.chainId, rpcUrl, nativeSymbol: network.nativeSymbol, nativeName: network.nativeName,
     nativePriceUsd: 0, nativePriceObservedAt: now, nativePriceConfidence: 0.5,
     tokens: config.tokens ?? [], knownSpenders: config.knownSpenders ?? []
