@@ -161,6 +161,53 @@ export class EvmGrantVerifier {
     };
   }
 
+  async verifyAssetRevocation(
+    grant: RecoveryAuthorizationGrant,
+    authenticatedWallet: string,
+    tokenAddress: string,
+    transactionHash: string,
+    now = Date.now()
+  ): Promise<{ revokedAt: string; transactionHash: string; tokenAddress: string }> {
+    if (grant.ownerWallet.toLowerCase() !== authenticatedWallet.toLowerCase()) throw new Error("Grant owner does not match the authenticated wallet.");
+    if (!ADDRESS.test(tokenAddress) || !HASH.test(transactionHash)) throw new Error("Asset address or revocation transaction hash is invalid.");
+    const asset = grant.assets.find(item => item.tokenAddress?.toLowerCase() === tokenAddress.toLowerCase());
+    if (!asset) throw new Error("Asset is not part of this owner grant.");
+    const chainHex = await this.rpc("eth_chainId", []);
+    if (typeof chainHex !== "string" || !/^0x[0-9a-fA-F]+$/.test(chainHex) ||
+        Number(BigInt(chainHex)) !== this.config.expectedChainId ||
+        this.config.expectedChainId !== NETWORK_CHAIN_IDS[grant.network] || grant.chainId !== this.config.expectedChainId) {
+      throw new Error("Asset revocation RPC chain does not match the stored grant.");
+    }
+    const code = await this.rpc("eth_getCode", [grant.executorAddress, "latest"]);
+    if (typeof code !== "string" || code === "0x" || keccak256Hex(code).toLowerCase() !== this.config.trustedExecutorCodeHash.toLowerCase()) {
+      throw new Error("Executor runtime bytecode is no longer trusted.");
+    }
+    const executorOwner = this.decodeAddress(await this.call(grant.executorAddress, "owner()"));
+    if (executorOwner !== authenticatedWallet.toLowerCase()) throw new Error("Executor owner does not match the authenticated wallet.");
+    const selector = keccak256Hex("0x" + Array.from(new TextEncoder().encode("revokeAsset(address)"), b => b.toString(16).padStart(2, "0")).join("")).slice(0, 10);
+    const expectedInput = selector + tokenAddress.slice(2).toLowerCase().padStart(64, "0");
+    const tx = await this.rpc("eth_getTransactionByHash", [transactionHash]) as { from?: string; to?: string | null; input?: string } | null;
+    const receipt = await this.rpc("eth_getTransactionReceipt", [transactionHash]) as Receipt | null;
+    if (!tx || !receipt || receipt.status !== "0x1" ||
+        tx.from?.toLowerCase() !== authenticatedWallet.toLowerCase() ||
+        tx.to?.toLowerCase() !== grant.executorAddress.toLowerCase() ||
+        tx.input?.toLowerCase() !== expectedInput) {
+      throw new Error("Transaction does not prove that the authenticated owner successfully called revokeAsset() for this token.");
+    }
+    const arg = tokenAddress.slice(2).toLowerCase().padStart(64, "0");
+    const cap = BigInt("0x" + (await this.call(grant.executorAddress, "assetLimit(address)", arg)).slice(-64));
+    const recovered = BigInt("0x" + (await this.call(grant.executorAddress, "amountRecovered(address)", arg)).slice(-64));
+    if (cap !== recovered) throw new Error("Executor has not disabled further recovery for this asset.");
+    if (!receipt.blockNumber || !/^0x[0-9a-fA-F]+$/.test(receipt.blockNumber)) throw new Error("Asset revocation receipt is missing its block number.");
+    const block = await this.rpc("eth_getBlockByNumber", [receipt.blockNumber, false]) as { timestamp?: string } | null;
+    if (!block?.timestamp || !/^0x[0-9a-fA-F]+$/.test(block.timestamp)) throw new Error("Asset revocation block timestamp is unavailable.");
+    const revokedAt = new Date(Number(BigInt(block.timestamp)) * 1000).toISOString();
+    if (Date.parse(revokedAt) < Date.parse(grant.approvedAt) || Date.parse(revokedAt) > now + 60_000) {
+      throw new Error("Asset revocation block timestamp is outside the authorization window.");
+    }
+    return { revokedAt, transactionHash: transactionHash.toLowerCase(), tokenAddress: tokenAddress.toLowerCase() };
+  }
+
   async verifyRevocation(
     grant: RecoveryAuthorizationGrant,
     authenticatedWallet: string,
