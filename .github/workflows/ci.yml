@@ -32,7 +32,7 @@ jobs:
           if ! git diff --quiet -- src/application/executor-artifact.ts; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add src/application/executor-artifact.ts
+            git add src/application/executor-artifact.ts deploy/worker.js deploy/worker-build.json
             git commit -m "chore: refresh pinned executor artifact [skip ci]"
             git push origin HEAD:main
           fi
