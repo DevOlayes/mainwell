@@ -60,7 +60,7 @@ function makeVerifier(overrides = {}) {
 }
 
 test("Keccak-256 uses Ethereum Keccak padding, not NIST SHA3 padding", () => {
-  assert.equal(keccak256(new Uint8Array()), "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
+  assert.equal(keccak256(new Uint8Array()), "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
 });
 
 test("verifies deployed executor, owner, destination, expiry, cap and live allowance", async () => {
