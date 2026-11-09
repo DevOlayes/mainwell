@@ -149,7 +149,7 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     if(expectedHash&&expectedHash.toLowerCase()!==EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase())throw new Error("executor_code_hash_mismatch");
     const repository=new D1GrantRepository(env.DB as unknown as GrantDatabase);
     const grant=await repository.getById(job.grant_id);
-    if(!grant||grant.ownerWallet.toLowerCase()!==String(scope.owner_wallet).toLowerCase())throw new Error("grant_inactive");
+    if(!grant||grant.ownerWallet.toLowerCase()!==String(scope.owner_wallet).toLowerCase()||grant.executorAddress.toLowerCase()!==String(scope.executor_address).toLowerCase()||grant.network!==String(scope.network))throw new Error("grant_inactive");
     if(!grant.executionModes.includes(job.execution_mode))throw new Error("execution_mode_not_owner_authorized");
     const operatorAddress=job.execution_mode==="admin-initiated"?env.MAINWELL_ADMIN_OPERATOR:env.MAINWELL_AUTOMATION_OPERATOR;
     const privateKey=job.execution_mode==="admin-initiated"?env.MAINWELL_ADMIN_PRIVATE_KEY:env.MAINWELL_AUTOMATION_PRIVATE_KEY;
