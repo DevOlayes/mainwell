@@ -51,6 +51,7 @@ interface GrantAssetRow {
   amount_kind: "capped" | "unlimited-allowance";
   max_amount_raw: string | null;
   owner_acknowledged: number;
+  revoked_at: string | null;
 }
 
 function parseModes(value: string): RecoveryAuthorizationGrant["executionModes"] {
@@ -67,7 +68,8 @@ function mapAsset(row: GrantAssetRow): RecoveryGrantAsset {
     ...(row.token_address ? { tokenAddress: row.token_address } : {}),
     amount: row.amount_kind === "capped"
       ? { kind: "capped", maxAmountRaw: row.max_amount_raw ?? "" }
-      : { kind: "unlimited-allowance", ownerAcknowledged: true }
+      : { kind: "unlimited-allowance", ownerAcknowledged: true },
+    ...(row.revoked_at ? { revokedAt: row.revoked_at } : {})
   };
 }
 
@@ -146,7 +148,7 @@ export class D1GrantRepository {
     if (!row || row.verification_status !== "verified") return null;
 
     const assets = await this.db.prepare(`
-      SELECT asset_id, token_address, amount_kind, max_amount_raw, owner_acknowledged
+      SELECT asset_id, token_address, amount_kind, max_amount_raw, owner_acknowledged, revoked_at
       FROM recovery_grant_assets WHERE grant_id = ? ORDER BY asset_id
     `).bind(grantId).all<GrantAssetRow>();
 
@@ -165,6 +167,21 @@ export class D1GrantRepository {
       evidence: { kind: row.evidence_kind, reference: row.evidence_reference },
       ...(row.revoked_at ? { revokedAt: row.revoked_at } : {})
     };
+  }
+
+  async markAssetRevoked(grantId: string, assetId: string, revokedAt: string): Promise<boolean> {
+    if (!Number.isFinite(Date.parse(revokedAt))) throw new Error("Invalid asset revocation timestamp.");
+    const result = await this.db.prepare(`
+      UPDATE recovery_grant_assets
+      SET revoked_at = ?
+      WHERE grant_id = ? AND asset_id = ? AND revoked_at IS NULL
+        AND EXISTS (
+          SELECT 1 FROM recovery_grants
+          WHERE grant_id = ? AND verification_status = 'verified'
+            AND revoked_at IS NULL
+        )
+    `).bind(revokedAt, grantId, assetId, grantId).run();
+    return (result.meta?.changes ?? 0) === 1;
   }
 
   async markRevoked(grantId: string, revokedAt: string): Promise<boolean> {
