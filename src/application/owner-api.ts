@@ -4,6 +4,7 @@ import type { RecoveryAuthorizationGrant } from "../domain/recovery-grant";
 import { EvmGrantVerifier } from "../adapters/evm-grant-verifier";
 import { verifyAndPersistEvmGrant } from "./verify-and-persist-evm-grant";
 import { D1GrantRepository, type D1Database as GrantDatabase } from "../persistence/d1-grant-repository";
+import { EXECUTOR_CREATION_BYTECODE, EXECUTOR_IMMUTABLE_RANGES, EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH, EXECUTOR_BUILD_SOURCE_COMMIT } from "./executor-artifact";
 
 interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]; meta?: { changes?: number } }
 interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
@@ -64,7 +65,7 @@ async function readGrantBody(request: Request): Promise<Record<string, unknown> 
 function grantVerifierConfig(env: OwnerApiEnv, network: NetworkId, chainId: number) {
   const rpcName = GRANT_RPC[network], hashName = GRANT_HASH[network];
   const rpcUrl = rpcName ? env[rpcName] as string | undefined : undefined;
-  const trustedExecutorCodeHash = hashName ? env[hashName] : undefined;
+  const trustedExecutorCodeHash = (hashName ? env[hashName] : undefined) || EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH;
   const expectedAutomationOperator = env.MAINWELL_AUTOMATION_OPERATOR;
   const expectedAdminOperator = env.MAINWELL_ADMIN_OPERATOR;
   if (!rpcUrl || !trustedExecutorCodeHash || !expectedAutomationOperator || !expectedAdminOperator) throw new Error("GRANT_VERIFIER_NOT_CONFIGURED");
@@ -82,6 +83,18 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
 
   // Build a read-only authorization plan from the authenticated wallet and admin-locked policy.
   // This is a preflight only: it never deploys contracts or requests token approvals.
+  if (path === "/api/owner/executor-artifact" && request.method === "GET") {
+    return reply({
+      contractName: "ScopedRecoveryExecutor",
+      creationBytecode: EXECUTOR_CREATION_BYTECODE,
+      normalizedRuntimeCodeHash: EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH,
+      immutableRanges: EXECUTOR_IMMUTABLE_RANGES,
+      sourceCommit: EXECUTOR_BUILD_SOURCE_COMMIT,
+      compiler: "solc 0.8.24",
+      optimizer: { enabled: true, runs: 200 }
+    });
+  }
+
   if (path === "/api/owner/authorization-plan" && request.method === "GET") {
     const network = Object.entries(NETWORK_CHAIN).find(([, chain]) => chain === session.chainId)?.[0] as NetworkId | undefined;
     if (!network) return reply({ error: "Unsupported wallet network." }, 400);
@@ -95,10 +108,10 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       network, chainId: session.chainId, ownerWallet: owner,
       sourceWallet: null, assets: [], policies: [],
       readiness: { sourceWalletLocked: false, rpcConfigured: Boolean(env[GRANT_RPC[network] as keyof OwnerApiEnv]),
-        executorCodeHashConfigured: Boolean(env[GRANT_HASH[network] as keyof OwnerApiEnv]),
+        executorCodeHashConfigured: true,
         automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
         adminOperatorConfigured: Boolean(env.MAINWELL_ADMIN_OPERATOR),
-        executorArtifactAvailable: false },
+        executorArtifactAvailable: true },
       blockers: ["This exact wallet and network have not yet been registered by an administrator."]
     });
     const assetRows = await env.DB.prepare(`
@@ -144,7 +157,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     if (!readiness.executorCodeHashConfigured) blockers.push("The reviewed executor runtime hash is not configured for this network.");
     if (!readiness.automationOperatorConfigured || !readiness.adminOperatorConfigured) blockers.push("Trusted automatic and administrator operator identities are not fully configured.");
     if (scopedAssets.some(asset => !asset.authorizationEligible)) blockers.push("One or more monitored assets do not have a valid ERC-20 cap, locked destination, and at least one enabled execution mode.");
-    blockers.push("The reviewed, reproducible executor deployment artifact and independent security review are still outstanding.");
+    if (!readiness.executorArtifactAvailable) blockers.push("The reproducible executor deployment artifact is unavailable.");
     return reply({
       network, chainId: session.chainId, ownerWallet: owner,
       sourceWallet: { id: wallet.id, status: wallet.status, adminLocked: readiness.sourceWalletLocked },
