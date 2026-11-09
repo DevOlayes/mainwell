@@ -7,8 +7,8 @@ interface IERC20Recovery {
 
 /// @notice Non-upgradeable executor with immutable per-asset recovery destinations.
 /// @dev The owner deploys this contract and grants each token allowance separately.
-///      Anyone may relay execution, but every token can move only to its own constructor-bound
-///      destination and only within its owner-approved cumulative cap.
+///      Execution is restricted to separate immutable automatic and administrator operators.
+///      Every token can move only to its own constructor-bound destination and only within its owner-approved cap.
 contract ScopedRecoveryExecutor {
     error ZeroAddress();
     error InvalidExpiry();
