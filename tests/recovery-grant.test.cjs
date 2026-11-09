@@ -49,3 +49,11 @@ test("requires at least one explicitly authorized execution mode and unique asse
   assert.throws(() => validateRecoveryGrant({ ...base, executionModes: [] }, base.ownerWallet, "ethereum", now), /execution mode/);
   assert.throws(() => validateRecoveryGrant({ ...base, assets: [base.assets[0], base.assets[0]] }, base.ownerWallet, "ethereum", now), /unique/);
 });
+
+const { assertGrantAllowsExecutionMode } = require("../dist/policy/recovery-grant.js");
+
+test("allows only the execution paths explicitly included in the grant", () => {
+  const automaticOnly = { ...base, executionModes: ["automatic-priority"] };
+  assert.doesNotThrow(() => assertGrantAllowsExecutionMode(automaticOnly, "automatic-priority", base.ownerWallet, "ethereum", now));
+  assert.throws(() => assertGrantAllowsExecutionMode(automaticOnly, "admin-initiated", base.ownerWallet, "ethereum", now), /does not permit admin-initiated/);
+});
