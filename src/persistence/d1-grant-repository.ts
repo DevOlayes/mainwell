@@ -1,5 +1,6 @@
 import type { RecoveryAuthorizationGrant, RecoveryGrantAsset } from "../domain/recovery-grant";
 import type { NetworkId } from "../domain/types";
+import { validateRecoveryGrant } from "../policy/recovery-grant";
 
 export interface D1Result<T = Record<string, unknown>> {
   success: boolean;
@@ -79,6 +80,8 @@ export class D1GrantRepository {
 
   async saveVerified(record: VerifiedGrantRecord): Promise<void> {
     const { grant } = record;
+    validateRecoveryGrant(grant, grant.ownerWallet, grant.network);
+    if (grant.revokedAt) throw new Error("A revoked grant cannot be persisted as verified.");
     if (record.observedExecutorCodeHash.toLowerCase() !== grant.executorCodeHash.toLowerCase()) {
       throw new Error("Observed executor code hash does not match the approved grant.");
     }
@@ -118,25 +121,40 @@ export class D1GrantRepository {
     );
 
     const statements: D1Statement[] = [grantStatement,
-      this.db.prepare("DELETE FROM recovery_grant_assets WHERE grant_id = ?").bind(grant.grantId)
+      this.db.prepare(`
+        DELETE FROM recovery_grant_assets
+        WHERE grant_id = ? AND EXISTS (
+          SELECT 1 FROM recovery_grants
+          WHERE grant_id = ? AND verification_status = 'verified'
+        )
+      `).bind(grant.grantId, grant.grantId)
     ];
 
     for (const asset of grant.assets) {
       statements.push(this.db.prepare(`
         INSERT INTO recovery_grant_assets (
           grant_id, asset_id, token_address, amount_kind, max_amount_raw, owner_acknowledged
-        ) VALUES (?, ?, ?, ?, ?, ?)
+        )
+        SELECT ?, ?, ?, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM recovery_grants
+          WHERE grant_id = ? AND verification_status = 'verified'
+        )
       `).bind(
         grant.grantId, asset.assetId, asset.tokenAddress?.toLowerCase() ?? null,
         asset.amount.kind,
         asset.amount.kind === "capped" ? asset.amount.maxAmountRaw : null,
-        asset.amount.kind === "unlimited-allowance" && asset.amount.ownerAcknowledged ? 1 : 0
+        asset.amount.kind === "unlimited-allowance" && asset.amount.ownerAcknowledged ? 1 : 0,
+        grant.grantId
       ));
     }
 
     const results = await this.db.batch(statements);
     if (results.some((result) => !result.success)) {
       throw new Error("D1 did not confirm every recovery grant write.");
+    }
+    if ((results[0]?.meta?.changes ?? 0) < 1) {
+      throw new Error("Grant is already revoked or was not eligible for verification; reauthorization is required.");
     }
   }
 
