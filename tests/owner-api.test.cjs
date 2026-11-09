@@ -87,7 +87,7 @@ test("authorization preflight returns admin lock, asset inventory and fail-close
         async first() { return { id: "wallet-row", network: "ethereum", chain_id: 1, status: "monitoring", admin_locked: 1 }; },
         async all() {
           if (sql.includes("FROM wallet_assets")) return { success: true, results: [{ assetId: "token-usdc", tokenAddress: "0x4444444444444444444444444444444444444444", symbol: "USDC", balanceRaw: "2500000", decimals: 6 }] };
-          return { success: true, results: [{ assetId: "token-usdc", destinationId: "dest-1", destinationAddress: "0x3333333333333333333333333333333333333333" }] };
+          return { success: true, results: [{ assetId: "token-usdc", destinationId: "dest-1", destinationAddress: "0x3333333333333333333333333333333333333333", maxAmountRaw: "2500000", automaticPriorityEnabled: 1, adminInitiatedEnabled: 1, expiresInSeconds: 604800 }] };
         }
       };
     } },
