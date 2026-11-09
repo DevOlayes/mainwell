@@ -76,3 +76,45 @@ test("owner API rejects cross-origin wallet state changes", async () => {
   const response = await handleOwnerApi(request, { DB: { prepare() { throw new Error("must not query"); } } }, session);
   assert.equal(response.status, 403);
 });
+
+test("authorization preflight returns admin lock, asset inventory and fail-closed readiness", async () => {
+  const calls = [];
+  const env = {
+    DB: { prepare(sql) {
+      calls.push(sql);
+      return {
+        bind(...args) { this.args = args; return this; },
+        async first() { return { id: "wallet-row", network: "ethereum", chain_id: 1, status: "monitoring", admin_locked: 1 }; },
+        async all() {
+          if (sql.includes("FROM wallet_assets")) return { success: true, results: [{ assetId: "token-usdc", tokenAddress: "0x4444444444444444444444444444444444444444", symbol: "USDC", balanceRaw: "2500000", decimals: 6 }] };
+          return { success: true, results: [{ assetId: "token-usdc", destinationId: "dest-1", destinationAddress: "0x3333333333333333333333333333333333333333" }] };
+        }
+      };
+    } },
+    EVM_RPC_ETHEREUM: "https://rpc.example",
+    MAINWELL_EXECUTOR_CODE_HASH_ETHEREUM: "0x" + "a".repeat(64),
+    MAINWELL_AUTOMATION_OPERATOR: "0x6666666666666666666666666666666666666666",
+    MAINWELL_ADMIN_OPERATOR: "0x7777777777777777777777777777777777777777"
+  };
+  const response = await handleOwnerApi(req("/api/owner/authorization-plan"), env, session);
+  const data = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(data.readiness.sourceWalletLocked, true);
+  assert.equal(data.assets[0].symbol, "USDC");
+  assert.equal(data.policies[0].destinationAddress, "0x3333333333333333333333333333333333333333");
+  assert.equal(data.readiness.executorArtifactAvailable, false);
+  assert.ok(data.blockers.some(x => x.includes("deployment artifact")));
+  assert.ok(calls.some(sql => sql.includes("admin_locked")));
+});
+
+test("authorization preflight fails closed when the wallet has not been registered", async () => {
+  const env = { DB: { prepare() {
+    return { bind() { return this; }, async first() { return null; } };
+  } } };
+  const response = await handleOwnerApi(req("/api/owner/authorization-plan"), env, session);
+  const data = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(data.readiness.sourceWalletLocked, false);
+  assert.equal(data.assets.length, 0);
+  assert.ok(data.blockers.length > 0);
+});
