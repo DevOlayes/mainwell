@@ -75,9 +75,9 @@ test("verified grant and all asset scopes are written as one D1 batch", async ()
   const db = fakeDb();
   const repo = new D1GrantRepository(db);
   await repo.saveVerified({ grant, verifiedAt: "2026-11-09T06:05:00.000Z", observedExecutorCodeHash: grant.executorCodeHash });
-  assert.equal(db.calls.at(-1).batchSize, 4);
+  assert.equal(db.calls.at(-1).batchSize, 3);
   assert.match(db.calls[0].sql, /verification_status/);
-  assert.match(db.calls[2].sql, /recovery_grant_assets/);
+  assert.match(db.calls[1].sql, /recovery_grant_assets/);
 });
 
 test("verified grant retrieval reconstructs capped and acknowledged unlimited assets", async () => {
@@ -103,6 +103,7 @@ test("revoked grant cannot be re-saved or have its asset scope rewritten", async
     repo.saveVerified({ grant, verifiedAt: "2026-11-09T06:05:00.000Z", observedExecutorCodeHash: grant.executorCodeHash }),
     /already revoked/
   );
+  assert.match(db.calls[1].sql, /changes\(\) = 1/);
   assert.match(db.calls[1].sql, /EXISTS/);
   assert.match(db.calls[2].sql, /EXISTS/);
 });
