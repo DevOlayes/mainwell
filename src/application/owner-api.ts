@@ -191,6 +191,59 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     return reply({ updated: true, status });
   }
 
+  if (path === "/api/owner/grants/verify" && request.method === "POST") {
+    if (!validOrigin(request, url)) return reply({ error: "Origin check failed." }, 403);
+    const body = await readGrantBody(request);
+    const grant = body?.grant as RecoveryAuthorizationGrant | undefined;
+    if (!grant || typeof grant.network !== "string" || NETWORK_CHAIN[grant.network] !== session.chainId ||
+        grant.chainId !== session.chainId || grant.ownerWallet?.toLowerCase() !== owner) {
+      return reply({ error: "Grant must belong to the authenticated wallet and active session chain." }, 400);
+    }
+    try {
+      const config = grantVerifierConfig(env, grant.network, session.chainId);
+      const verified = await verifyAndPersistEvmGrant(env.DB as unknown as GrantDatabase, config, owner, grant);
+      const now = new Date().toISOString();
+      await env.DB.prepare("INSERT INTO audit_events (actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES ('owner',?,'recovery.grant.verified','recovery_grant',?,?,?)")
+        .bind(owner, grant.grantId, JSON.stringify({ network: grant.network, chainId: verified.chainId, assets: verified.assets.length }), now).run();
+      return reply({ verified: true, grantId: grant.grantId, verifiedAt: verified.verifiedAt,
+        network: grant.network, chainId: verified.chainId, executor: verified.executor,
+        destination: verified.destination, assets: verified.assets });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === "GRANT_VERIFIER_NOT_CONFIGURED") return reply({ error: "The trusted executor verifier is not configured for this network.", code: "grant_verifier_not_configured" }, 503);
+      return reply({ error: "Owner authorization could not be verified against the live chain.", code: "grant_verification_failed" }, 400);
+    }
+  }
+
+  const revokeConfirmMatch = path.match(/^\/api\/owner\/grants\/([A-Za-z0-9_-]{1,128})\/revoke\/confirm$/);
+  if (revokeConfirmMatch && request.method === "POST") {
+    if (!validOrigin(request, url)) return reply({ error: "Origin check failed." }, 403);
+    const body = await readBody(request);
+    const transactionHash = typeof body?.transactionHash === "string" ? body.transactionHash : "";
+    const row = await env.DB.prepare("SELECT network, chain_id FROM recovery_grants WHERE grant_id = ? AND owner_wallet = ? AND verification_status = 'verified' AND revoked_at IS NULL LIMIT 1")
+      .bind(revokeConfirmMatch[1], owner).first<{ network: NetworkId; chain_id: number | null }>();
+    if (!row) return reply({ error: "Active authorization not found for this wallet." }, 404);
+    if (!row.chain_id || row.chain_id !== session.chainId || NETWORK_CHAIN[row.network] !== row.chain_id) {
+      return reply({ error: "Authorization network does not match the authenticated wallet session." }, 409);
+    }
+    try {
+      const repository = new D1GrantRepository(env.DB as unknown as GrantDatabase);
+      const grant = await repository.getById(revokeConfirmMatch[1]);
+      if (!grant || grant.ownerWallet.toLowerCase() !== owner) return reply({ error: "Active authorization not found." }, 404);
+      const verifier = new EvmGrantVerifier(grantVerifierConfig(env, row.network, row.chain_id));
+      const revocation = await verifier.verifyRevocation(grant, owner, transactionHash);
+      const marked = await repository.markRevoked(grant.grantId, revocation.revokedAt);
+      if (!marked) return reply({ error: "Authorization state changed; refresh and check its current status." }, 409);
+      await env.DB.prepare("INSERT INTO audit_events (actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES ('owner',?,'recovery.grant.revoked','recovery_grant',?,?,?)")
+        .bind(owner, grant.grantId, JSON.stringify({ transactionHash: revocation.transactionHash, revokedAt: revocation.revokedAt }), revocation.revokedAt).run();
+      return reply({ revoked: true, grantId: grant.grantId, revokedAt: revocation.revokedAt, transactionHash: revocation.transactionHash });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === "GRANT_VERIFIER_NOT_CONFIGURED") return reply({ error: "The trusted executor verifier is not configured for this network.", code: "grant_verifier_not_configured" }, 503);
+      return reply({ error: "On-chain revocation could not be verified.", code: "revocation_verification_failed" }, 400);
+    }
+  }
+
   if (path === "/api/owner/grants" && request.method === "GET") {
     const now = new Date().toISOString(), limit = limitFrom(url);
     const grants = await env.DB.prepare(`
