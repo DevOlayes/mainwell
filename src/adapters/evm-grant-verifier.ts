@@ -180,11 +180,17 @@ export class EvmGrantVerifier {
       const cap=BigInt("0x"+(await this.call(grant.executorAddress,"assetLimit(address)",arg)).slice(-64));
       const recovered=BigInt("0x"+(await this.call(grant.executorAddress,"amountRecovered(address)",arg)).slice(-64));
       const expectedCap=asset.amount.kind==="capped" ? BigInt(asset.amount.maxAmountRaw) : UINT256_MAX;
-      if (cap!==expectedCap || recovered>cap) throw new Error("On-chain asset cap does not exactly match the owner's grant for "+asset.assetId+".");
+      if (recovered>cap) throw new Error("On-chain recovered amount exceeds the configured cap for "+asset.assetId+".");
       const allowanceArg=grant.ownerWallet.slice(2).padStart(64,"0")+grant.executorAddress.slice(2).padStart(64,"0");
       const allowance=BigInt("0x"+(await this.call(token,"allowance(address,address)",allowanceArg)).slice(-64));
+      if(asset.revokedAt){
+        if(cap!==recovered)throw new Error("Database marks asset "+asset.assetId+" revoked but its on-chain cap is still spendable.");
+        assets.push({tokenAddress:token,destinationAddress:onchainDestination,cap:cap.toString(),recovered:recovered.toString(),allowance:allowance.toString(),remaining:"0"});
+        continue;
+      }
+      if(cap!==expectedCap)throw new Error("On-chain asset cap does not exactly match the owner's grant for "+asset.assetId+".");
       const remaining=cap-recovered;
-      if (allowance<remaining) throw new Error("Live ERC-20 allowance is below the remaining authorized scope for "+asset.assetId+".");
+      if(allowance<remaining)throw new Error("Live ERC-20 allowance is below the remaining authorized scope for "+asset.assetId+".");
       assets.push({tokenAddress:token,destinationAddress:onchainDestination,cap:cap.toString(),recovered:recovered.toString(),allowance:allowance.toString(),remaining:remaining.toString()});
     }
 
