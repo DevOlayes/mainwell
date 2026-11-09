@@ -196,7 +196,35 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   return response({cleared:true});
  }
 
- // Queue an administrator-initiated recovery for an already verified, owner-authorized ERC-20 grant.
+
+ if(path==="/api/admin/recovery-grants"&&request.method==="GET"){
+  const rows=await env.DB.prepare(`
+   SELECT g.grant_id AS grantId,g.owner_wallet AS ownerWallet,g.network,g.execution_modes_json AS executionModesJson,
+          g.expires_at AS expiresAt,a.asset_id AS assetId,a.token_address AS tokenAddress,
+          a.amount_kind AS amountKind,a.max_amount_raw AS maxAmountRaw,a.destination_address AS destinationAddress,
+          a.revoked_at AS assetRevokedAt,s.symbol,s.name,s.decimals,
+          w.status AS walletStatus,w.admin_locked AS adminLocked,
+          d.locked AS destinationLocked,d.is_active AS destinationActive
+   FROM recovery_grants g
+   INNER JOIN recovery_grant_assets a ON a.grant_id=g.grant_id
+   INNER JOIN recovery_wallets w ON lower(w.owner_address)=lower(g.owner_wallet) AND w.network=g.network
+   LEFT JOIN recovery_supported_assets s ON s.id=a.asset_id AND s.network=g.network AND s.is_active=1
+   LEFT JOIN recovery_destinations d ON d.network=g.network AND lower(d.address)=lower(a.destination_address)
+   WHERE g.verification_status='verified' AND g.revoked_at IS NULL AND g.expires_at>?
+     AND a.revoked_at IS NULL AND w.admin_locked=1 AND w.status='monitoring'
+   ORDER BY g.expires_at,g.network,a.asset_id
+  `).bind(now).all<Record<string,unknown>>();
+  if(!rows.success)return response({error:"Unable to load active owner authorizations."},503);
+  const grants=rows.results.filter(row=>{
+   try{return Array.isArray(JSON.parse(String(row.executionModesJson)))&&
+     (JSON.parse(String(row.executionModesJson)) as unknown[]).includes("admin-initiated")&&
+     row.amountKind==="capped"&&typeof row.maxAmountRaw==="string"&&
+     Number(row.destinationLocked)===1&&Number(row.destinationActive)===1&&Boolean(row.symbol);}
+   catch{return false;}
+  }).map(row=>({...row,executionModes:JSON.parse(String(row.executionModesJson))}));
+  return response({grants,executionEnabled:false});
+ }
+\n // Queue an administrator-initiated recovery for an already verified, owner-authorized ERC-20 grant.
  // Queueing never signs or submits a blockchain transaction.
  if(path==="/api/admin/recovery-jobs"&&request.method==="POST"){
   if(!originOk(request,url))return response({error:"Origin check failed."},403);
