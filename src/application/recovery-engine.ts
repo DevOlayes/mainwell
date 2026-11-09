@@ -1,5 +1,5 @@
 import {
-  createPublicClient, createWalletClient, encodeFunctionData, http, parseAbi,
+  createPublicClient, encodeFunctionData, http, keccak256, parseAbi, decodeEventLog,
   privateKeyToAccount, type Address, type Chain, type Hex
 } from "viem";
 import { EvmGrantVerifier } from "../adapters/evm-grant-verifier";
@@ -118,7 +118,7 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     if(!scope||scope.verification_status!=="verified"||scope.revoked_at||String(scope.expires_at)<=now)throw new Error("grant_inactive");
     if(scope.wallet_status!=="monitoring"||Number(scope.admin_locked)!==1)throw new Error("source_wallet_not_locked");
     if(scope.asset_revoked_at||scope.amount_kind!=="capped"||!scope.token_address||!ADDRESS.test(String(scope.token_address)))throw new Error("asset_not_authorized");
-    if(Number(scope.destination_locked)!==1||Number(scope.destination_active)!==1||String(scope.destination_address).toLowerCase()!==String(scope.destination_address).toLowerCase())throw new Error("destination_not_locked");
+    if(Number(scope.destination_locked)!==1||Number(scope.destination_active)!==1||!ADDRESS.test(String(scope.destination_address)))throw new Error("destination_not_locked");
     if(Number(scope.token_active)!==1)throw new Error("token_not_active");
     const network=String(scope.network) as Network;
     const config=NETWORKS[network];
@@ -171,19 +171,29 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     if(account.address.toLowerCase()!==operatorAddress.toLowerCase())throw new Error("operator_private_key_address_mismatch");
     const sponsorBalance=await publicClient.getBalance({address:account.address});
     if(sponsorBalance<estimatedFee+reserve)throw new Error("sponsor_gas_insufficient");
-    const walletClient=createWalletClient({account,chain,transport:http(rpcUrl)});
-    const hash=await walletClient.writeContract({account,chain,address:executor,abi:EXECUTOR_ABI,functionName,args:[token,amount],gas,maxFeePerGas,maxPriorityFeePerGas});
+    const nonce=await publicClient.getTransactionCount({address:account.address,blockTag:"pending"});
+    const data=encodeFunctionData({abi:EXECUTOR_ABI,functionName,args:[token,amount]});
+    const serialized=await account.signTransaction({chain,nonce,to:executor,data,value:0n,gas,maxFeePerGas,maxPriorityFeePerGas,type:"eip1559"});
+    const hash=keccak256(serialized);
     const txId=crypto.randomUUID(),sentAt=new Date().toISOString();
-    const result=await env.DB.batch([
-      env.DB.prepare("INSERT INTO recovery_transactions(id,job_id,network,transaction_hash,status,asset_id,amount_raw,destination_address,estimated_fee_raw,actual_fee_raw,submitted_at,confirmed_at,created_at,sender_address,gas_limit_raw,max_fee_per_gas_raw,max_priority_fee_per_gas_raw) VALUES(?,?,?,?,'submitted',?,?,?, ?,NULL,?,NULL,?,?,?, ?,?)")
-        .bind(txId,job.id,network,hash,job.asset_id,amount.toString(),verifiedAsset.destinationAddress,estimatedFee.toString(),sentAt,sentAt,account.address,gas.toString(),maxFeePerGas.toString(),maxPriorityFeePerGas.toString()),
+    const prepared=await env.DB.batch([
+      env.DB.prepare("INSERT INTO recovery_transactions(id,job_id,network,transaction_hash,status,asset_id,amount_raw,destination_address,estimated_fee_raw,actual_fee_raw,submitted_at,confirmed_at,created_at,sender_address,nonce,gas_limit_raw,max_fee_per_gas_raw,max_priority_fee_per_gas_raw) VALUES(?,?,?,?,'prepared',?,?,?, ?,NULL,NULL,NULL,?,?,?,?,?,?)")
+        .bind(txId,job.id,network,hash,job.asset_id,amount.toString(),verifiedAsset.destinationAddress,estimatedFee.toString(),sentAt,account.address,nonce,gas.toString(),maxFeePerGas.toString(),maxPriorityFeePerGas.toString()),
       env.DB.prepare("INSERT INTO recovery_execution_attempts(id,job_id,attempt_number,phase,simulation_block_number,gas_funding_source,estimated_fee_raw,fee_cap_raw,transaction_hash,error_code,created_at,updated_at) VALUES(?,?,?,?,?,'recovery-sponsor',?,?,?,NULL,?,?)")
-        .bind(attemptId,job.id,job.attempt_count,"submitted",Number(await publicClient.getBlockNumber()),estimatedFee.toString(),maxAllowed.toString(),hash,sentAt,sentAt),
-      env.DB.prepare("UPDATE recovery_jobs SET status='submitted',requested_amount_raw=?,destination_address=?,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE id=? AND lease_owner=?")
-        .bind(amount.toString(),verifiedAsset.destinationAddress,sentAt,job.id,leaseId)
+        .bind(attemptId,job.id,job.attempt_count,"signed",Number(await publicClient.getBlockNumber()),estimatedFee.toString(),maxAllowed.toString(),hash,sentAt,sentAt)
     ]);
-    if(result.some(x=>!x.success))throw new Error("transaction_submitted_but_database_recording_failed");
-    await audit(env,job.id,"recovery.transaction.submitted",{network,assetId:job.asset_id,amountRaw:amount.toString(),transactionHash:hash,gasFundingSource:"recovery-sponsor"},sentAt);
+    if(prepared.some(x=>!x.success))throw new Error("signed_transaction_recording_failed");
+    const submittedHash=await publicClient.sendRawTransaction({serializedTransaction:serialized});
+    if(submittedHash.toLowerCase()!==hash.toLowerCase())throw new Error("rpc_transaction_hash_mismatch");
+    const submittedAt=new Date().toISOString();
+    const marked=await env.DB.batch([
+      env.DB.prepare("UPDATE recovery_transactions SET status='submitted',submitted_at=? WHERE id=? AND status='prepared'").bind(submittedAt,txId),
+      env.DB.prepare("UPDATE recovery_execution_attempts SET phase='submitted',updated_at=? WHERE id=?").bind(submittedAt,attemptId),
+      env.DB.prepare("UPDATE recovery_jobs SET status='submitted',requested_amount_raw=?,destination_address=?,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE id=? AND lease_owner=?")
+        .bind(amount.toString(),verifiedAsset.destinationAddress,submittedAt,job.id,leaseId)
+    ]);
+    if(marked.some(x=>!x.success))throw new Error("transaction_submission_state_recording_failed");
+    await audit(env,job.id,"recovery.transaction.submitted",{network,assetId:job.asset_id,amountRaw:amount.toString(),transactionHash:hash,gasFundingSource:"recovery-sponsor"},submittedAt);
     return true;
   }catch(error){
     const code=safeCode(error),at=new Date().toISOString();
@@ -198,7 +208,7 @@ async function processOne(env:EngineEnv):Promise<boolean>{
   }
 }
 async function trackTransactions(env:EngineEnv):Promise<number>{
-  const rows=await env.DB.prepare("SELECT id,job_id,network,transaction_hash,asset_id,amount_raw,destination_address,sender_address FROM recovery_transactions WHERE status IN ('submitted','pending') AND transaction_hash IS NOT NULL ORDER BY submitted_at ASC LIMIT 25")
+  const rows=await env.DB.prepare("SELECT t.id,t.job_id,t.network,t.transaction_hash,t.asset_id,t.amount_raw,t.destination_address,t.sender_address,g.executor_address FROM recovery_transactions t INNER JOIN recovery_jobs j ON j.id=t.job_id INNER JOIN recovery_grants g ON g.grant_id=j.grant_id WHERE t.status IN ('submitted','pending') AND t.transaction_hash IS NOT NULL ORDER BY submitted_at ASC LIMIT 25")
     .all<Record<string,unknown>>();
   if(!rows.success)return 0;
   let checked=0;
@@ -217,7 +227,7 @@ async function trackTransactions(env:EngineEnv):Promise<number>{
         try{return parseAbiEvent(log)}catch{return []}
       }):[];
       const event=events.find(e=>String(e.args.token).toLowerCase()===String(row.asset_id).split(":").pop()?.toLowerCase()&&String(e.args.destination).toLowerCase()===String(row.destination_address).toLowerCase()&&BigInt(e.args.amount as bigint)===BigInt(String(row.amount_raw))&&String(e.args.caller).toLowerCase()===String(row.sender_address).toLowerCase());
-      const ok=receipt.status==="success"&&Boolean(event)&&transaction.to?.toLowerCase()!==undefined;
+      const ok=receipt.status==="success"&&Boolean(event)&&transaction.to?.toLowerCase()===String(row.executor_address).toLowerCase()&&transaction.from.toLowerCase()===String(row.sender_address).toLowerCase();
       const status=ok?"confirmed":"reverted";
       await env.DB.batch([
         env.DB.prepare("UPDATE recovery_transactions SET status=?,block_number=?,block_hash=?,gas_used_raw=?,effective_gas_price_raw=?,actual_fee_raw=?,confirmed_at=?,last_checked_at=?,failure_code=? WHERE id=?")
@@ -236,12 +246,9 @@ async function trackTransactions(env:EngineEnv):Promise<number>{
   return checked;
 }
 function parseAbiEvent(log:{topics:readonly Hex[];data:Hex;address:Address}):Array<{args:Record<string,unknown>}>{
-  const {decodeEventLog}=requireViem();
   const decoded=decodeEventLog({abi:EXECUTOR_ABI,data:log.data,topics:log.topics});
   return decoded.eventName==="TokenRecovered"?[{args:decoded.args as unknown as Record<string,unknown>}]:[];
 }
-function requireViem(){return {decodeEventLog:decodeEventLogImported};}
-import { decodeEventLog as decodeEventLogImported } from "viem";
 
 export async function runRecoveryAutomation(env:EngineEnv):Promise<void>{
   // All automation is opt-in. The execution switch remains separate and defaults off.
