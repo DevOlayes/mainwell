@@ -79,6 +79,10 @@ test("fails closed when RPC chain ID differs from configured chain", async () =>
   await assert.rejects(makeVerifier({ chainId: "0x89" }).verify(grant, owner, now), /chain ID does not match/);
 });
 
+test("fails closed when grant network label and chain ID are inconsistent", async () => {
+  await assert.rejects(makeVerifier().verify({ ...grant, chainId: 137 }, owner, now), /chain ID does not match/);
+});
+
 test("fails closed when authenticated wallet differs from grant owner", async () => {
   await assert.rejects(makeVerifier().verify(grant, destination, now), /Grant owner does not match/);
 });
