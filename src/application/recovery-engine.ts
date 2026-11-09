@@ -43,7 +43,7 @@ function safeCode(error:unknown):string {
   const known=["grant_inactive","source_wallet_not_locked","asset_not_authorized","destination_not_locked","token_not_active",
     "execution_mode_not_owner_authorized","operator_address_not_configured","operator_private_key_not_configured",
     "operator_private_key_address_mismatch","onchain_asset_scope_mismatch","requested_amount_exceeds_live_authorization_or_balance",
-    "eip1559_fee_quote_unavailable","recovery_fee_cap_missing_or_exceeded","sponsor_gas_insufficient","executor_code_hash_mismatch",
+    "eip1559_fee_quote_unavailable","estimated_gas_limit_exceeded","recovery_fee_cap_missing_or_exceeded","sponsor_gas_insufficient","sponsor_reserve_invalid","executor_code_hash_mismatch",
     "rpc_not_configured","unsupported_network"];
   if(known.includes(message))return message;
   if(message.includes("GRANT_VERIFIER_NOT_CONFIGURED"))return "grant_verifier_not_configured";
@@ -163,14 +163,17 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     if(!UINT.test(amount.toString())||amount<=0n||amount>available)throw new Error("requested_amount_exceeds_live_authorization_or_balance");
     const functionName=job.execution_mode==="admin-initiated"?"executeAdminToken":"executeAutomaticToken";
     const simulation=await publicClient.simulateContract({account:operatorAddress as Address,address:executor,abi:EXECUTOR_ABI,functionName,args:[token,amount]});
-    const gas=await publicClient.estimateContractGas({account:operatorAddress as Address,address:executor,abi:EXECUTOR_ABI,functionName,args:[token,amount]});
+    const estimatedGas=await publicClient.estimateContractGas({account:operatorAddress as Address,address:executor,abi:EXECUTOR_ABI,functionName,args:[token,amount]});
+    if(estimatedGas>1_000_000n)throw new Error("estimated_gas_limit_exceeded");
+    const gas=estimatedGas*120n/100n;
     const fees=await publicClient.estimateFeesPerGas();
     const maxFeePerGas=fees.maxFeePerGas;
     const maxPriorityFeePerGas=fees.maxPriorityFeePerGas;
-    if(!maxFeePerGas||!maxPriorityFeePerGas)throw new Error("eip1559_fee_quote_unavailable");
+    if(!maxFeePerGas||!maxPriorityFeePerGas||maxPriorityFeePerGas>maxFeePerGas)throw new Error("eip1559_fee_quote_unavailable");
     const estimatedFee=gas*maxFeePerGas;
     const maxAllowed=env.MAINWELL_MAX_RECOVERY_FEE_WEI&&UINT.test(env.MAINWELL_MAX_RECOVERY_FEE_WEI)?BigInt(env.MAINWELL_MAX_RECOVERY_FEE_WEI):null;
-    const reserve=env.MAINWELL_SPONSOR_RESERVE_WEI&&UINT.test(env.MAINWELL_SPONSOR_RESERVE_WEI)?BigInt(env.MAINWELL_SPONSOR_RESERVE_WEI):0n;
+    if(env.MAINWELL_SPONSOR_RESERVE_WEI&&!UINT.test(env.MAINWELL_SPONSOR_RESERVE_WEI))throw new Error("sponsor_reserve_invalid");
+    const reserve=env.MAINWELL_SPONSOR_RESERVE_WEI?BigInt(env.MAINWELL_SPONSOR_RESERVE_WEI):0n;
     const attemptBase={id:attemptId,job_id:job.id,attempt_number:job.attempt_count,phase:"simulated",simulation_block_number:Number(await publicClient.getBlockNumber()),gas_funding_source:"recovery-sponsor",estimated_fee_raw:estimatedFee.toString(),fee_cap_raw:maxAllowed?.toString()??null,transaction_hash:null,error_code:null,created_at:now,updated_at:now};
     const sponsorBalance=await publicClient.getBalance({address:operatorAddress as Address});
     const sponsorGasSufficient=sponsorBalance>=estimatedFee+reserve;
