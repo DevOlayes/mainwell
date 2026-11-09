@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mainwell",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-11-09",
+  "upload_source_maps": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "persist": true,
+      "head_sampling_rate": 0.1
+    }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mainwell",
+      "database_id": "a87f16fd-873b-4917-ad92-cb7ce8f29ffd",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
