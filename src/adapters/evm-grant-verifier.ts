@@ -57,7 +57,7 @@ export class EvmGrantVerifier {
   }
 
   private async call(to: string, signature: string, args = ""): Promise<string> {
-    const selector=keccak256Hex(new TextEncoder().encode(signature)).slice(0,10);
+    const selector=keccak256Hex("0x"+Array.from(new TextEncoder().encode(signature),b=>b.toString(16).padStart(2,"0")).join("")).slice(0,10);
     const result=await this.rpc("eth_call",[{to,data:selector+args},"latest"]);
     if (typeof result!=="string" || !/^0x[0-9a-fA-F]*$/.test(result) || result.length<66) {
       throw new Error("Malformed executor contract response for "+signature+".");
