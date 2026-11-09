@@ -4,6 +4,7 @@ export * from "./domain/networks";
 export * from "./adapters/read-only-wallet";
 export * from "./adapters/evm-read-only";
 export * from "./application/monitor-wallet";
+export * from "./application/evm-monitor";
 export * from "./policy/recovery-policy";
 export * from "./policy/recovery-grant";
 export * from "./planner/recovery-planner";
