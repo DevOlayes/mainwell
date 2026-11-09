@@ -55,7 +55,7 @@ function makeVerifier(overrides = {}) {
     return { ok: true, status: 200, json: async () => ({ jsonrpc: "2.0", id: req.id, result }) };
   };
   return new EvmGrantVerifier({
-    rpcUrl: "https://trusted-rpc.example", trustedExecutorCodeHash: codeHash, fetcher
+    rpcUrl: "https://trusted-rpc.example", trustedExecutorCodeHash: codeHash, expectedChainId: 1, fetcher
   });
 }
 
@@ -75,8 +75,27 @@ test("fails closed when deployed runtime bytecode hash is not trusted", async ()
   await assert.rejects(makeVerifier({ code: "0x60016000" }).verify(grant, owner, now), /bytecode hash is not trusted/);
 });
 
-test("fails closed when RPC chain ID differs from grant", async () => {
+test("fails closed when RPC chain ID differs from configured chain", async () => {
   await assert.rejects(makeVerifier({ chainId: "0x89" }).verify(grant, owner, now), /chain ID does not match/);
+});
+
+test("fails closed when authenticated wallet differs from grant owner", async () => {
+  await assert.rejects(makeVerifier().verify(grant, destination, now), /Grant owner does not match/);
+});
+
+test("fails closed when executor owner differs from authenticated wallet", async () => {
+  const selectors = { owner: selector("owner()") };
+  await assert.rejects(makeVerifier({ callResult: { selector: selectors.owner, value: "0x" + addressWord(destination) } }).verify(grant, owner, now), /Executor owner does not match/);
+});
+
+test("fails closed when executor destination differs from approved destination", async () => {
+  const sig = selector("destination()");
+  await assert.rejects(makeVerifier({ callResult: { selector: sig, value: "0x" + addressWord(owner) } }).verify(grant, owner, now), /destination does not match/);
+});
+
+test("fails closed when executor is revoked on-chain", async () => {
+  const sig = selector("revoked()");
+  await assert.rejects(makeVerifier({ callResult: { selector: sig, value: "0x" + word(1) } }).verify(grant, owner, now), /revoked on-chain/);
 });
 
 test("fails closed when deployment receipt does not prove owner deployment", async () => {
