@@ -46,7 +46,6 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   const normalized=address.toLowerCase(),existing=await env.DB.prepare("SELECT id FROM recovery_destinations WHERE network=? AND address=? LIMIT 1").bind(network,normalized).first<{id:string}>();
   const id=existing?.id??crypto.randomUUID();
   const batch=await env.DB.batch([
-   env.DB.prepare("UPDATE recovery_destinations SET is_active=0,updated_by=?,updated_at=? WHERE network=? AND is_active=1").bind(admin.adminId,now,network),
    env.DB.prepare("INSERT INTO recovery_destinations(id,network,address,locked,is_active,updated_by,updated_at) VALUES(?,?,?,1,1,?,?) ON CONFLICT(network,address) DO UPDATE SET locked=1,is_active=1,updated_by=excluded.updated_by,updated_at=excluded.updated_at").bind(id,network,normalized,admin.adminId,now),
    env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.destination.lock','recovery_destination',?,?,?)").bind(admin.adminId,id,JSON.stringify({network,address:normalized,locked:true}),now)
   ]);
