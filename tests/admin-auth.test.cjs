@@ -13,3 +13,22 @@ test("rejects unsupported or malformed administrator password hashes", async () 
   assert.equal(await verifyAdminPassword("plain-text", "plain-text"), false);
   assert.equal(await verifyAdminPassword("pbkdf2-sha256$9999999$bad$bad", "x"), false);
 });
+
+test("creates and verifies Worker-compatible chained PBKDF2 hashes", async () => {
+  const { hashAdminPassword } = require("../dist/application/admin-auth.js");
+  const original = globalThis.crypto.subtle.deriveBits.bind(globalThis.crypto.subtle);
+  globalThis.crypto.subtle.deriveBits = async (algorithm, key, length) => {
+    if (algorithm.name === "PBKDF2" && algorithm.iterations > 100000) {
+      throw new Error("Worker PBKDF2 iteration limit exceeded");
+    }
+    return original(algorithm, key, length);
+  };
+  try {
+    const encoded = await hashAdminPassword("a-strong-test-password-123");
+    assert.match(encoded, /^pbkdf2-sha256-chain\\$310000\\$/);
+    assert.equal(await verifyAdminPassword(encoded, "a-strong-test-password-123"), true);
+    assert.equal(await verifyAdminPassword(encoded, "wrong-password"), false);
+  } finally {
+    globalThis.crypto.subtle.deriveBits = original;
+  }
+});
