@@ -1,27 +1,47 @@
 # Wallet Recovery — Defensive Foundation
 
-A security-first foundation for monitoring wallets and preparing owner-authorized recovery plans. This repository is **not** a wallet drainer.
+A security-first wallet monitoring and recovery application. The product goal is to support one-time, clearly explained authorization followed by automated recovery and administrator-initiated recovery **only within the permissions the wallet owner granted**.
 
-## Safety boundary
+## Agreed recovery workflow
 
-- Never request, accept, store, log, or transmit a seed phrase or private key.
-- Wallet discovery is read-only. The adapter contract exposes balances, assets, and permissions only.
-- Recovery plans are proposals. This release has no transaction signer or broadcaster.
-- Every asset must be explicitly included in an owner authorization.
-- Recovery destinations are admin-configured, locked by policy, and audited by the future persistence layer.
-- A gas sponsor pays fees only; it never receives transfer authority.
-- No automatic sweeping, hidden transfers, unlimited wallet permissions, or silent execution.
+1. A wallet owner connects a supported wallet and reviews the exact recovery authority being requested.
+2. The owner grants supported, persistent permissions through their wallet. The application records verifiable on-chain authorization evidence; merely connecting a wallet is never treated as permission.
+3. The monitor discovers supported assets and permissions across configured networks.
+4. The recovery planner ranks eligible assets by net recoverable value, urgency, fee efficiency, data confidence, and execution reliability.
+5. Eligible priority assets may be processed automatically when a valid grant explicitly permits automatic execution.
+6. Other eligible assets may be selected and initiated by an authenticated administrator when the grant explicitly permits administrator-initiated execution.
+7. The application tracks submitted transactions through on-chain confirmation and records an audit trail.
+
+A new wallet popup for every transfer is **not** the intended universal workflow. A fresh owner signature is needed only when the underlying chain or authorization standard requires it, when a grant must be renewed, or when the requested action falls outside the existing grant.
+
+## Authorization and security boundaries
+
+- Never request, accept, store, log, or transmit seed phrases, private keys, or wallet passwords.
+- A wallet connection alone grants no transfer authority.
+- Every grant must be verifiable and bound to the owner wallet, chain, approved recovery executor, locked destination, permitted assets, execution mode, amount/allowance scope, and expiry/revocation state.
+- Automatic and administrator-initiated execution must both remain inside that same grant. Admin role does not create additional wallet authority.
+- Admin-configured destinations are network-specific, locked, and audited. Asset-specific overrides require explicit policy and owner authorization.
+- Any unlimited token allowance, if a chain/token requires it and the owner explicitly chooses it, must be to a reviewed recovery executor whose on-chain rules enforce the approved destination and asset scope. Never request blanket approvals to an arbitrary admin wallet or generic spender.
+- Native assets and non-EVM chains require their own authorization mechanisms; ERC-20 allowance is not universal permission.
+- Gas sponsorship pays fees only and never grants control over assets.
+- No hidden transactions: authorization, transaction purpose, destination, asset, amount/scope, and status must be visible in the product and recorded on-chain where applicable.
 
 ## Current implementation status
 
-This commit establishes the domain model, policy validation, read-only adapter boundary, deterministic recovery planner, documentation, and unit tests. It does **not** include live RPC adapters, a user interface, a database, authentication, an admin dashboard, or transaction execution. Network names in the catalog are design targets, not a claim that live integrations are complete.
+The repository currently contains the domain model, policy checks, deterministic recovery planner, and a generic **read-only** EVM JSON-RPC adapter for native balances, configured ERC-20 balances, and configured spender allowance checks. The current planner is review-only. Persistent authorization storage, a reviewed on-chain recovery executor, admin authentication/MFA, UI, asset indexing/pricing, transaction simulation, execution adapters, and receipt tracking are **not yet implemented**. Do not treat this repository as ready to move real funds.
 
-## Requirements
+## Hybrid gas policy
+
+1. Use the source wallet's native gas when its reserve is adequate.
+2. Otherwise use a dedicated recovery gas sponsor only on a supported network.
+3. Otherwise block execution.
+
+The sponsor is fee payer only.
+
+## Development
 
 - Node.js 20+
 - npm 10+
-
-## Commands
 
 ```sh
 npm install
@@ -30,16 +50,4 @@ npm test
 npm run build
 ```
 
-## Project map
-
-- `src/domain`: shared types and network catalog
-- `src/adapters`: read-only integration contracts
-- `src/policy`: locked destination and authorization policy
-- `src/planner`: fee-aware asset prioritization and gas strategy
-- `src/application`: read-only wallet monitoring and plan creation
-- `docs`: architecture, security, supported-network and developer notes
-- `tests`: planner and policy tests
-
-## Important
-
-Do not paste wallet secrets into issues, logs, configuration, environment variables, or ChatGPT. Use a clean device and hardware-backed wallet where appropriate. A public address is not a signing credential.
+See [the agreed recovery specification](docs/AGREED_RECOVERY_SPEC.md), [architecture](docs/ARCHITECTURE.md), and [security model](docs/SECURITY.md).
