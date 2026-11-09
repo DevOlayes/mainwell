@@ -1,26 +1,18 @@
 {
-  "name": "wallet-drainer",
-  "version": "0.0.1",
-  "description": "EVM Emergency wallet drainer",
-  "bin": {
-    "wallet-drainer": "./bin/wallet-drainer.js"
-  },
+  "name": "defensive-wallet-recovery",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read-only wallet monitoring and owner-authorized recovery planning foundation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "prettier": "prettier --write .",
-    "build": "tsc"
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test tests/*.test.cjs"
   },
-  "keywords": [],
-  "author": "Cristian Iturri <iturri.cf@gmail.com>",
-  "license": "MIT",
+  "engines": { "node": ">=20" },
   "devDependencies": {
-    "@types/node": "^20.4.0",
-    "@types/yargs": "^17.0.24",
-    "prettier": "^3.0.0",
-    "typescript": "^5.1.6"
-  },
-  "dependencies": {
-    "ethers": "^5.7.2",
-    "yargs": "^17.7.2"
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.3"
   }
 }
