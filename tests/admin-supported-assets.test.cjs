@@ -31,18 +31,19 @@ test("admin can register a supported ERC-20 token with normalized network asset 
     const result=req.method==="eth_chainId"?"0x1":req.method==="eth_getCode"?"0x60006000":"0x6";
     return new Response(JSON.stringify({jsonrpc:"2.0",id:req.id,result}),{status:200});
   };
-  const env=envMock();env.EVM_RPC_ETHEREUM="https://rpc.example";
-  const response=await handleAdminDestinationApi(request("/api/admin/supported-assets","POST",{
-    network:"ethereum",address:"0x4444444444444444444444444444444444444444",
-    symbol:"USDC",name:"USD Coin",decimals:6
-  }),env,admin);
-  const data=await response.json();
-  assert.equal(response.status,200);
-  assert.equal(data.asset.id,"ethereum:erc20:0x4444444444444444444444444444444444444444");
-  assert.equal(data.asset.decimals,6);
-  assert.equal(env.writes.length,2);
+  try {
+    const env=envMock();env.EVM_RPC_ETHEREUM="https://rpc.example";
+    const response=await handleAdminDestinationApi(request("/api/admin/supported-assets","POST",{
+      network:"ethereum",address:"0x4444444444444444444444444444444444444444",
+      symbol:"USDC",name:"USD Coin",decimals:6
+    }),env,admin);
+    const data=await response.json();
+    assert.equal(response.status,200);
+    assert.equal(data.asset.id,"ethereum:erc20:0x4444444444444444444444444444444444444444");
+    assert.equal(data.asset.decimals,6);
+    assert.equal(env.writes.length,2);
+  } finally { global.fetch=originalFetch; }
 });
-
 test("admin token registry rejects invalid decimals and malformed token addresses", async () => {
   const env=envMock();
   const response=await handleAdminDestinationApi(request("/api/admin/supported-assets","POST",{
