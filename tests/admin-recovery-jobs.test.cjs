@@ -52,8 +52,8 @@ function makeEnv({ scope = baseScope, prior = null } = {}) {
   };
   return { env: { DB }, calls };
 }
-function request(body = payload, origin = "https://mainwell.example") {
-  return new Request("https://mainwell.example/api/admin/recovery-jobs", {
+function request(body = payload, origin = "https://mainwell.example", path = "/api/admin/recovery-jobs") {
+  return new Request("https://mainwell.example" + path, {
     method: "POST",
     headers: { origin, "content-type": "application/json" },
     body: JSON.stringify(body)
@@ -111,4 +111,24 @@ test("idempotent retries return the original job without creating another", asyn
   assert.equal(data.duplicate, true);
   assert.equal(data.job.id, "job-existing");
   assert.equal(calls.batch.length, 0);
+});
+
+test("retry requeues a ready job and writes its audit record atomically", async () => {
+  const { env, calls } = makeEnv();
+  const response = await handleAdminDestinationApi(request({}, "https://mainwell.example", "/api/admin/recovery-jobs/job-1/retry"), env, admin);
+  const data = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(data.status, "queued");
+  assert.equal(calls.batch.length, 1);
+  assert.equal(calls.batch[0].length, 3);
+});
+
+test("cancellation is recorded as an atomic terminal state change", async () => {
+  const { env, calls } = makeEnv();
+  const response = await handleAdminDestinationApi(request({}, "https://mainwell.example", "/api/admin/recovery-jobs/job-1/cancel"), env, admin);
+  const data = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(data.status, "cancelled");
+  assert.equal(calls.batch.length, 1);
+  assert.equal(calls.batch[0].length, 3);
 });
