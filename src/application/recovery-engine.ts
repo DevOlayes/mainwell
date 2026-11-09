@@ -42,7 +42,7 @@ function safeCode(error:unknown):string {
   const message=error instanceof Error?error.message:"";
   const known=["grant_inactive","source_wallet_not_locked","asset_not_authorized","destination_not_locked","token_not_active","token_decimals_changed",
     "execution_mode_not_owner_authorized","invalid_recovery_destination","operator_address_not_configured","operator_private_key_not_configured",
-    "operator_private_key_address_mismatch","onchain_asset_scope_mismatch","requested_amount_exceeds_live_authorization_or_balance",
+    "operator_private_key_address_mismatch","operator_execution_busy","onchain_asset_scope_mismatch","requested_amount_exceeds_live_authorization_or_balance",
     "eip1559_fee_quote_unavailable","gas_fee_quote_unavailable","estimated_gas_limit_exceeded","recovery_fee_cap_missing_or_exceeded","sponsor_gas_insufficient","sponsor_reserve_invalid","executor_code_hash_mismatch",
     "rpc_not_configured","unsupported_network"];
   if(known.includes(message))return message;
@@ -123,6 +123,7 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     .bind(candidate.id,leaseId).first<{id:string;grant_id:string;asset_id:string;execution_mode:"admin-initiated"|"automatic-priority";requested_amount_raw:string|null;attempt_count:number}>();
   if(!job)return false;
   const attemptId=crypto.randomUUID();
+  let executionLock:{network:string;operatorAddress:string}|null=null;
   try{
     const scope=await env.DB.prepare(`
       SELECT g.network,g.owner_wallet,g.executor_address,g.expires_at,g.revoked_at,g.verification_status,
@@ -204,6 +205,11 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     const account=privateKeyToAccount((privateKey.startsWith("0x")?privateKey:"0x"+privateKey) as Hex);
     if(account.address.toLowerCase()!==operatorAddress.toLowerCase())throw new Error("operator_private_key_address_mismatch");
     if(!sponsorGasSufficient)throw new Error("sponsor_gas_insufficient");
+    const lockUntil=new Date(Date.now()+600_000).toISOString();
+    const lockResult=await env.DB.prepare("INSERT INTO recovery_execution_locks(network,operator_address,lease_owner,lease_expires_at,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(network,operator_address) DO UPDATE SET lease_owner=excluded.lease_owner,lease_expires_at=excluded.lease_expires_at,updated_at=excluded.updated_at WHERE recovery_execution_locks.lease_expires_at<?")
+      .bind(network,account.address,leaseId,lockUntil,now,now).run();
+    if((lockResult.meta?.changes??0)!==1)throw new Error("operator_execution_busy");
+    executionLock={network,operatorAddress:account.address};
     const nonce=await publicClient.getTransactionCount({address:account.address,blockTag:"pending"});
     const data=encodeFunctionData({abi:EXECUTOR_ABI,functionName,args:[token,amount]});
     const serialized=useEip1559
@@ -232,6 +238,12 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     return true;
   }catch(error){
     const code=safeCode(error),at=new Date().toISOString();
+    if(code==="operator_execution_busy"){
+      const retryAt=new Date(Date.now()+30_000).toISOString();
+      await env.DB.prepare("UPDATE recovery_jobs SET status='queued',next_attempt_at=?,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE id=? AND lease_owner=?")
+        .bind(retryAt,at,job.id,leaseId).run();
+      return true;
+    }
     await env.DB.batch([
       env.DB.prepare("INSERT INTO recovery_execution_attempts(id,job_id,attempt_number,phase,error_code,created_at,updated_at) VALUES(?,?,?,'blocked',?,?,?) ON CONFLICT(job_id,attempt_number) DO UPDATE SET phase='blocked',error_code=excluded.error_code,updated_at=excluded.updated_at")
         .bind(attemptId,job.id,job.attempt_count,code,at,at),
@@ -240,6 +252,13 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     ]);
     await audit(env,job.id,"recovery.preflight.blocked",{errorCode:code},at);
     return true;
+  } finally {
+    if(executionLock){
+      try{
+        await env.DB.prepare("DELETE FROM recovery_execution_locks WHERE network=? AND operator_address=? AND lease_owner=?")
+          .bind(executionLock.network,executionLock.operatorAddress,leaseId).run();
+      }catch{console.error("mainwell_execution_lock_release_failed");}
+    }
   }
 }
 async function trackTransactions(env:EngineEnv):Promise<number>{
