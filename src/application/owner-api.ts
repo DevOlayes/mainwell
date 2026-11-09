@@ -76,6 +76,15 @@ function ownerFilter(session: OwnerSession): string { return session.wallet.toLo
 export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session: OwnerSession): Promise<Response | null> {
   const url = new URL(request.url), path = url.pathname, owner = ownerFilter(session);
 
+  if (path === "/api/owner/recovery-destinations" && request.method === "GET") {
+    const network = url.searchParams.get("network");
+    if (network && !NETWORKS.has(network)) return reply({ error: "Unsupported network." }, 400);
+    const sql = "SELECT id, network, address, locked, updated_at FROM recovery_destinations WHERE is_active = 1 AND locked = 1" + (network ? " AND network = ?" : "") + " ORDER BY network";
+    const statement = env.DB.prepare(sql);
+    const rows = await (network ? statement.bind(network) : statement).all<Record<string, unknown>>();
+    return rows.success ? reply({ destinations: rows.results }) : reply({ error: "Unable to load locked destinations." }, 503);
+  }
+
   if (path === "/api/owner/profile" && request.method === "GET") {
     const result = await env.DB.prepare(`
       SELECT COUNT(*) AS wallet_count FROM recovery_wallets WHERE owner_address = ?
@@ -292,8 +301,11 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     if (ids.length) {
       const placeholders = ids.map(() => "?").join(",");
       const assets = await env.DB.prepare(`
-        SELECT grant_id, asset_id, token_address, amount_kind, max_amount_raw, owner_acknowledged, revoked_at
-        FROM recovery_grant_assets WHERE grant_id IN (${placeholders}) ORDER BY asset_id
+        SELECT a.grant_id, a.asset_id, a.token_address, a.amount_kind, a.max_amount_raw, a.owner_acknowledged, a.revoked_at, d.id AS selected_destination_id, d.address AS selected_destination_address
+        FROM recovery_grant_assets a
+        LEFT JOIN recovery_asset_destinations x ON x.grant_id = a.grant_id AND x.asset_id = a.asset_id
+        LEFT JOIN recovery_destinations d ON d.id = x.destination_id AND d.is_active = 1
+        WHERE a.grant_id IN (${placeholders}) ORDER BY a.asset_id
       `).bind(...ids).all<Record<string, unknown>>();
       if (!assets.success) return reply({ error: "Unable to load authorization scopes." }, 503);
       for (const a of assets.results) {
@@ -301,7 +313,8 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
         if (!assetsByGrant.has(key)) assetsByGrant.set(key, []);
         assetsByGrant.get(key)!.push({
           assetId: a.asset_id, tokenAddress: a.token_address, amountKind: a.amount_kind,
-          maxAmountRaw: a.max_amount_raw, ownerAcknowledged: Boolean(a.owner_acknowledged), revokedAt: a.revoked_at
+          maxAmountRaw: a.max_amount_raw, ownerAcknowledged: Boolean(a.owner_acknowledged), revokedAt: a.revoked_at,
+          selectedDestinationId: a.selected_destination_id ?? null, selectedDestinationAddress: a.selected_destination_address ?? null
         });
       }
     }
