@@ -247,11 +247,12 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
    SELECT g.network,g.owner_wallet,g.execution_modes_json,g.expires_at,g.revoked_at,g.verification_status,
           a.token_address,a.amount_kind,a.max_amount_raw,a.revoked_at AS asset_revoked_at,a.destination_address,
           w.id AS wallet_id,w.status AS wallet_status,w.admin_locked,
-          d.locked AS destination_locked,d.is_active AS destination_active
+          d.locked AS destination_locked,d.is_active AS destination_active,s.is_active AS token_active
    FROM recovery_grants g
    INNER JOIN recovery_grant_assets a ON a.grant_id=g.grant_id AND a.asset_id=?
    INNER JOIN recovery_wallets w ON lower(w.owner_address)=lower(g.owner_wallet) AND w.network=g.network
    LEFT JOIN recovery_destinations d ON d.network=g.network AND lower(d.address)=lower(a.destination_address)
+   LEFT JOIN recovery_supported_assets s ON s.id=a.asset_id AND s.network=g.network
    WHERE g.grant_id=? LIMIT 1
   `).bind(assetId,grantId).first<Record<string,unknown>>();
   if(!scope||scope.verification_status!=="verified"||scope.revoked_at||String(scope.expires_at)<=now)
@@ -259,6 +260,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   if(Number(scope.admin_locked)!==1||scope.wallet_status!=="monitoring")
    return response({error:"The exact source wallet must remain administrator-locked and actively monitored."},409);
   if(scope.asset_revoked_at)return response({error:"The owner has revoked this asset authorization."},409);
+  if(Number(scope.token_active)!==1)return response({error:"This token is not currently enabled in the supported asset registry."},409);
   if(!scope.token_address||!ADDRESS.test(String(scope.token_address)))
    return response({error:"This Phase Two queue currently supports verified ERC-20 assets only."},409);
   if(scope.amount_kind!=="capped"||typeof scope.max_amount_raw!=="string"||!/^[1-9][0-9]{0,77}$/.test(scope.max_amount_raw))
