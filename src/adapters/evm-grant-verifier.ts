@@ -36,7 +36,7 @@ export interface EvmGrantVerification {
   executor: string;
   destination: string;
   expiresAt: number;
-  assets: Array<{ tokenAddress: string; cap: string; recovered: string; allowance: string; remaining: string }>;
+  assets: Array<{ tokenAddress: string; destinationAddress: string; cap: string; recovered: string; allowance: string; remaining: string }>;
 }
 
 /** Fail-closed verifier for the reviewed ScopedRecoveryExecutor deployment. */
@@ -143,6 +143,12 @@ export class EvmGrantVerifier {
       if (!asset.tokenAddress || !ADDRESS.test(asset.tokenAddress)) throw new Error("Native assets are not supported by this ERC-20 executor.");
       const token=asset.tokenAddress.toLowerCase();
       if (onchainAsset !== token) throw new Error("On-chain asset order or token address does not match the grant.");
+      const onchainDestination = this.decodeAddress(await this.call(grant.executorAddress, "assetDestination(address)", token.slice(2).padStart(64, "0")));
+      if (!ADDRESS.test(asset.destinationAddress) || onchainDestination !== asset.destinationAddress.toLowerCase()) {
+        throw new Error("On-chain destination for asset " + asset.assetId + " does not match its owner-approved destination.");
+      }
+      const destinationAtIndex = this.decodeAddress(await this.call(grant.executorAddress, "authorizedAssetDestinationAt(uint256)", indexArg));
+      if (destinationAtIndex !== onchainDestination) throw new Error("On-chain asset destination index does not match its immutable mapping.");
       const arg=token.slice(2).padStart(64,"0");
       const cap=BigInt("0x"+(await this.call(grant.executorAddress,"assetLimit(address)",arg)).slice(-64));
       const recovered=BigInt("0x"+(await this.call(grant.executorAddress,"amountRecovered(address)",arg)).slice(-64));
@@ -152,7 +158,7 @@ export class EvmGrantVerifier {
       const allowance=BigInt("0x"+(await this.call(token,"allowance(address,address)",allowanceArg)).slice(-64));
       const remaining=cap-recovered;
       if (allowance<remaining) throw new Error("Live ERC-20 allowance is below the remaining authorized scope for "+asset.assetId+".");
-      assets.push({tokenAddress:token,cap:cap.toString(),recovered:recovered.toString(),allowance:allowance.toString(),remaining:remaining.toString()});
+      assets.push({tokenAddress:token,destinationAddress:onchainDestination,cap:cap.toString(),recovered:recovered.toString(),allowance:allowance.toString(),remaining:remaining.toString()});
     }
 
     return {
