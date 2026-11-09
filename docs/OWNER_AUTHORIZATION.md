@@ -82,3 +82,16 @@ Admin destination configuration:
 Changing a policy affects only future owner authorizations. It does not mutate an existing grant, executor, or asset destination. A different destination requires a new owner-approved executor/grant. TRON, Solana, and Bitcoin destination policies are not implemented by this EVM contract; their chain-specific adapters and owner authorization remain future work.
 
 **Deployment boundary:** the revised Solidity source is committed but is not deployed to any chain and has not been independently audited. Existing deployed executor bytecode hashes do not identify this new source version. The application must keep recovery execution disabled until the contract is independently reviewed, Foundry tests pass, the new runtime hash is pinned per network, and the owner-facing approval flow deploys/approves the exact per-asset destination array.
+
+
+## Administrator destination console and MFA bootstrap
+
+The Worker now serves `/admin`, a small destination-management console. It supports first-admin setup, TOTP sign-in, adding multiple locked EVM destinations, setting network/asset destination policies, viewing configured destinations/policies, and signing out. The JSON endpoints remain protected by a server-side administrator session whose MFA verification must be less than 12 hours old. Password/MFA failures are throttled by a hashed email/IP key.
+
+Before first use, configure two Worker secrets:
+- `ADMIN_MFA_ENCRYPTION_KEY`: base64 encoding of exactly 32 cryptographically random bytes. Used only to encrypt/decrypt TOTP seeds at rest with AES-256-GCM.
+- `MAINWELL_ADMIN_BOOTSTRAP_TOKEN`: a high-entropy one-time setup token (at least 32 random bytes, encoded as hex or base64).
+
+Open `/admin` and use First administrator setup with the bootstrap token, administrator email, and a strong password (minimum 14 characters). Add the returned TOTP secret to an authenticator app, confirm the six-digit code, then sign in. The bootstrap endpoint creates only the first administrator; subsequent setup attempts are rejected. Password hashes use `pbkdf2-sha256$310000$<base64-salt>$<base64-hash>`. Do not put either Worker secret in source control or Wrangler configuration.
+
+The D1 database currently has no administrator account provisioned, so the console cannot be signed into until those two Worker secrets are configured and the first-admin bootstrap is completed. Do not treat the presence of the login UI as proof that an administrator account already exists.
