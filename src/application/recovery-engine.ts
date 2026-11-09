@@ -111,7 +111,7 @@ async function queueAutomaticJobs(env:EngineEnv):Promise<number>{
   return queued;
 }
 async function processOne(env:EngineEnv):Promise<boolean>{
-  const now=new Date().toISOString(),leaseId=crypto.randomUUID(),leaseUntil=new Date(Date.now()+600_000).toISOString();
+  const now=new Date().toISOString(),leaseId=crypto.randomUUID(),leaseUntil=new Date(Date.now()+840_000).toISOString();
   await env.DB.prepare("UPDATE recovery_jobs SET status='blocked',last_error_code='worker_lease_expired',last_error_at=?,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE status='simulating' AND lease_expires_at IS NOT NULL AND lease_expires_at<?").bind(now,now,now).run();
   const candidate=await env.DB.prepare("SELECT id FROM recovery_jobs WHERE status='queued' AND (next_attempt_at IS NULL OR next_attempt_at<=?) AND (lease_expires_at IS NULL OR lease_expires_at<?) ORDER BY priority_score DESC,created_at ASC LIMIT 1")
     .bind(now,now).first<{id:string}>();
