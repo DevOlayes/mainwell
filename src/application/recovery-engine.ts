@@ -76,6 +76,7 @@ async function queueAutomaticJobs(env:EngineEnv):Promise<number>{
     FROM recovery_grants g
     INNER JOIN recovery_grant_assets a ON a.grant_id=g.grant_id
     INNER JOIN recovery_wallets w ON lower(w.owner_address)=lower(g.owner_wallet) AND w.network=g.network
+    INNER JOIN recovery_supported_assets s ON s.id=a.asset_id AND s.network=g.network AND s.is_active=1
     LEFT JOIN recovery_destinations d ON d.network=g.network AND lower(d.address)=lower(a.destination_address)
     WHERE g.verification_status='verified' AND g.revoked_at IS NULL AND g.expires_at>?
       AND a.revoked_at IS NULL AND w.status='monitoring' AND w.admin_locked=1
