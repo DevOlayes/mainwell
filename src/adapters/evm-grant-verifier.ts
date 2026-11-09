@@ -65,8 +65,8 @@ export class EvmGrantVerifier {
     return result;
   }
 
-  async verify(grant: RecoveryAuthorizationGrant, now = Date.now()): Promise<EvmGrantVerification> {
-    validateRecoveryGrant(grant,grant.ownerWallet,grant.network,now);
+  async verify(grant: RecoveryAuthorizationGrant, authenticatedWallet: string, now = Date.now()): Promise<EvmGrantVerification> {
+    validateRecoveryGrant(grant,authenticatedWallet,grant.network,now);
     if (!["ethereum","polygon","bsc","avalanche","arbitrum","optimism","base"].includes(grant.network)) {
       throw new Error("This verifier supports EVM networks only.");
     }
