@@ -161,6 +161,46 @@ export class EvmGrantVerifier {
     };
   }
 
+  async verifyRevocation(
+    grant: RecoveryAuthorizationGrant,
+    authenticatedWallet: string,
+    transactionHash: string,
+    now = Date.now()
+  ): Promise<{ revokedAt: string; transactionHash: string }> {
+    if (grant.ownerWallet.toLowerCase() !== authenticatedWallet.toLowerCase()) {
+      throw new Error("Grant owner does not match the authenticated wallet.");
+    }
+    if (!HASH.test(transactionHash)) throw new Error("A valid revocation transaction hash is required.");
+    const chainHex = await this.rpc("eth_chainId", []);
+    if (typeof chainHex !== "string" || !/^0x[0-9a-fA-F]+$/.test(chainHex) ||
+        Number(BigInt(chainHex)) !== this.config.expectedChainId ||
+        this.config.expectedChainId !== NETWORK_CHAIN_IDS[grant.network] ||
+        grant.chainId !== this.config.expectedChainId) {
+      throw new Error("Revocation RPC chain does not match the stored grant.");
+    }
+    const code = await this.rpc("eth_getCode", [grant.executorAddress, "latest"]);
+    if (typeof code !== "string" || code === "0x" || keccak256Hex(code).toLowerCase() !== this.config.trustedExecutorCodeHash.toLowerCase()) {
+      throw new Error("Executor runtime bytecode is no longer trusted.");
+    }
+    const tx = await this.rpc("eth_getTransactionByHash", [transactionHash]) as { from?: string; to?: string | null; input?: string } | null;
+    const receipt = await this.rpc("eth_getTransactionReceipt", [transactionHash]) as Receipt | null;
+    const revokeSelector = keccak256Hex("0x" + Array.from(new TextEncoder().encode("revoke()"), b => b.toString(16).padStart(2, "0")).join("")).slice(0, 10);
+    if (!tx || !receipt || receipt.status !== "0x1" ||
+        tx.from?.toLowerCase() !== authenticatedWallet.toLowerCase() ||
+        tx.to?.toLowerCase() !== grant.executorAddress.toLowerCase() ||
+        tx.input?.toLowerCase() !== revokeSelector) {
+      throw new Error("Transaction does not prove that the authenticated owner successfully called revoke() on this executor.");
+    }
+    const revoked = BigInt("0x" + (await this.call(grant.executorAddress, "revoked()")).slice(-64));
+    if (revoked !== 1n) throw new Error("Executor does not report an on-chain revoked state.");
+    if (!receipt.blockNumber || !/^0x[0-9a-fA-F]+$/.test(receipt.blockNumber)) throw new Error("Revocation receipt is missing its block number.");
+    const block = await this.rpc("eth_getBlockByNumber", [receipt.blockNumber, false]) as { timestamp?: string } | null;
+    if (!block?.timestamp || !/^0x[0-9a-fA-F]+$/.test(block.timestamp)) throw new Error("Revocation block timestamp is unavailable.");
+    const revokedAt = new Date(Number(BigInt(block.timestamp)) * 1000).toISOString();
+    if (Date.parse(revokedAt) > now + 60_000) throw new Error("Revocation block timestamp is unexpectedly in the future.");
+    return { revokedAt, transactionHash: transactionHash.toLowerCase() };
+  }
+
   private decodeAddress(data: string): string {
     const word=data.slice(-64);
     if (!/^[0-9a-fA-F]{64}$/.test(word) || !/^0{24}/i.test(word)) throw new Error("Malformed address returned by executor.");
