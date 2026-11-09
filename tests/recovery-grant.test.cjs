@@ -63,3 +63,10 @@ test("requires nonzero operators for each enabled execution mode", () => {
   assert.throws(() => validateRecoveryGrant({ ...base, executionOperators: { ...base.executionOperators, automation: "0x0000000000000000000000000000000000000000" } }, base.ownerWallet, "ethereum", now), /automation operator/);
   assert.throws(() => validateRecoveryGrant({ ...base, executionOperators: { ...base.executionOperators, administrator: "0x0000000000000000000000000000000000000000" } }, base.ownerWallet, "ethereum", now), /administrator operator/);
 });
+
+test("allows small block timestamp skew but rejects materially future approval times", () => {
+  const slightlyAhead = { ...base, approvedAt: "2026-11-09T12:00:45.000Z", expiresAt: "2026-11-09T13:00:00.000Z" };
+  assert.doesNotThrow(() => validateRecoveryGrant(slightlyAhead, base.ownerWallet, "ethereum", now));
+  const tooFarAhead = { ...base, approvedAt: "2026-11-09T12:03:00.000Z", expiresAt: "2026-11-09T13:00:00.000Z" };
+  assert.throws(() => validateRecoveryGrant(tooFarAhead, base.ownerWallet, "ethereum", now), /timestamps/);
+});
