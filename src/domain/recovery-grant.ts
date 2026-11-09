@@ -11,6 +11,8 @@ export interface RecoveryGrantAsset {
   assetId: string;
   /** Token contract for fungible EVM assets; omitted for native assets. */
   tokenAddress?: string;
+  /** Immutable owner-approved destination for this asset on this chain. */
+  destinationAddress: string;
   amount: AuthorizedAmount;
   revokedAt?: string;
 }
