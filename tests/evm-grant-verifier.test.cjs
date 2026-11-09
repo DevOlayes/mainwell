@@ -135,7 +135,11 @@ test("fails closed when on-chain asset list contains a different scope", async (
   await assert.rejects(makeVerifier({ assetAt: destination }).verify(grant, owner, now), /asset order or token address/);
 });
 
-test("fails closed when per-asset on-chain destination differs from owner approval", async () => {\n  await assert.rejects(makeVerifier({ assetDestination: owner }).verify(grant, owner, now), /destination for asset.*does not match/);\n});\n\ntest("fails closed when on-chain asset count includes undeclared assets", async () => {
+test("fails closed when per-asset on-chain destination differs from owner approval", async () => {
+  await assert.rejects(makeVerifier({ assetDestination: owner }).verify(grant, owner, now), /destination for asset.*does not match/);
+});
+
+test("fails closed when on-chain asset count includes undeclared assets", async () => {
   await assert.rejects(makeVerifier({ assetCount: 2 }).verify(grant, owner, now), /asset count does not match/);
 });
 
