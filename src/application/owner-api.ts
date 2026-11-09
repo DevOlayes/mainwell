@@ -116,11 +116,14 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       blockers: ["This exact wallet and network have not yet been registered by an administrator."]
     });
     const assetRows = await env.DB.prepare(`
-      SELECT asset_ref AS assetId, token_address AS tokenAddress, symbol, name,
-             amount_raw AS balanceRaw, decimals, observed_at AS observedAt
-      FROM wallet_assets
-      WHERE wallet_id = ?
-      ORDER BY symbol, asset_ref
+      SELECT a.asset_ref AS assetId, a.token_address AS tokenAddress, a.symbol, a.name,
+             a.amount_raw AS balanceRaw, a.decimals, a.observed_at AS observedAt,
+             s.id AS supportedAssetId
+      FROM wallet_assets a
+      LEFT JOIN recovery_supported_assets s
+        ON s.network = a.network AND s.token_address = a.token_address AND s.is_active = 1
+      WHERE a.wallet_id = ?
+      ORDER BY a.symbol, a.asset_ref
     `).bind(wallet.id).all<Record<string, unknown>>();
     if (!assetRows.success) return reply({ error: "Unable to load the wallet asset inventory." }, 503);
     const policyRows = await env.DB.prepare(`
@@ -149,7 +152,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     const assetPolicyMap = new Map(policyRows.results.map(row => [String(row.assetId), row]));
     const scopedAssets = assetRows.results.map(asset => {
       const policy = assetPolicyMap.get(String(asset.assetId));
-      const isToken = typeof asset.tokenAddress === "string" && ADDRESS.test(asset.tokenAddress);
+      const isToken = typeof asset.tokenAddress === "string" && ADDRESS.test(asset.tokenAddress) && typeof asset.supportedAssetId === "string";
       const cap = typeof policy?.maxAmountRaw === "string" && /^[1-9][0-9]{0,77}$/.test(policy.maxAmountRaw) && BigInt(policy.maxAmountRaw) <= ((1n << 256n) - 1n);
       const modes = Boolean(Number(policy?.automaticPriorityEnabled) || Number(policy?.adminInitiatedEnabled));
       return { ...asset, policy: policy ?? null, authorizationEligible: Boolean(isToken && policy && cap && modes) };
@@ -337,6 +340,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
              d.address AS destinationAddress, a.token_address AS tokenAddress
       FROM recovery_asset_destination_policies p
       INNER JOIN recovery_destinations d ON d.id = p.destination_id
+      INNER JOIN recovery_supported_assets s ON s.id = p.asset_id AND s.network = p.network AND s.is_active = 1
       LEFT JOIN wallet_assets a ON a.wallet_id = ? AND a.network = p.network AND a.asset_ref = p.asset_id
       WHERE p.network = ? AND p.asset_id IN (${placeholders})
         AND d.locked = 1 AND d.is_active = 1
