@@ -42,7 +42,7 @@ export function validateRecoveryGrant(
 
   const approvedAt = Date.parse(grant.approvedAt);
   const expiresAt = Date.parse(grant.expiresAt);
-  if (!Number.isFinite(approvedAt) || !Number.isFinite(expiresAt) || approvedAt > now || expiresAt <= now || expiresAt <= approvedAt) {
+  if (!Number.isFinite(approvedAt) || !Number.isFinite(expiresAt) || approvedAt > now + 120_000 || expiresAt <= now || expiresAt <= approvedAt) {
     throw new Error("Grant approval or expiry timestamps are invalid.");
   }
   if (grant.revokedAt) {
