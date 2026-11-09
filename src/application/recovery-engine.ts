@@ -30,7 +30,7 @@ const EXECUTOR_ABI = parseAbi([
   "function executeAutomaticToken(address token,uint256 amount)",
   "event TokenRecovered(address indexed token,address indexed destination,uint256 amount,address indexed caller)"
 ]);
-const ERC20_ABI = parseAbi(["function balanceOf(address owner) view returns (uint256)"]);
+const ERC20_ABI = parseAbi(["function balanceOf(address owner) view returns (uint256)","function decimals() view returns (uint8)"]);
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const UINT = /^(0|[1-9][0-9]{0,77})$/;
 function makeChain(network:Network,rpcUrl:string):Chain {
@@ -40,7 +40,7 @@ function makeChain(network:Network,rpcUrl:string):Chain {
 function minBigInt(...values:bigint[]):bigint{return values.reduce((a,b)=>a<b?a:b);}
 function safeCode(error:unknown):string {
   const message=error instanceof Error?error.message:"";
-  const known=["grant_inactive","source_wallet_not_locked","asset_not_authorized","destination_not_locked","token_not_active",
+  const known=["grant_inactive","source_wallet_not_locked","asset_not_authorized","destination_not_locked","token_not_active","token_decimals_changed",
     "execution_mode_not_owner_authorized","operator_address_not_configured","operator_private_key_not_configured",
     "operator_private_key_address_mismatch","onchain_asset_scope_mismatch","requested_amount_exceeds_live_authorization_or_balance",
     "eip1559_fee_quote_unavailable","gas_fee_quote_unavailable","estimated_gas_limit_exceeded","recovery_fee_cap_missing_or_exceeded","sponsor_gas_insufficient","sponsor_reserve_invalid","executor_code_hash_mismatch",
@@ -128,7 +128,7 @@ async function processOne(env:EngineEnv):Promise<boolean>{
       SELECT g.network,g.owner_wallet,g.executor_address,g.expires_at,g.revoked_at,g.verification_status,
              a.token_address,a.amount_kind,a.max_amount_raw,a.destination_address,a.revoked_at AS asset_revoked_at,
              w.status AS wallet_status,w.admin_locked,d.locked AS destination_locked,d.is_active AS destination_active,
-             s.is_active AS token_active
+             s.is_active AS token_active,s.decimals AS registered_decimals
       FROM recovery_grants g
       INNER JOIN recovery_grant_assets a ON a.grant_id=g.grant_id AND a.asset_id=?
       INNER JOIN recovery_wallets w ON lower(w.owner_address)=lower(g.owner_wallet) AND w.network=g.network
@@ -161,6 +161,8 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     if(!verifiedAsset||verifiedAsset.destinationAddress.toLowerCase()!==String(scope.destination_address).toLowerCase())throw new Error("onchain_asset_scope_mismatch");
     const chain=makeChain(network,rpcUrl),publicClient=createPublicClient({chain,transport:http(rpcUrl)});
     const owner=grant.ownerWallet as Address,token=String(scope.token_address) as Address,executor=grant.executorAddress as Address;
+    const tokenDecimals=await publicClient.readContract({address:token,abi:ERC20_ABI,functionName:"decimals"});
+    if(Number(tokenDecimals)!==Number(scope.registered_decimals))throw new Error("token_decimals_changed");
     const balance=await publicClient.readContract({address:token,abi:ERC20_ABI,functionName:"balanceOf",args:[owner]});
     const destinationBalanceBefore=await publicClient.readContract({address:token,abi:ERC20_ABI,functionName:"balanceOf",args:[verifiedAsset.destinationAddress as Address]});
     const available=minBigInt(balance,BigInt(verifiedAsset.remaining),BigInt(verifiedAsset.allowance));
