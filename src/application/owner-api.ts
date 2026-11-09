@@ -517,7 +517,10 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     const rows = await env.DB.prepare(`
       SELECT t.id, t.job_id, t.network, t.transaction_hash, t.status,
              t.asset_id, t.amount_raw, t.destination_address,
-             t.estimated_fee_raw, t.actual_fee_raw, t.submitted_at, t.confirmed_at, t.created_at
+             t.estimated_fee_raw, t.actual_fee_raw, t.submitted_at, t.confirmed_at, t.created_at,
+             t.sender_address, t.nonce, t.gas_limit_raw, t.max_fee_per_gas_raw, t.max_priority_fee_per_gas_raw,
+             t.block_number, t.block_hash, t.gas_used_raw, t.effective_gas_price_raw, t.failure_code,
+             t.destination_balance_before_raw, t.destination_balance_after_raw, t.last_checked_at
       FROM recovery_transactions t
       INNER JOIN recovery_jobs j ON j.id = t.job_id
       INNER JOIN recovery_grants g ON g.grant_id = j.grant_id
