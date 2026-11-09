@@ -27,15 +27,18 @@ function makeVerifier(overrides = {}) {
     owner: selector("owner()"), destination: selector("destination()"),
     expires: selector("expiresAt()"), revoked: selector("revoked()"),
     limit: selector("assetLimit(address)"), recovered: selector("amountRecovered(address)"),
-    allowance: selector("allowance(address,address)")
+    allowance: selector("allowance(address,address)"),
+    automatic: selector("automaticPriorityEnabled()"), admin: selector("adminInitiatedEnabled()"),
+    assetCount: selector("authorizedAssetCount()"), assetAt: selector("authorizedAssetAt(uint256)")
   };
   const fetcher = async (_url, init) => {
     const req = JSON.parse(init.body);
     let result;
     if (req.method === "eth_chainId") result = overrides.chainId || "0x1";
     else if (req.method === "eth_getCode") result = overrides.code || code;
+    else if (req.method === "eth_getBlockByNumber") result = { timestamp: "0x" + Math.floor(Date.parse(grant.approvedAt) / 1000).toString(16) };
     else if (req.method === "eth_getTransactionReceipt") result = overrides.receipt === undefined ? {
-      status: "0x1", from: owner, contractAddress: executor
+      status: "0x1", from: owner, contractAddress: executor, blockNumber: "0x10"
     } : overrides.receipt;
     else if (req.method === "eth_call") {
       const data = req.params[0].data;
@@ -47,7 +50,11 @@ function makeVerifier(overrides = {}) {
         [selectors.revoked]: "0x" + word(0),
         [selectors.limit]: "0x" + word(overrides.limit ?? 2500000),
         [selectors.recovered]: "0x" + word(overrides.recovered ?? 500000),
-        [selectors.allowance]: "0x" + word(overrides.allowance ?? 2000000)
+        [selectors.allowance]: "0x" + word(overrides.allowance ?? 2000000),
+        [selectors.automatic]: "0x" + word(overrides.automatic === undefined ? 1 : overrides.automatic),
+        [selectors.admin]: "0x" + word(overrides.admin === undefined ? 1 : overrides.admin),
+        [selectors.assetCount]: "0x" + word(overrides.assetCount === undefined ? 1 : overrides.assetCount),
+        [selectors.assetAt]: "0x" + addressWord(overrides.assetAt || token)
       };
       result = values[sig];
       if (overrides.callResult && sig === overrides.callResult.selector) result = overrides.callResult.value;
@@ -112,4 +119,21 @@ test("fails closed when on-chain allowance is below remaining authorized cap", a
 
 test("fails closed when on-chain token cap differs from owner grant", async () => {
   await assert.rejects(makeVerifier({ limit: 2500001 }).verify(grant, owner, now), /does not exactly match/);
+});
+
+test("fails closed when on-chain execution modes differ from declared owner modes", async () => {
+  await assert.rejects(makeVerifier({ automatic: 0 }).verify(grant, owner, now), /execution modes do not match/);
+});
+
+test("fails closed when on-chain asset list contains a different scope", async () => {
+  await assert.rejects(makeVerifier({ assetAt: destination }).verify(grant, owner, now), /asset order or token address/);
+});
+
+test("fails closed when on-chain asset count includes undeclared assets", async () => {
+  await assert.rejects(makeVerifier({ assetCount: 2 }).verify(grant, owner, now), /asset count does not match/);
+});
+
+test("fails closed when grant approval timestamp is not the deployment block timestamp", async () => {
+  const changed = { ...grant, approvedAt: "2026-11-09T06:01:00.000Z" };
+  await assert.rejects(makeVerifier().verify(changed, owner, now), /timestamp does not match/);
 });
