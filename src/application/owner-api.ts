@@ -318,6 +318,50 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       "SELECT id FROM recovery_wallets WHERE owner_address = ? AND network = ? AND admin_locked = 1 AND status != 'revoked' LIMIT 1"
     ).bind(owner, grant.network).first<{ id: string }>();
     if (!lockedWallet) return reply({ error: "This source wallet has not been registered and locked by an administrator. Ask the administrator to configure this exact address and network first.", code: "source_wallet_not_locked" }, 409);
+    if (grant.assets.length === 0 || grant.assets.length > 20 ||
+        grant.assets.some(asset => !asset || typeof asset.assetId !== "string" || asset.assetId.length > 160)) {
+      return reply({ error: "Grant must contain between 1 and 20 valid policy-bound assets." }, 400);
+    }
+    const assetIds = grant.assets.map(asset => asset.assetId);
+    if (new Set(assetIds).size !== assetIds.length) return reply({ error: "Duplicate assets are not permitted in one authorization." }, 400);
+    const placeholders = assetIds.map(() => "?").join(",");
+    const configuredPolicies = await env.DB.prepare(`
+      SELECT p.asset_id AS assetId, p.max_amount_raw AS maxAmountRaw,
+             p.automatic_priority_enabled AS automaticPriorityEnabled,
+             p.admin_initiated_enabled AS adminInitiatedEnabled,
+             p.expires_in_seconds AS expiresInSeconds,
+             d.address AS destinationAddress, a.token_address AS tokenAddress
+      FROM recovery_asset_destination_policies p
+      INNER JOIN recovery_destinations d ON d.id = p.destination_id
+      LEFT JOIN wallet_assets a ON a.wallet_id = ? AND a.network = p.network AND a.asset_ref = p.asset_id
+      WHERE p.network = ? AND p.asset_id IN (${placeholders})
+        AND d.locked = 1 AND d.is_active = 1
+    `).bind(lockedWallet.id, grant.network, ...assetIds).all<Record<string, unknown>>();
+    if (!configuredPolicies.success || configuredPolicies.results.length !== grant.assets.length) {
+      return reply({ error: "Every authorized asset must have a current administrator-locked destination and asset policy." }, 409);
+    }
+    let maximumExpirySeconds = Number.MAX_SAFE_INTEGER;
+    for (const asset of grant.assets) {
+      const policy = configuredPolicies.results.find(row => String(row.assetId) === asset.assetId);
+      if (!policy || typeof policy.tokenAddress !== "string" || !ADDRESS.test(policy.tokenAddress) ||
+          !asset.tokenAddress || asset.tokenAddress.toLowerCase() !== policy.tokenAddress.toLowerCase() ||
+          asset.amount.kind !== "capped" || asset.amount.maxAmountRaw !== String(policy.maxAmountRaw) ||
+          asset.destinationAddress.toLowerCase() !== String(policy.destinationAddress).toLowerCase()) {
+        return reply({ error: "The token, cap or destination in the grant does not exactly match the administrator's current asset policy." }, 409);
+      }
+      if (grant.executionModes.includes("automatic-priority") && Number(policy.automaticPriorityEnabled) !== 1) {
+        return reply({ error: "Automatic-priority execution is not enabled for every selected asset." }, 409);
+      }
+      if (grant.executionModes.includes("admin-initiated") && Number(policy.adminInitiatedEnabled) !== 1) {
+        return reply({ error: "Administrator-initiated execution is not enabled for every selected asset." }, 409);
+      }
+      maximumExpirySeconds = Math.min(maximumExpirySeconds, Number(policy.expiresInSeconds));
+    }
+    const grantDurationMs = Date.parse(grant.expiresAt) - Date.parse(grant.approvedAt);
+    if (!Number.isFinite(grantDurationMs) || grantDurationMs <= 0 ||
+        grantDurationMs > maximumExpirySeconds * 1000 + 1000) {
+      return reply({ error: "Grant expiry exceeds the shortest administrator-approved asset policy." }, 409);
+    }
     try {
       const config = grantVerifierConfig(env, grant.network, session.chainId);
       const verified = await verifyAndPersistEvmGrant(env.DB as unknown as GrantDatabase, config, owner, grant);
