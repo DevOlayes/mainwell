@@ -96,22 +96,7 @@ export class D1GrantRepository {
         evidence_kind, evidence_reference, approved_at, expires_at,
         revoked_at, verification_status, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'verified', ?, ?)
-      ON CONFLICT(grant_id) DO UPDATE SET
-        owner_wallet = excluded.owner_wallet,
-        network = excluded.network,
-        chain_id = excluded.chain_id,
-        executor_address = excluded.executor_address,
-        executor_code_hash = excluded.executor_code_hash,
-        destination_address = excluded.destination_address,
-        execution_modes_json = excluded.execution_modes_json,
-        evidence_kind = excluded.evidence_kind,
-        evidence_reference = excluded.evidence_reference,
-        approved_at = excluded.approved_at,
-        expires_at = excluded.expires_at,
-        revoked_at = NULL,
-        verification_status = 'verified',
-        updated_at = excluded.updated_at
-      WHERE recovery_grants.verification_status != 'revoked'
+      ON CONFLICT(grant_id) DO NOTHING
     `).bind(
       grant.grantId, grant.ownerWallet.toLowerCase(), grant.network, grant.chainId ?? null,
       grant.executorAddress.toLowerCase(), grant.executorCodeHash.toLowerCase(),
@@ -120,15 +105,8 @@ export class D1GrantRepository {
       record.verifiedAt, record.verifiedAt
     );
 
-    const statements: D1Statement[] = [grantStatement,
-      this.db.prepare(`
-        DELETE FROM recovery_grant_assets
-        WHERE grant_id = ? AND EXISTS (
-          SELECT 1 FROM recovery_grants
-          WHERE grant_id = ? AND verification_status = 'verified'
-        )
-      `).bind(grant.grantId, grant.grantId)
-    ];
+    // Grant IDs are immutable; never overwrite an existing owner's scope.
+    const statements: D1Statement[] = [grantStatement];
 
     for (const asset of grant.assets) {
       statements.push(this.db.prepare(`
@@ -136,7 +114,7 @@ export class D1GrantRepository {
           grant_id, asset_id, token_address, amount_kind, max_amount_raw, owner_acknowledged
         )
         SELECT ?, ?, ?, ?, ?, ?
-        WHERE EXISTS (
+        WHERE changes() = 1 AND EXISTS (
           SELECT 1 FROM recovery_grants
           WHERE grant_id = ? AND verification_status = 'verified'
         )
