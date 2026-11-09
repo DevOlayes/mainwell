@@ -34,12 +34,24 @@ function rawAmount(amount: string, decimals: number): string {
   if (!/^\d+$/.test(whole) || !/^\d*$/.test(fraction) || fraction.length > decimals) throw new Error("Adapter returned an invalid decimal asset amount.");
   return (BigInt(whole) * (10n ** BigInt(decimals)) + BigInt((fraction + "0".repeat(decimals)).slice(0, decimals) || "0")).toString();
 }
-function toAssetConfig(env: MonitorEnv, network: string): AssetConfig {
+async function toAssetConfig(env: MonitorEnv, network: string, observedAt: string): Promise<AssetConfig> {
   const configs = parseAssetConfig(env.MAINWELL_EVM_ASSETS);
   const item = configs[network] ?? {};
   if (item.tokens !== undefined && !Array.isArray(item.tokens)) throw new Error("Configured token list must be an array.");
   if (item.knownSpenders !== undefined && !Array.isArray(item.knownSpenders)) throw new Error("Configured spender list must be an array.");
-  return item;
+  const registered = await env.DB.prepare(
+    "SELECT token_address AS address,symbol,name,decimals FROM recovery_supported_assets WHERE network=? AND is_active=1 ORDER BY symbol"
+  ).bind(network).all<{address:string;symbol:string;name:string;decimals:number}>();
+  if (!registered.success) throw new Error("Unable to load the administrator-managed supported asset registry.");
+  const tokens = new Map<string, EvmTokenConfig>();
+  for (const token of registered.results) {
+    tokens.set(token.address.toLowerCase(), {
+      address: token.address, symbol: token.symbol, name: token.name, decimals: token.decimals,
+      priceUsd: 0, priceObservedAt: observedAt, priceConfidence: 0.5
+    });
+  }
+  for (const token of item.tokens ?? []) tokens.set(token.address.toLowerCase(), token);
+  return { ...item, tokens: [...tokens.values()] };
 }
 export async function refreshEvmWallet(env: MonitorEnv, wallet: { id: string; address: string; network: string; chain_id: number | null }): Promise<{ assets: AssetPosition[]; permissions: PermissionRecord[]; observedAt: string }> {
   const networkName = wallet.network as EvmNetwork;
