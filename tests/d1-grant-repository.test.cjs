@@ -11,8 +11,8 @@ const grant = {
   executorCodeHash: "0x" + "a".repeat(64),
   destinationAddress: "0x3333333333333333333333333333333333333333",
   assets: [
-    { assetId: "usdc-ethereum", tokenAddress: "0x4444444444444444444444444444444444444444", amount: { kind: "capped", maxAmountRaw: "2500000" } },
-    { assetId: "dai-ethereum", tokenAddress: "0x5555555555555555555555555555555555555555", amount: { kind: "unlimited-allowance", ownerAcknowledged: true } }
+    { assetId: "usdc-ethereum", tokenAddress: "0x4444444444444444444444444444444444444444", destinationAddress: "0x3333333333333333333333333333333333333333", amount: { kind: "capped", maxAmountRaw: "2500000" } },
+    { assetId: "dai-ethereum", tokenAddress: "0x5555555555555555555555555555555555555555", destinationAddress: "0x6666666666666666666666666666666666666666", amount: { kind: "unlimited-allowance", ownerAcknowledged: true } }
   ],
   executionModes: ["automatic-priority", "admin-initiated"],
   approvedAt: "2026-11-09T06:00:00.000Z",
@@ -46,8 +46,8 @@ function fakeDb() {
               verification_status: "verified"
             }),
             all: async () => ({ success: true, results: [
-              { asset_id: "usdc-ethereum", token_address: "0x4444444444444444444444444444444444444444", amount_kind: "capped", max_amount_raw: "2500000", owner_acknowledged: 0 },
-              { asset_id: "dai-ethereum", token_address: "0x5555555555555555555555555555555555555555", amount_kind: "unlimited-allowance", max_amount_raw: null, owner_acknowledged: 1 }
+              { asset_id: "usdc-ethereum", token_address: "0x4444444444444444444444444444444444444444", amount_kind: "capped", max_amount_raw: "2500000", owner_acknowledged: 0, destination_address: "0x3333333333333333333333333333333333333333" },
+              { asset_id: "dai-ethereum", token_address: "0x5555555555555555555555555555555555555555", amount_kind: "unlimited-allowance", max_amount_raw: null, owner_acknowledged: 1, destination_address: "0x6666666666666666666666666666666666666666" }
             ] }),
             run: async () => ({ success: true, results: [], meta: { changes: 1 } })
           };
