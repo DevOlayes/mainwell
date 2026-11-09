@@ -60,3 +60,25 @@ Owner API:
 - `GET /api/owner/grants` includes the configured per-asset destination selection where one exists.
 
 **Immutable executor boundary:** the deployed executor fixes its destination at construction. Therefore an admin cannot use a database override to redirect an existing authorization. A per-asset destination assignment is accepted only when it equals that grant's already deployed destination. To use a different address, the owner must explicitly approve a new executor/grant with that destination. The API rejects mismatches rather than silently changing the on-chain policy. Recovery execution remains disabled pending the later execution and end-to-end acceptance work.
+
+
+## Per-asset destination authorization (Implementation 5 extension)
+
+Every EVM `RecoveryGrantAsset` now carries a required `destinationAddress`. The owner-approved deployment constructor accepts an ordered destination array parallel to the ordered asset and amount arrays. The contract stores `assetDestination[token]` permanently and `executeToken` transfers only to that token's own stored destination. The legacy `destination()` getter is retained as a default/read-compatibility value equal to the first asset's destination; it is not used to route transfers.
+
+The verifier checks all of the following for every asset:
+- The on-chain asset at each index matches the exact grant asset order.
+- `assetDestination(token)` equals the owner-approved `destinationAddress`.
+- `authorizedAssetDestinationAt(index)` agrees with the mapping.
+- The exact cap and live allowance still satisfy the remaining authorized amount.
+
+Admin destination configuration:
+- `POST /api/admin/recovery-destinations` with `{"network":"ethereum","address":"0x..."}` adds a locked destination. Multiple active destinations per EVM network are supported.
+- `GET /api/admin/recovery-destinations` lists the locked destination registry.
+- `PUT /api/admin/recovery-destination-policies/:network/:assetId` with `{"destinationId":"..."}` chooses the default locked destination policy for that network/asset. The owner must still explicitly approve that exact address in the grant before any transfer can use it.
+- `GET /api/owner/recovery-destination-policies?network=ethereum` lets the authenticated owner retrieve those suggested asset policies.
+- Existing grant-specific destination assignment endpoints reject any value different from the asset's already verified on-chain destination.
+
+Changing a policy affects only future owner authorizations. It does not mutate an existing grant, executor, or asset destination. A different destination requires a new owner-approved executor/grant. TRON, Solana, and Bitcoin destination policies are not implemented by this EVM contract; their chain-specific adapters and owner authorization remain future work.
+
+**Deployment boundary:** the revised Solidity source is committed but is not deployed to any chain and has not been independently audited. Existing deployed executor bytecode hashes do not identify this new source version. The application must keep recovery execution disabled until the contract is independently reviewed, Foundry tests pass, the new runtime hash is pinned per network, and the owner-facing approval flow deploys/approves the exact per-asset destination array.
