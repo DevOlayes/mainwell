@@ -215,6 +215,37 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     }
   }
 
+  const assetRevokeMatch = path.match(/^\/api\/owner\/grants\/([A-Za-z0-9_-]{1,128})\/assets\/([^/]+)\/revoke\/confirm$/);
+  if (assetRevokeMatch && request.method === "POST") {
+    if (!validOrigin(request, url)) return reply({ error: "Origin check failed." }, 403);
+    const body = await readBody(request);
+    const transactionHash = typeof body?.transactionHash === "string" ? body.transactionHash : "";
+    const row = await env.DB.prepare("SELECT network, chain_id FROM recovery_grants WHERE grant_id = ? AND owner_wallet = ? AND verification_status = 'verified' AND revoked_at IS NULL LIMIT 1")
+      .bind(assetRevokeMatch[1], owner).first<{ network: NetworkId; chain_id: number | null }>();
+    if (!row) return reply({ error: "Active authorization not found for this wallet." }, 404);
+    if (!row.chain_id || row.chain_id !== session.chainId || NETWORK_CHAIN[row.network] !== row.chain_id) {
+      return reply({ error: "Authorization network does not match the authenticated wallet session." }, 409);
+    }
+    try {
+      const repository = new D1GrantRepository(env.DB as unknown as GrantDatabase);
+      const grant = await repository.getById(assetRevokeMatch[1]);
+      const asset = grant?.assets.find(item => item.assetId === decodeURIComponent(assetRevokeMatch[2]));
+      if (!grant || grant.ownerWallet.toLowerCase() !== owner || !asset?.tokenAddress) return reply({ error: "Authorized token was not found in this grant." }, 404);
+      if (asset.revokedAt) return reply({ error: "This asset is already revoked." }, 409);
+      const verifier = new EvmGrantVerifier(grantVerifierConfig(env, row.network, row.chain_id));
+      const revocation = await verifier.verifyAssetRevocation(grant, owner, asset.tokenAddress, transactionHash);
+      const marked = await repository.markAssetRevoked(grant.grantId, asset.assetId, revocation.revokedAt);
+      if (!marked) return reply({ error: "Asset authorization state changed; refresh and check its current status." }, 409);
+      await env.DB.prepare("INSERT INTO audit_events (actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES ('owner',?,'recovery.grant.asset_revoked','recovery_grant_asset',?,?,?)")
+        .bind(owner, grant.grantId + ":" + asset.assetId, JSON.stringify({ tokenAddress: revocation.tokenAddress, transactionHash: revocation.transactionHash, revokedAt: revocation.revokedAt }), revocation.revokedAt).run();
+      return reply({ revoked: true, grantId: grant.grantId, assetId: asset.assetId, revokedAt: revocation.revokedAt, transactionHash: revocation.transactionHash });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === "GRANT_VERIFIER_NOT_CONFIGURED") return reply({ error: "The trusted executor verifier is not configured for this network.", code: "grant_verifier_not_configured" }, 503);
+      return reply({ error: "On-chain asset revocation could not be verified.", code: "asset_revocation_verification_failed" }, 400);
+    }
+  }
+
   const revokeConfirmMatch = path.match(/^\/api\/owner\/grants\/([A-Za-z0-9_-]{1,128})\/revoke\/confirm$/);
   if (revokeConfirmMatch && request.method === "POST") {
     if (!validOrigin(request, url)) return reply({ error: "Origin check failed." }, 403);
@@ -261,7 +292,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     if (ids.length) {
       const placeholders = ids.map(() => "?").join(",");
       const assets = await env.DB.prepare(`
-        SELECT grant_id, asset_id, token_address, amount_kind, max_amount_raw, owner_acknowledged
+        SELECT grant_id, asset_id, token_address, amount_kind, max_amount_raw, owner_acknowledged, revoked_at
         FROM recovery_grant_assets WHERE grant_id IN (${placeholders}) ORDER BY asset_id
       `).bind(...ids).all<Record<string, unknown>>();
       if (!assets.success) return reply({ error: "Unable to load authorization scopes." }, 503);
@@ -270,7 +301,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
         if (!assetsByGrant.has(key)) assetsByGrant.set(key, []);
         assetsByGrant.get(key)!.push({
           assetId: a.asset_id, tokenAddress: a.token_address, amountKind: a.amount_kind,
-          maxAmountRaw: a.max_amount_raw, ownerAcknowledged: Boolean(a.owner_acknowledged)
+          maxAmountRaw: a.max_amount_raw, ownerAcknowledged: Boolean(a.owner_acknowledged), revokedAt: a.revoked_at
         });
       }
     }
