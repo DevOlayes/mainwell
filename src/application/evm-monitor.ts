@@ -41,10 +41,10 @@ async function toAssetConfig(env: MonitorEnv, network: string, observedAt: strin
   if (item.knownSpenders !== undefined && !Array.isArray(item.knownSpenders)) throw new Error("Configured spender list must be an array.");
   const registered = await env.DB.prepare(
     "SELECT token_address AS address,symbol,name,decimals FROM recovery_supported_assets WHERE network=? AND is_active=1 ORDER BY symbol"
-  ).bind(network).all<{address:string;symbol:string;name:string;decimals:number}>();
+  ).bind(network).all();
   if (!registered.success) throw new Error("Unable to load the administrator-managed supported asset registry.");
   const tokens = new Map<string, EvmTokenConfig>();
-  for (const token of registered.results) {
+  for (const token of registered.results as Array<{address:string;symbol:string;name:string;decimals:number}>) {
     tokens.set(token.address.toLowerCase(), {
       address: token.address, symbol: token.symbol, name: token.name, decimals: token.decimals,
       priceUsd: 0, priceObservedAt: observedAt, priceConfidence: 0.5
