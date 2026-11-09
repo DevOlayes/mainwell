@@ -182,6 +182,8 @@ export class EvmGrantVerifier {
     if (typeof code !== "string" || code === "0x" || keccak256Hex(code).toLowerCase() !== this.config.trustedExecutorCodeHash.toLowerCase()) {
       throw new Error("Executor runtime bytecode is no longer trusted.");
     }
+    const executorOwner = this.decodeAddress(await this.call(grant.executorAddress, "owner()"));
+    if (executorOwner !== authenticatedWallet.toLowerCase()) throw new Error("Executor owner does not match the authenticated wallet.");
     const tx = await this.rpc("eth_getTransactionByHash", [transactionHash]) as { from?: string; to?: string | null; input?: string } | null;
     const receipt = await this.rpc("eth_getTransactionReceipt", [transactionHash]) as Receipt | null;
     const revokeSelector = keccak256Hex("0x" + Array.from(new TextEncoder().encode("revoke()"), b => b.toString(16).padStart(2, "0")).join("")).slice(0, 10);
@@ -197,6 +199,7 @@ export class EvmGrantVerifier {
     const block = await this.rpc("eth_getBlockByNumber", [receipt.blockNumber, false]) as { timestamp?: string } | null;
     if (!block?.timestamp || !/^0x[0-9a-fA-F]+$/.test(block.timestamp)) throw new Error("Revocation block timestamp is unavailable.");
     const revokedAt = new Date(Number(BigInt(block.timestamp)) * 1000).toISOString();
+    if (Date.parse(revokedAt) < Date.parse(grant.approvedAt)) throw new Error("Revocation block predates the owner authorization.");
     if (Date.parse(revokedAt) > now + 60_000) throw new Error("Revocation block timestamp is unexpectedly in the future.");
     return { revokedAt, transactionHash: transactionHash.toLowerCase() };
   }
