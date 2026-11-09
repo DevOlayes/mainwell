@@ -11,11 +11,12 @@ import { EvmGrantVerifier, type EvmGrantVerifierConfig, type EvmGrantVerificatio
 export async function verifyAndPersistEvmGrant(
   db: D1Database,
   config: EvmGrantVerifierConfig,
+  authenticatedWallet: string,
   grant: RecoveryAuthorizationGrant,
   now = Date.now()
 ): Promise<EvmGrantVerification> {
   const verifier = new EvmGrantVerifier(config);
-  const verified = await verifier.verify(grant, now);
+  const verified = await verifier.verify(grant, authenticatedWallet, now);
   const repository = new D1GrantRepository(db);
   await repository.saveVerified({
     grant,
