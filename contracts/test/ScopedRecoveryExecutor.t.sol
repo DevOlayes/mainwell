@@ -43,10 +43,12 @@ contract ScopedRecoveryExecutorTest {
     function setUp() public {
         token = new MockRecoveryToken();
         address[] memory assets = new address[](1);
+        address[] memory destinations = new address[](1);
         uint256[] memory caps = new uint256[](1);
         assets[0] = address(token);
+        destinations[0] = DESTINATION;
         caps[0] = 500;
-        executor = new ScopedRecoveryExecutor(DESTINATION, uint64(block.timestamp + 1 days), assets, caps, true, true);
+        executor = new ScopedRecoveryExecutor(uint64(block.timestamp + 1 days), assets, destinations, caps, true, true);
         token.mint(address(this), 1_000);
         token.approve(address(executor), 1_000);
     }
@@ -64,6 +66,24 @@ contract ScopedRecoveryExecutorTest {
         require(token.balanceOf(DESTINATION) == 200, "destination balance");
         require(token.balanceOf(STRANGER) == 0, "caller received tokens");
         require(executor.amountRecovered(address(token)) == 200, "spent accounting");
+    }
+
+    function testEachAssetUsesItsOwnImmutableDestination() public {
+        MockRecoveryToken second = new MockRecoveryToken();
+        address secondDestination = address(0xD00D);
+        address[] memory assets = new address[](2);
+        address[] memory destinations = new address[](2);
+        uint256[] memory caps = new uint256[](2);
+        assets[0] = address(token); assets[1] = address(second);
+        destinations[0] = DESTINATION; destinations[1] = secondDestination;
+        caps[0] = 500; caps[1] = 700;
+        ScopedRecoveryExecutor multi = new ScopedRecoveryExecutor(uint64(block.timestamp + 1 days), assets, destinations, caps, true, true);
+        second.mint(address(this), 700);
+        second.approve(address(multi), 700);
+        multi.executeToken(address(second), 300);
+        require(second.balanceOf(secondDestination) == 300, "asset-specific destination not used");
+        require(second.balanceOf(DESTINATION) == 0, "asset sent to another asset destination");
+        require(multi.assetDestination(address(second)) == secondDestination, "destination binding missing");
     }
 
     function testCumulativeRecoveryCannotExceedOwnerConfiguredCap() public {
