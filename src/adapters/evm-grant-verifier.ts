@@ -32,7 +32,8 @@ export function normalizedExecutorRuntimeHash(code: string): string {
   if (!/^0x(?:[0-9a-fA-F]{2})+$/.test(code)) throw new Error("Malformed executor runtime bytecode.");
   const bytes = code.slice(2).toLowerCase().split("");
   const minBytes = Math.max(...EXECUTOR_IMMUTABLE_RANGES.map(range => range.start + range.length));
-  if (bytes.length < minBytes) return keccak256Hex(code);\n  for (const range of EXECUTOR_IMMUTABLE_RANGES) {
+  if (bytes.length < minBytes) return keccak256Hex(code);
+  for (const range of EXECUTOR_IMMUTABLE_RANGES) {
     const start = range.start * 2, end = (range.start + range.length) * 2;
     if (end > bytes.length) throw new Error("Executor immutable reference is outside runtime bytecode.");
     for (let i = start; i < end; i++) bytes[i] = "0";
