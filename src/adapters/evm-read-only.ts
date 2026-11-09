@@ -128,10 +128,14 @@ export class EvmReadOnlyAdapter implements ReadOnlyWalletAdapter {
     return this.rpc<string>("eth_call", [{ to: contract, data: `0x${data}` }, "latest"]);
   }
 
-  async getNativeBalance(wallet: WalletReference): Promise<number> {
+  private async getNativeBalanceAmount(wallet: WalletReference): Promise<string> {
     this.assertWallet(wallet);
     const raw = await this.rpc<string>("eth_getBalance", [wallet.address, "latest"]);
-    const amount = Number(units(decodeUint(raw), this.config.nativeDecimals ?? 18));
+    return units(decodeUint(raw), this.config.nativeDecimals ?? 18);
+  }
+
+  async getNativeBalance(wallet: WalletReference): Promise<number> {
+    const amount = Number(await this.getNativeBalanceAmount(wallet));
     if (!Number.isFinite(amount)) throw new Error("Native balance exceeds supported numeric precision.");
     return amount;
   }
@@ -139,8 +143,7 @@ export class EvmReadOnlyAdapter implements ReadOnlyWalletAdapter {
   async getAssets(wallet: WalletReference): Promise<AssetPosition[]> {
     this.assertWallet(wallet);
     validatePrice(this.config.nativePriceUsd, this.config.nativePriceObservedAt, this.config.nativePriceConfidence);
-    const nativeAmount = await this.getNativeBalance(wallet);
-    const nativeString = nativeAmount.toString();
+    const nativeString = await this.getNativeBalanceAmount(wallet);
     const assets: AssetPosition[] = [{
       id: `${this.network}:native`, network: this.network, symbol: this.config.nativeSymbol,
       name: this.config.nativeName, amount: nativeString, decimals: this.config.nativeDecimals ?? 18,
