@@ -117,6 +117,7 @@ contract ScopedRecoveryExecutorTest {
     function testCumulativeRecoveryCannotExceedOwnerConfiguredCap() public {
         vm.prank(ADMIN_OPERATOR);
         executor.executeAdminToken(address(token), 300);
+        vm.prank(ADMIN_OPERATOR);
         (bool ok,) = address(executor).call(
             abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 201)
         );
@@ -126,6 +127,7 @@ contract ScopedRecoveryExecutorTest {
 
     function testUnlistedTokenCannotBeRecovered() public {
         MockRecoveryToken other = new MockRecoveryToken();
+        vm.prank(ADMIN_OPERATOR);
         (bool ok,) = address(executor).call(
             abi.encodeWithSelector(executor.executeAdminToken.selector, address(other), 1)
         );
@@ -134,6 +136,7 @@ contract ScopedRecoveryExecutorTest {
 
     function testExpiredGrantCannotExecute() public {
         vm.warp(block.timestamp + 1 days);
+        vm.prank(ADMIN_OPERATOR);
         (bool ok,) = address(executor).call(
             abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 1)
         );
@@ -142,6 +145,7 @@ contract ScopedRecoveryExecutorTest {
 
     function testOwnerCanRevokeWholeGrant() public {
         executor.revoke();
+        vm.prank(ADMIN_OPERATOR);
         (bool ok,) = address(executor).call(
             abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 1)
         );
@@ -150,6 +154,7 @@ contract ScopedRecoveryExecutorTest {
 
     function testOwnerCanRevokeOneAssetWithoutChangingDestination() public {
         executor.revokeAsset(address(token));
+        vm.prank(ADMIN_OPERATOR);
         (bool ok,) = address(executor).call(
             abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 1)
         );
@@ -165,6 +170,7 @@ contract ScopedRecoveryExecutorTest {
 
     function testInsufficientTokenAllowanceBlocksTransfer() public {
         token.approve(address(executor), 0);
+        vm.prank(ADMIN_OPERATOR);
         (bool ok,) = address(executor).call(
             abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 1)
         );
