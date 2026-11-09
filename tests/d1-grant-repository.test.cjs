@@ -15,6 +15,7 @@ const grant = {
     { assetId: "dai-ethereum", tokenAddress: "0x5555555555555555555555555555555555555555", destinationAddress: "0x6666666666666666666666666666666666666666", amount: { kind: "unlimited-allowance", ownerAcknowledged: true } }
   ],
   executionModes: ["automatic-priority", "admin-initiated"],
+  executionOperators: { automation: "0x6666666666666666666666666666666666666666", administrator: "0x7777777777777777777777777777777777777777" },
   approvedAt: "2026-11-09T06:00:00.000Z",
   expiresAt: "2026-12-09T06:00:00.000Z",
   evidence: { kind: "onchain-approval", reference: "0x" + "b".repeat(64) }
@@ -38,6 +39,8 @@ function fakeDb() {
               executor_code_hash: grant.executorCodeHash,
               destination_address: grant.destinationAddress,
               execution_modes_json: JSON.stringify(grant.executionModes),
+              automation_operator: grant.executionOperators.automation,
+              admin_operator: grant.executionOperators.administrator,
               evidence_kind: "onchain-approval",
               evidence_reference: grant.evidence.reference,
               approved_at: grant.approvedAt,
@@ -86,6 +89,7 @@ test("verified grant retrieval reconstructs capped and acknowledged unlimited as
   assert.equal(restored.grantId, grant.grantId);
   assert.equal(restored.destinationAddress, grant.destinationAddress);
   assert.deepEqual(restored.executionModes, grant.executionModes);
+  assert.deepEqual(restored.executionOperators, grant.executionOperators);
   assert.deepEqual(restored.assets[0].amount, { kind: "capped", maxAmountRaw: "2500000" });
   assert.deepEqual(restored.assets[1].amount, { kind: "unlimited-allowance", ownerAcknowledged: true });
 });
