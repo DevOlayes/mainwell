@@ -33,4 +33,4 @@ Before execution is enabled, require:
 - durable audit logs, monitoring, incident response, and revocation;
 - testnet plus controlled mainnet testing.
 
-The current repository is not production-ready and has no enabled transaction execution.
+The authorization and policy foundation is deployed, but the application is not production-ready for asset movement: transaction execution remains disabled. Before enabling execution, complete the production gates above and obtain an independent third-party review of the executor and admin services.
