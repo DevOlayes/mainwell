@@ -129,3 +129,12 @@ test("expired grant objects are rejected before any database write", async () =>
   );
   assert.equal(db.calls.length, 0);
 });
+
+test("per-asset revocation is a conditional one-way persistence update", async () => {
+  const db = fakeDb();
+  const repo = new D1GrantRepository(db);
+  assert.equal(await repo.markAssetRevoked(grant.grantId, "usdc-ethereum", "2026-11-09T06:10:00.000Z"), true);
+  assert.match(db.calls[0].sql, /UPDATE recovery_grant_assets/);
+  assert.match(db.calls[0].sql, /revoked_at IS NULL/);
+  assert.match(db.calls[0].sql, /verification_status = 'verified'/);
+});
