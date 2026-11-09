@@ -17,13 +17,17 @@ npm test
 5. Add fixture tests for empty wallets, malformed responses, stale data, RPC failure, and rate limits.
 6. Register the adapter only after tests pass.
 
+## Authorization and execution
+
+Use `RecoveryAuthorizationGrant` as the domain contract for persistent permissions. Structural validation is not proof of authorization: before execution, the chain adapter must verify the grant evidence, chain ID, live allowance/session, executor bytecode hash, destination, expiry, and revocation state against trusted chain data.
+
+Automatic-priority and admin-initiated execution are separate grant modes. A background worker may only process the former. The admin service may only initiate the latter. Both must call the same scope-enforcing executor. Admin privileges must never bypass the grant.
+
+Do not add a backend private-key signer or generic arbitrary-call executor. For EVM, any unlimited allowance must be a deliberate owner choice directed to a reviewed executor contract that enforces the fixed destination and approved assets on-chain.
+
 ## Policy changes
 
-Destination changes belong behind an authenticated admin service. Require MFA, validate network-specific addresses, persist the change, and append an audit event. A frontend lock is not an enforcement boundary.
-
-## Recovery planning
-
-The planner is deterministic and side-effect free. It creates review plans only. Keep transaction execution in a separate module until an independent security review approves a narrowly scoped design.
+Destination changes belong behind an authenticated admin service. Require MFA, validate network-specific addresses, persist the change, and append an audit event. A frontend lock is not an enforcement boundary. A destination update cannot silently rewrite an existing owner grant.
 
 ## Operations
 
@@ -31,3 +35,4 @@ The planner is deterministic and side-effect free. It creates review plans only.
 - Keep credentials in the deployment secret manager, never in Git.
 - Never store private keys or seed phrases.
 - Do not describe catalog-only networks as integrated.
+- Do not enable execution until the executor, simulation, receipt tracking, and production security gate are complete.
