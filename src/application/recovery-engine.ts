@@ -281,22 +281,26 @@ async function trackTransactions(env:EngineEnv):Promise<number>{
       }):[];
       const event=events.find(e=>String(e.args.token).toLowerCase()===String(row.asset_id).split(":").pop()?.toLowerCase()&&String(e.args.destination).toLowerCase()===String(row.destination_address).toLowerCase()&&BigInt(e.args.amount as bigint)===BigInt(String(row.amount_raw))&&String(e.args.caller).toLowerCase()===String(row.sender_address).toLowerCase());
       const identityOk=Boolean(event)&&transaction.to?.toLowerCase()===String(row.executor_address).toLowerCase()&&transaction.from.toLowerCase()===String(row.sender_address).toLowerCase();
-      const tokenAddress=String(row.asset_id).split(":").pop() as Address;
-      const destinationBalanceAfter=await client.readContract({address:tokenAddress,abi:ERC20_ABI,functionName:"balanceOf",args:[String(row.destination_address) as Address]});
-      const balanceOk=typeof row.destination_balance_before_raw==="string"&&destinationBalanceAfter>=BigInt(row.destination_balance_before_raw)+BigInt(String(row.amount_raw));
+      let destinationBalanceAfter:bigint|null=null;
+      if(receipt.status==="success"){
+        const tokenAddress=String(row.asset_id).split(":").pop() as Address;
+        try{destinationBalanceAfter=await client.readContract({address:tokenAddress,abi:ERC20_ABI,functionName:"balanceOf",args:[String(row.destination_address) as Address]});}catch{}
+      }
+      const balanceOk=typeof row.destination_balance_before_raw==="string"&&destinationBalanceAfter!==null&&
+        destinationBalanceAfter>=BigInt(row.destination_balance_before_raw)+BigInt(String(row.amount_raw));
       const ok=receipt.status==="success"&&identityOk&&balanceOk;
       const txStatus=ok?"confirmed":receipt.status==="reverted"?"reverted":"unknown";
       const jobStatus=ok?"confirmed":receipt.status==="reverted"?"failed":"blocked";
       const failureCode=ok?null:receipt.status==="reverted"?"transaction_reverted":!identityOk?"receipt_or_event_verification_failed":"destination_balance_postcondition_failed";
       await env.DB.batch([
         env.DB.prepare("UPDATE recovery_transactions SET status=?,block_number=?,block_hash=?,gas_used_raw=?,effective_gas_price_raw=?,actual_fee_raw=?,destination_balance_after_raw=?,confirmed_at=?,last_checked_at=?,failure_code=? WHERE id=?")
-          .bind(txStatus,Number(receipt.blockNumber),receipt.blockHash,receipt.gasUsed.toString(),receipt.effectiveGasPrice.toString(),(receipt.gasUsed*receipt.effectiveGasPrice).toString(),destinationBalanceAfter.toString(),at,at,failureCode,row.id),
+          .bind(txStatus,Number(receipt.blockNumber),receipt.blockHash,receipt.gasUsed.toString(),receipt.effectiveGasPrice.toString(),(receipt.gasUsed*receipt.effectiveGasPrice).toString(),destinationBalanceAfter?.toString()??null,at,at,failureCode,row.id),
         env.DB.prepare("UPDATE recovery_jobs SET status=?,completed_at=?,updated_at=?,last_error_code=? WHERE id=? AND status IN ('submitted','ready','simulating','blocked')")
           .bind(jobStatus,at,at,failureCode,row.job_id),
         env.DB.prepare("UPDATE recovery_execution_attempts SET phase=?,updated_at=? WHERE transaction_hash=?")
           .bind(ok?"confirmed":receipt.status==="reverted"?"failed":"blocked",at,row.transaction_hash)
       ]);
-      await audit(env,String(row.job_id),ok?"recovery.transaction.confirmed":receipt.status==="reverted"?"recovery.transaction.reverted":"recovery.transaction.postcondition_failed",{transactionHash:row.transaction_hash,blockNumber:receipt.blockNumber.toString(),actualFeeRaw:(receipt.gasUsed*receipt.effectiveGasPrice).toString(),destinationBalanceBeforeRaw:row.destination_balance_before_raw,destinationBalanceAfterRaw:destinationBalanceAfter.toString()},at);
+      await audit(env,String(row.job_id),ok?"recovery.transaction.confirmed":receipt.status==="reverted"?"recovery.transaction.reverted":"recovery.transaction.postcondition_failed",{transactionHash:row.transaction_hash,blockNumber:receipt.blockNumber.toString(),actualFeeRaw:(receipt.gasUsed*receipt.effectiveGasPrice).toString(),destinationBalanceBeforeRaw:row.destination_balance_before_raw,destinationBalanceAfterRaw:destinationBalanceAfter?.toString()??null},at);
       checked++;
     }catch(error){
       // A missing receipt is normal while the transaction is pending; never resubmit blindly.
