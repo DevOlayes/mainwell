@@ -10,6 +10,27 @@ function originOk(req:Request,url:URL):boolean{return req.headers.get("origin")=
 async function body(req:Request):Promise<Record<string,unknown>|null>{try{if(Number(req.headers.get("content-length")??"0")>2048)return null;const raw=await req.text();if(raw.length>2048)return null;const v:unknown=JSON.parse(raw);return v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:null;}catch{return null;}}
 export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,admin:AdminSession):Promise<Response|null>{
  const url=new URL(request.url),path=url.pathname,now=new Date().toISOString();
+ // Admin-managed source wallets: registration alone never makes a wallet recovery-eligible.
+ if(path==="/api/admin/recovery-wallets"&&request.method==="GET"){
+  const rows=await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id,status,admin_locked AS adminLocked,locked_by AS lockedBy,locked_at AS lockedAt,created_at AS createdAt,updated_at AS updatedAt FROM recovery_wallets ORDER BY admin_locked DESC,updated_at DESC").all<Record<string,unknown>>();
+  return rows.success?response({wallets:rows.results}):response({error:"Unable to load configured source wallets."},503);
+ }
+ if(path==="/api/admin/recovery-wallets"&&request.method==="POST"){
+  if(!originOk(request,url))return response({error:"Origin check failed."},403);
+  const b=await body(request),network=typeof b?.network==="string"?b.network:"",address=typeof b?.address==="string"?b.address:"";
+  if(!(network in NETWORK_CHAIN)||!ADDRESS.test(address))return response({error:"A supported network and valid source wallet address are required."},400);
+  const normalized=address.toLowerCase();
+  const existing=await env.DB.prepare("SELECT id,status FROM recovery_wallets WHERE owner_address=? AND network=? LIMIT 1").bind(normalized,network).first<{id:string;status:string}>();
+  if(existing?.status==="revoked")return response({error:"This source wallet was previously revoked and cannot be silently reactivated."},409);
+  const id=existing?.id??crypto.randomUUID();
+  const saved=await env.DB.prepare("INSERT INTO recovery_wallets(id,owner_address,network,chain_id,status,first_seen_at,created_at,updated_at,admin_locked,locked_by,locked_at) VALUES(?,?,?,?, 'monitoring',?,?,?,?,?,?) ON CONFLICT(owner_address,network) DO UPDATE SET admin_locked=1,locked_by=excluded.locked_by,locked_at=excluded.locked_at,updated_at=excluded.updated_at WHERE recovery_wallets.status!='revoked'").bind(id,normalized,network,NETWORK_CHAIN[network],now,now,now,1,admin.adminId,now).run();
+  if(!saved.success)return response({error:"Unable to lock this source wallet."},503);
+  const row=await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id,status,admin_locked AS adminLocked,locked_by AS lockedBy,locked_at AS lockedAt,updated_at AS updatedAt FROM recovery_wallets WHERE owner_address=? AND network=?").bind(normalized,network).first<Record<string,unknown>>();
+  if(!row||Number(row.adminLocked)!==1)return response({error:"Source-wallet lock could not be confirmed."},503);
+  await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.source_wallet.lock','recovery_wallet',?,?,?)").bind(admin.adminId,id,JSON.stringify({network,address:normalized,locked:true}),now).run();
+  return response({locked:true,wallet:row});
+ }
+
  if(path==="/api/admin/recovery-destinations"&&request.method==="POST"){
   if(!originOk(request,url))return response({error:"Origin check failed."},403);
   const b=await body(request),network=typeof b?.network==="string"?b.network:"",address=typeof b?.address==="string"?b.address:"";
