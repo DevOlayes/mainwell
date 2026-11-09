@@ -42,23 +42,31 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.destination.add','recovery_destination',?,?,?)").bind(admin.adminId,String(row?.id??id),JSON.stringify({network,address:normalized,locked:true}),now).run();
   return response({created:true,destination:row});
  }
- const policyMatch=path.match(/^\/api\/admin\/recovery-destination-policies\/([a-z-]+)\/([^/]+)$/);
+ const policyMatch=path.match(/^\\/api\\/admin\\/recovery-destination-policies\\/([a-z-]+)\\/([^/]+)$/);
  if(policyMatch&&request.method==="PUT"){
   if(!originOk(request,url))return response({error:"Origin check failed."},403);
   const network=policyMatch[1],b=await body(request),destinationId=typeof b?.destinationId==="string"?b.destinationId:"";
   let assetId:string;try{assetId=decodeURIComponent(policyMatch[2]);}catch{return response({error:"Invalid asset identifier."},400);}
-  if(!(network in NETWORK_CHAIN)||!assetId||assetId.length>160||!destinationId)return response({error:"Valid network, asset ID and destination ID are required."},400);
+  const maxAmountRaw=typeof b?.maxAmountRaw==="string"?b.maxAmountRaw:"";
+  const automaticPriorityEnabled=b?.automaticPriorityEnabled===true;
+  const adminInitiatedEnabled=b?.adminInitiatedEnabled===true;
+  const expiresInSeconds=Number(b?.expiresInSeconds);
+  if(!(network in NETWORK_CHAIN)||!assetId||assetId.length>160||!destinationId||
+     !/^[1-9][0-9]{0,77}$/.test(maxAmountRaw)||(!automaticPriorityEnabled&&!adminInitiatedEnabled)||
+     !Number.isSafeInteger(expiresInSeconds)||expiresInSeconds<3600||expiresInSeconds>31536000){
+    return response({error:"Provide a destination, positive asset cap in token base units, at least one execution mode, and expiry from 1 hour to 365 days."},400);
+  }
   const dest=await env.DB.prepare("SELECT id,address FROM recovery_destinations WHERE id=? AND network=? AND locked=1 AND is_active=1").bind(destinationId,network).first<{id:string;address:string}>();
   if(!dest)return response({error:"Select an active locked destination on the same network."},409);
-  const saved=await env.DB.prepare("INSERT INTO recovery_asset_destination_policies(network,asset_id,destination_id,updated_by,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(network,asset_id) DO UPDATE SET destination_id=excluded.destination_id,updated_by=excluded.updated_by,updated_at=excluded.updated_at").bind(network,assetId,destinationId,admin.adminId,now).run();
-  if(!saved.success)return response({error:"Unable to save asset destination policy."},503);
-  await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.asset_destination_policy.set','recovery_asset_destination_policy',?,?,?)").bind(admin.adminId,network+":"+assetId,JSON.stringify({destinationId,address:dest.address}),now).run();
-  return response({updated:true,network,assetId,destinationId,address:dest.address,ownerApprovalRequired:true});
+  const saved=await env.DB.prepare("INSERT INTO recovery_asset_destination_policies(network,asset_id,destination_id,updated_by,updated_at,max_amount_raw,automatic_priority_enabled,admin_initiated_enabled,expires_in_seconds) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(network,asset_id) DO UPDATE SET destination_id=excluded.destination_id,updated_by=excluded.updated_by,updated_at=excluded.updated_at,max_amount_raw=excluded.max_amount_raw,automatic_priority_enabled=excluded.automatic_priority_enabled,admin_initiated_enabled=excluded.admin_initiated_enabled,expires_in_seconds=excluded.expires_in_seconds").bind(network,assetId,destinationId,admin.adminId,now,maxAmountRaw,automaticPriorityEnabled?1:0,adminInitiatedEnabled?1:0,expiresInSeconds).run();
+  if(!saved.success)return response({error:"Unable to save asset authorization policy."},503);
+  await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.asset_authorization_policy.set','recovery_asset_destination_policy',?,?,?)").bind(admin.adminId,network+":"+assetId,JSON.stringify({destinationId,address:dest.address,maxAmountRaw,automaticPriorityEnabled,adminInitiatedEnabled,expiresInSeconds}),now).run();
+  return response({updated:true,network,assetId,destinationId,address:dest.address,maxAmountRaw,automaticPriorityEnabled,adminInitiatedEnabled,expiresInSeconds,ownerApprovalRequired:true});
  }
  if(path==="/api/admin/recovery-destination-policies"&&request.method==="GET"){
   const network=url.searchParams.get("network");
   if(network&&!(network in NETWORK_CHAIN))return response({error:"Unsupported network."},400);
-  const sql="SELECT p.network,p.asset_id AS assetId,p.destination_id AS destinationId,d.address AS destinationAddress,p.updated_at AS updatedAt FROM recovery_asset_destination_policies p INNER JOIN recovery_destinations d ON d.id=p.destination_id"+(network?" WHERE p.network=?":"")+" ORDER BY p.network,p.asset_id";
+  const sql="SELECT p.network,p.asset_id AS assetId,p.destination_id AS destinationId,d.address AS destinationAddress,p.max_amount_raw AS maxAmountRaw,p.automatic_priority_enabled AS automaticPriorityEnabled,p.admin_initiated_enabled AS adminInitiatedEnabled,p.expires_in_seconds AS expiresInSeconds,p.updated_at AS updatedAt FROM recovery_asset_destination_policies p INNER JOIN recovery_destinations d ON d.id=p.destination_id"+(network?" WHERE p.network=?":"")+" ORDER BY p.network,p.asset_id";
   const stmt=env.DB.prepare(sql),rows=await (network?stmt.bind(network):stmt).all<Record<string,unknown>>();
   return rows.success?response({policies:rows.results}):response({error:"Unable to load asset destination policies."},503);
  }
