@@ -160,8 +160,11 @@ export class D1GrantRepository {
 
   async getById(grantId: string): Promise<RecoveryAuthorizationGrant | null> {
     const row = await this.db.prepare(`
-      SELECT * FROM recovery_grants WHERE grant_id = ? LIMIT 1
-    `).bind(grantId).first<GrantRow>();
+      SELECT * FROM recovery_grants
+      WHERE grant_id = ? AND verification_status = 'verified'
+        AND revoked_at IS NULL AND expires_at > ?
+      LIMIT 1
+    `).bind(grantId, new Date().toISOString()).first<GrantRow>();
     if (!row || row.verification_status !== "verified") return null;
 
     const assets = await this.db.prepare(`
