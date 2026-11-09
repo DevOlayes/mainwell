@@ -505,7 +505,8 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     const limit = limitFrom(url);
     const rows = await env.DB.prepare(`
       SELECT j.id, j.grant_id, j.asset_id, j.execution_mode, j.status,
-             j.priority_score, j.created_at, j.updated_at
+             j.priority_score, j.created_at, j.updated_at, j.requested_amount_raw,
+             j.destination_address, j.attempt_count, j.last_error_code, j.completed_at
       FROM recovery_jobs j INNER JOIN recovery_grants g ON g.grant_id = j.grant_id
       WHERE g.owner_wallet = ? ORDER BY j.created_at DESC LIMIT ?
     `).bind(owner, limit).all<Record<string, unknown>>();
