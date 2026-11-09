@@ -80,7 +80,7 @@ contract ScopedRecoveryExecutor {
             address asset = assets_[i];
             address assetDest = destinations_[i];
             uint256 cap = maxAmounts_[i];
-            if (asset == address(0) || assetDest == address(0) || cap == 0) revert InvalidAssetConfiguration();
+            if (asset == address(0) || asset.code.length == 0 || assetDest == address(0) || cap == 0) revert InvalidAssetConfiguration();
             if (assetLimit[asset] != 0) revert DuplicateAsset(asset);
             assetLimit[asset] = cap;
             assetDestination[asset] = assetDest;
