@@ -32,7 +32,7 @@ export function validateRecoveryGrant(
     for (const [label, value] of [
       ["owner wallet", grant.ownerWallet],
       ["executor", grant.executorAddress],
-      ["destination", grant.destinationAddress]
+      ["default destination", grant.destinationAddress]
     ] as const) {
       if (!EVM_ADDRESS.test(value)) throw new Error(`Grant ${label} is not a valid EVM address.`);
     }
@@ -62,6 +62,9 @@ export function validateRecoveryGrant(
   for (const asset of grant.assets) {
     if (!asset.assetId.trim() || seen.has(asset.assetId)) throw new Error("Asset IDs must be non-empty and unique.");
     seen.add(asset.assetId);
+    if (EVM_NETWORKS.has(grant.network) && !EVM_ADDRESS.test(asset.destinationAddress)) {
+      throw new Error("Every EVM asset must have its own valid owner-approved destination address.");
+    }
     if (asset.amount.kind === "capped") {
       if (!UINT.test(asset.amount.maxAmountRaw) || BigInt(asset.amount.maxAmountRaw) <= 0n) {
         throw new Error("Capped authorization must have a positive integer amount in base units.");
