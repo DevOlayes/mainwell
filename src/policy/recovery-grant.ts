@@ -7,6 +7,7 @@ const EVM_NETWORKS = new Set<NetworkId>([
 const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const HASH = /^0x[0-9a-fA-F]{64}$/;
 const UINT = /^(0|[1-9][0-9]*)$/;
+const UINT256_MAX = (1n << 256n) - 1n;
 
 /**
  * Structural grant validation. Before any transaction, the execution adapter
@@ -78,7 +79,7 @@ export function validateRecoveryGrant(
       throw new Error("Every EVM asset must have its own valid owner-approved destination address.");
     }
     if (asset.amount.kind === "capped") {
-      if (!UINT.test(asset.amount.maxAmountRaw) || BigInt(asset.amount.maxAmountRaw) <= 0n) {
+      if (!UINT.test(asset.amount.maxAmountRaw) || BigInt(asset.amount.maxAmountRaw) <= 0n || BigInt(asset.amount.maxAmountRaw) > UINT256_MAX) {
         throw new Error("Capped authorization must have a positive integer amount in base units.");
       }
     } else if (asset.amount.kind === "unlimited-allowance") {
