@@ -49,7 +49,7 @@ function base32(s:string):Uint8Array{
  for(const ch of s.toUpperCase().replace(/=+$/,"").replace(/\s/g,"")){const n=alphabet.indexOf(ch);if(n<0)throw new Error("Invalid TOTP secret.");value=(value<<5)|n;bits+=5;if(bits>=8){out.push((value>>(bits-8))&255);bits-=8;value&=(1<<bits)-1;}}
  return new Uint8Array(out);
 }
-async function decryptTotpSecret(ciphertext:string,keyText:string):Promise<Uint8Array>{
+export async function decryptTotpSecret(ciphertext:string,keyText:string):Promise<Uint8Array>{
  const p=ciphertext.split(":");if(p.length!==3||p[0]!=="v1")throw new Error("Invalid encrypted MFA secret.");
  const keyBytes=b64(keyText);if(keyBytes.length!==32)throw new Error("MFA encryption key must be 32 bytes.");
  const key=await crypto.subtle.importKey("raw",keyBytes,{name:"AES-GCM"},false,["decrypt"]);
