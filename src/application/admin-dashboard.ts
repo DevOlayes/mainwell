@@ -38,5 +38,5 @@ $("destinationForm").addEventListener("submit",async e=>{e.preventDefault();cons
 $("policyForm").addEventListener("submit",async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));try{await api("/api/admin/recovery-destination-policies/"+encodeURIComponent(b.network)+"/"+encodeURIComponent(b.assetId),{method:"PUT",body:JSON.stringify({destinationId:b.destinationId})});$("policyStatus").textContent="Asset policy saved. Owner approval is still required.";await load()}catch(err){$("policyStatus").className="status error";$("policyStatus").textContent=err.message}});
 $("logout").addEventListener("click",async()=>{try{await api("/api/admin/auth/logout",{method:"POST",body:"{}"})}finally{location.reload()}});
 api("/api/admin/auth/me").then(showConsole).catch(()=>{});
-</script></body></html>;
+</script></body></html>`;
 export function adminDashboardResponse():Response{return new Response(HTML,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}});}
