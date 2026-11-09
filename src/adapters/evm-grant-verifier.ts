@@ -27,6 +27,7 @@ interface Receipt {
   status?: string;
   from?: string;
   contractAddress?: string | null;
+  blockNumber?: string;
 }
 export interface EvmGrantVerification {
   verifiedAt: string;
@@ -109,6 +110,12 @@ export class EvmGrantVerifier {
       throw new Error("Owner deployment transaction receipt does not prove this executor deployment.");
     }
 
+    if (!receipt.blockNumber || !/^0x[0-9a-fA-F]+$/.test(receipt.blockNumber)) throw new Error("Deployment receipt is missing its block number.");
+    const block = await this.rpc("eth_getBlockByNumber", [receipt.blockNumber, false]) as { timestamp?: string } | null;
+    if (!block?.timestamp || !/^0x[0-9a-fA-F]+$/.test(block.timestamp)) throw new Error("Deployment block timestamp is unavailable.");
+    const deployedAt = Number(BigInt(block.timestamp)) * 1000;
+    if (Math.abs(Date.parse(grant.approvedAt) - deployedAt) > 1000) throw new Error("Grant approval timestamp does not match the owner deployment block.");
+
     const owner=this.decodeAddress(await this.call(grant.executorAddress,"owner()"));
     const destination=this.decodeAddress(await this.call(grant.executorAddress,"destination()"));
     const expiry=BigInt("0x"+(await this.call(grant.executorAddress,"expiresAt()")).slice(-64));
@@ -119,10 +126,23 @@ export class EvmGrantVerifier {
     if (expiry!==expectedExpiry || expiry<=BigInt(Math.floor(now/1000))) throw new Error("Executor expiry is mismatched or expired.");
     if (revoked!==0n) throw new Error("Executor grant has been revoked on-chain.");
 
+    const automaticEnabled = BigInt("0x" + (await this.call(grant.executorAddress,"automaticPriorityEnabled()")).slice(-64)) === 1n;
+    const adminEnabled = BigInt("0x" + (await this.call(grant.executorAddress,"adminInitiatedEnabled()")).slice(-64)) === 1n;
+    if (automaticEnabled !== grant.executionModes.includes("automatic-priority") ||
+        adminEnabled !== grant.executionModes.includes("admin-initiated")) {
+      throw new Error("On-chain execution modes do not match the owner's declared authorization.");
+    }
+    const authorizedCount = BigInt("0x" + (await this.call(grant.executorAddress,"authorizedAssetCount()")).slice(-64));
+    if (authorizedCount !== BigInt(grant.assets.length)) throw new Error("On-chain authorized asset count does not match the grant.");
+
     const assets=[];
-    for (const asset of grant.assets) {
+    for (let assetIndex = 0; assetIndex < grant.assets.length; assetIndex++) {
+      const asset = grant.assets[assetIndex];
+      const indexArg = BigInt(assetIndex).toString(16).padStart(64, "0");
+      const onchainAsset = this.decodeAddress(await this.call(grant.executorAddress, "authorizedAssetAt(uint256)", indexArg));
       if (!asset.tokenAddress || !ADDRESS.test(asset.tokenAddress)) throw new Error("Native assets are not supported by this ERC-20 executor.");
       const token=asset.tokenAddress.toLowerCase();
+      if (onchainAsset !== token) throw new Error("On-chain asset order or token address does not match the grant.");
       const arg=token.slice(2).padStart(64,"0");
       const cap=BigInt("0x"+(await this.call(grant.executorAddress,"assetLimit(address)",arg)).slice(-64));
       const recovered=BigInt("0x"+(await this.call(grant.executorAddress,"amountRecovered(address)",arg)).slice(-64));
