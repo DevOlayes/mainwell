@@ -213,7 +213,7 @@ async function processOne(env:EngineEnv):Promise<boolean>{
   }
 }
 async function trackTransactions(env:EngineEnv):Promise<number>{
-  const rows=await env.DB.prepare("SELECT t.id,t.job_id,t.network,t.transaction_hash,t.asset_id,t.amount_raw,t.destination_address,t.sender_address,g.executor_address FROM recovery_transactions t INNER JOIN recovery_jobs j ON j.id=t.job_id INNER JOIN recovery_grants g ON g.grant_id=j.grant_id WHERE t.status IN ('submitted','pending') AND t.transaction_hash IS NOT NULL ORDER BY submitted_at ASC LIMIT 25")
+  const rows=await env.DB.prepare("SELECT t.id,t.job_id,t.network,t.transaction_hash,t.asset_id,t.amount_raw,t.destination_address,t.sender_address,g.executor_address FROM recovery_transactions t INNER JOIN recovery_jobs j ON j.id=t.job_id INNER JOIN recovery_grants g ON g.grant_id=j.grant_id WHERE t.status IN ('prepared','submitted','pending') AND t.transaction_hash IS NOT NULL ORDER BY t.created_at ASC LIMIT 25")
     .all<Record<string,unknown>>();
   if(!rows.success)return 0;
   let checked=0;
@@ -228,7 +228,7 @@ async function trackTransactions(env:EngineEnv):Promise<number>{
         await env.DB.prepare("UPDATE recovery_transactions SET status='unknown',failure_code='transaction_identity_mismatch',last_checked_at=? WHERE id=?").bind(at,row.id).run();
         continue;
       }
-      let receipt;
+      let receipt: Awaited<ReturnType<typeof client.getTransactionReceipt>>;
       try{receipt=await client.getTransactionReceipt({hash:String(row.transaction_hash) as Hex});}
       catch{
         await env.DB.batch([
