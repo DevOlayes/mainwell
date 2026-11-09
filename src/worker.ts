@@ -8,10 +8,11 @@ import { ownerDashboardResponse } from "./application/owner-dashboard";
 import { ownerAuthorizationResponse } from "./application/owner-authorization";
 import { operatorWalletSetupResponse } from "./application/operator-wallet-setup";
 import { adminDiagnosticsResponse } from "./application/admin-diagnostics";
+import { runRecoveryAutomation } from "./application/recovery-engine";
 interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]; meta?: { changes?: number } }
 interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
 interface D1Database { prepare(query: string): D1Statement; batch<T = unknown>(statements: D1Statement[]): Promise<D1Result<T>[]> }
-interface Env extends OwnerApiEnv { ADMIN_MFA_ENCRYPTION_KEY?: string; MAINWELL_ADMIN_BOOTSTRAP_TOKEN?: string; MAINWELL_ADMIN_PRIVATE_KEY?: string; MAINWELL_AUTOMATION_PRIVATE_KEY?: string }
+interface Env extends OwnerApiEnv { ADMIN_MFA_ENCRYPTION_KEY?: string; MAINWELL_ADMIN_BOOTSTRAP_TOKEN?: string; MAINWELL_ADMIN_PRIVATE_KEY?: string; MAINWELL_AUTOMATION_PRIVATE_KEY?: string; MAINWELL_EXECUTION_ENABLED?: string; MAINWELL_AUTOMATION_ENABLED?: string; MAINWELL_MAX_RECOVERY_FEE_WEI?: string; MAINWELL_SPONSOR_RESERVE_WEI?: string }
 const SESSION_SECONDS = 604800, CHALLENGE_SECONDS = 300;
 const CHAINS = new Set([1, 137, 56, 43114, 42161, 10, 8453]);
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
@@ -30,7 +31,7 @@ async function session(req: Request,env: Env) {
   if(!row)return null; await env.DB.prepare("UPDATE wallet_sessions SET last_seen_at=? WHERE id=?").bind(now,row.id).run();
   return {wallet:row.wallet_address,chainId:row.chain_id};
 }
-export default { async fetch(request: Request,env: Env): Promise<Response> {
+export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(promise:Promise<unknown>):void}):Promise<void> { ctx.waitUntil(runRecoveryAutomation(env)); }, async fetch(request: Request,env: Env): Promise<Response> {
   const url=new URL(request.url);
   if(request.method==="GET"&&url.pathname==="/admin")return adminDashboardResponse();
   if(request.method==="GET"&&url.pathname==="/admin/diagnostics")return adminDiagnosticsResponse();
