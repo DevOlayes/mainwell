@@ -90,4 +90,6 @@ After submission:
 
 ## 9. Delivery status rule
 
-The current code is not a complete or production-ready recovery application. Read-only EVM monitoring exists in an initial form. Authorization persistence, executor contract, admin UI/authentication/MFA, automated scheduling, admin execution workflow, simulation, gas sponsorship, transaction submission, receipt tracking, and non-EVM adapters remain implementation work. A feature is complete only after code, tests, and supported-chain integration have been verified.
+Phase One establishes the EVM authorization and policy foundation: persistent grant records, owner wallet authorization, the non-upgradeable scoped executor, exact ERC-20 allowance verification, admin MFA, locked source wallets and destinations, supported ERC-20 registration, per-asset caps/modes/expiry, separate operator identities, and the admin configuration console. CI builds and pins deployment artifacts; production deployment must be verified independently.
+
+Phase One does **not** mean the application can execute recoveries. Phase Two still requires the automatic and administrator execution workers, hybrid gas sponsorship, exact transaction simulation, transaction submission, confirmation/replacement tracking, and reconciliation. Execution remains disabled until those components and supported-chain tests are complete. No independent third-party security audit has been completed. A feature is complete only after code, tests, and supported-chain integration have been verified.
