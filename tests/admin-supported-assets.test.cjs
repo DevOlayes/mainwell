@@ -25,7 +25,13 @@ function envMock() {
 const admin={id:"session-1",adminId:"admin-1"};
 
 test("admin can register a supported ERC-20 token with normalized network asset ID", async () => {
-  const env=envMock();
+  const originalFetch=global.fetch;
+  global.fetch=async (_url,init)=>{
+    const req=JSON.parse(init.body);
+    const result=req.method==="eth_chainId"?"0x1":req.method==="eth_getCode"?"0x60006000":"0x6";
+    return new Response(JSON.stringify({jsonrpc:"2.0",id:req.id,result}),{status:200});
+  };
+  const env=envMock();env.EVM_RPC_ETHEREUM="https://rpc.example";
   const response=await handleAdminDestinationApi(request("/api/admin/supported-assets","POST",{
     network:"ethereum",address:"0x4444444444444444444444444444444444444444",
     symbol:"USDC",name:"USD Coin",decimals:6
