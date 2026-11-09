@@ -52,7 +52,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   const adminInitiatedEnabled=b?.adminInitiatedEnabled===true;
   const expiresInSeconds=Number(b?.expiresInSeconds);
   if(!(network in NETWORK_CHAIN)||!assetId||assetId.length>160||!destinationId||
-     !/^[1-9][0-9]{0,77}$/.test(maxAmountRaw)||(!automaticPriorityEnabled&&!adminInitiatedEnabled)||
+     !/^[1-9][0-9]{0,77}$/.test(maxAmountRaw)||(BigInt(maxAmountRaw) > ((1n << 256n) - 1n))||(!automaticPriorityEnabled&&!adminInitiatedEnabled)||
      !Number.isSafeInteger(expiresInSeconds)||expiresInSeconds<3600||expiresInSeconds>31536000){
     return response({error:"Provide a destination, positive asset cap in token base units, at least one execution mode, and expiry from 1 hour to 365 days."},400);
   }
