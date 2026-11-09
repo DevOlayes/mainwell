@@ -39,6 +39,8 @@ contract ScopedRecoveryExecutorTest {
     ScopedRecoveryExecutor private executor;
     address private constant DESTINATION = address(0xBEEF);
     address private constant STRANGER = address(0xCAFE);
+    address private constant AUTOMATION_OPERATOR = address(0xA110);
+    address private constant ADMIN_OPERATOR = address(0xAD01);
 
     function setUp() public {
         token = new MockRecoveryToken();
@@ -48,9 +50,34 @@ contract ScopedRecoveryExecutorTest {
         assets[0] = address(token);
         destinations[0] = DESTINATION;
         caps[0] = 500;
-        executor = new ScopedRecoveryExecutor(uint64(block.timestamp + 1 days), assets, destinations, caps, true, true);
+        executor = new ScopedRecoveryExecutor(uint64(block.timestamp + 1 days), assets, destinations, caps, true, true, AUTOMATION_OPERATOR, ADMIN_OPERATOR);
         token.mint(address(this), 1_000);
         token.approve(address(executor), 1_000);
+    }
+
+
+    function testAutomaticModeRequiresDedicatedAutomationOperator() public {
+        vm.prank(AUTOMATION_OPERATOR);
+        executor.executeAutomaticToken(address(token), 100);
+        require(token.balanceOf(DESTINATION) == 100, "automatic transfer missing");
+    }
+
+    function testAdminOperatorCannotCallAutomaticMode() public {
+        vm.prank(ADMIN_OPERATOR);
+        (bool ok,) = address(executor).call(abi.encodeWithSelector(executor.executeAutomaticToken.selector, address(token), 1));
+        require(!ok, "admin bypassed automatic role");
+    }
+
+    function testAutomationOperatorCannotCallAdminMode() public {
+        vm.prank(AUTOMATION_OPERATOR);
+        (bool ok,) = address(executor).call(abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 1));
+        require(!ok, "automation bypassed admin role");
+    }
+
+    function testStrangerCannotExecuteRecovery() public {
+        vm.prank(STRANGER);
+        (bool ok,) = address(executor).call(abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 1));
+        require(!ok, "unauthorized caller executed recovery");
     }
 
     function testExecutionModesAndExactAssetScopeAreImmutable() public {
@@ -61,8 +88,8 @@ contract ScopedRecoveryExecutorTest {
     }
 
     function testRecoveryCanOnlySendToImmutableDestination() public {
-        vm.prank(STRANGER);
-        executor.executeToken(address(token), 200);
+        vm.prank(ADMIN_OPERATOR);
+        executor.executeAdminToken(address(token), 200);
         require(token.balanceOf(DESTINATION) == 200, "destination balance");
         require(token.balanceOf(STRANGER) == 0, "caller received tokens");
         require(executor.amountRecovered(address(token)) == 200, "spent accounting");
@@ -80,7 +107,7 @@ contract ScopedRecoveryExecutorTest {
         ScopedRecoveryExecutor multi = new ScopedRecoveryExecutor(uint64(block.timestamp + 1 days), assets, destinations, caps, true, true);
         second.mint(address(this), 700);
         second.approve(address(multi), 700);
-        multi.executeToken(address(second), 300);
+        multi.executeAdminToken(address(second), 300);
         require(second.balanceOf(secondDestination) == 300, "asset-specific destination not used");
         require(second.balanceOf(DESTINATION) == 0, "asset sent to another asset destination");
         require(multi.assetDestination(address(second)) == secondDestination, "destination binding missing");
@@ -89,7 +116,7 @@ contract ScopedRecoveryExecutorTest {
     function testCumulativeRecoveryCannotExceedOwnerConfiguredCap() public {
         executor.executeToken(address(token), 300);
         (bool ok,) = address(executor).call(
-            abi.encodeWithSelector(executor.executeToken.selector, address(token), 201)
+            abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 201)
         );
         require(!ok, "cap bypassed");
         require(token.balanceOf(DESTINATION) == 300, "unexpected transfer");
