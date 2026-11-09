@@ -20,7 +20,7 @@ const grant = {
 const now = Date.parse("2026-11-09T06:05:00.000Z");
 const word = value => BigInt(value).toString(16).padStart(64, "0");
 const addressWord = value => value.slice(2).toLowerCase().padStart(64, "0");
-const selector = signature => keccak256(new TextEncoder().encode(signature)).slice(0, 4).toString("hex");
+const selector = signature => keccak256Hex("0x" + Buffer.from(signature).toString("hex")).slice(2, 10);
 
 function makeVerifier(overrides = {}) {
   const selectors = {
