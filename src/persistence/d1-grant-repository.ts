@@ -37,6 +37,8 @@ interface GrantRow {
   executor_code_hash: string;
   destination_address: string;
   execution_modes_json: string;
+  automation_operator: string;
+  admin_operator: string;
   evidence_kind: RecoveryAuthorizationGrant["evidence"]["kind"];
   evidence_reference: string;
   approved_at: string;
@@ -97,14 +99,15 @@ export class D1GrantRepository {
       INSERT INTO recovery_grants (
         grant_id, owner_wallet, network, chain_id, executor_address,
         executor_code_hash, destination_address, execution_modes_json,
-        evidence_kind, evidence_reference, approved_at, expires_at,
+        automation_operator, admin_operator, evidence_kind, evidence_reference, approved_at, expires_at,
         revoked_at, verification_status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'verified', ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'verified', ?, ?)
       ON CONFLICT(grant_id) DO NOTHING
     `).bind(
       grant.grantId, grant.ownerWallet.toLowerCase(), grant.network, grant.chainId ?? null,
       grant.executorAddress.toLowerCase(), grant.executorCodeHash.toLowerCase(),
       grant.destinationAddress.toLowerCase(), JSON.stringify(grant.executionModes),
+      grant.executionOperators.automation.toLowerCase(), grant.executionOperators.administrator.toLowerCase(),
       grant.evidence.kind, grant.evidence.reference, grant.approvedAt, grant.expiresAt,
       record.verifiedAt, record.verifiedAt
     );
@@ -163,6 +166,7 @@ export class D1GrantRepository {
       executorCodeHash: row.executor_code_hash,
       destinationAddress: row.destination_address,
       executionModes: parseModes(row.execution_modes_json),
+      executionOperators: { automation: row.automation_operator, administrator: row.admin_operator },
       assets: assets.results.map(mapAsset),
       approvedAt: row.approved_at,
       expiresAt: row.expires_at,
