@@ -19,6 +19,7 @@ Verified grant IDs are immutable in D1. A repeated ID cannot overwrite an existi
 - POST /api/owner/grants/verify: accepts a proposed grant after the owner has deployed the executor and set the required ERC-20 allowances. The server verifies the chain state and only then persists the grant.
 - GET /api/owner/grants: returns active, verified grants belonging to the authenticated wallet.
 - POST /api/owner/grants/:grantId/revoke/confirm: accepts the owner's revoke transaction hash. The server verifies the transaction sender, target, calldata, successful receipt, executor owner, trusted bytecode, and on-chain revoked state before marking the D1 record revoked.
+- POST /api/owner/grants/:grantId/assets/:assetId/revoke/confirm: verifies the owner's revokeAsset(token) transaction and confirms the token cap has been reduced to the amount already recovered before persisting per-asset revocation.
 
 All state-changing owner routes require a same-origin request and authenticated server-side wallet session. Grant verification and revocation are audited.
 
