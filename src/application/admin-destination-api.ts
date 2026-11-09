@@ -272,19 +272,21 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   if(!Array.isArray(modes)||!modes.includes("admin-initiated"))
    return response({error:"The owner did not authorize administrator-initiated recovery for this grant."},403);
   const id=crypto.randomUUID(),eventId=crypto.randomUUID();
-  const inserted=await env.DB.prepare("INSERT INTO recovery_jobs(id,grant_id,asset_id,execution_mode,status,priority_score,idempotency_key,requested_by,created_at,updated_at,requested_amount_raw,destination_address,next_attempt_at) VALUES(?,?,?,'admin-initiated','queued',0,?,?,?,?,?,?,?) ON CONFLICT(idempotency_key) DO NOTHING")
-   .bind(id,grantId,assetId,idempotencyKey,"admin:"+admin.adminId,now,now,amountRaw,String(scope.destination_address),now).run();
-  if(!inserted.success)return response({error:"Unable to queue the recovery request."},503);
-  if((inserted.meta?.changes??0)!==1){
+  const batch=await env.DB.batch([
+   env.DB.prepare("INSERT INTO recovery_jobs(id,grant_id,asset_id,execution_mode,status,priority_score,idempotency_key,requested_by,created_at,updated_at,requested_amount_raw,destination_address,next_attempt_at) VALUES(?,?,?,'admin-initiated','queued',0,?,?,?,?,?,?,?) ON CONFLICT(idempotency_key) DO NOTHING")
+    .bind(id,grantId,assetId,idempotencyKey,"admin:"+admin.adminId,now,now,amountRaw,String(scope.destination_address),now),
+   env.DB.prepare("INSERT INTO recovery_job_events(id,job_id,event_type,actor_type,actor_id,details_json,created_at) SELECT ?,?,'admin_recovery.queued','admin',?,?,? WHERE changes()=1")
+    .bind(eventId,id,admin.adminId,JSON.stringify({grantId,assetId,amountRaw,network:scope.network}),now),
+   env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) SELECT 'admin',?,'recovery.job.queued','recovery_job',?,?,? WHERE changes()=1")
+    .bind(admin.adminId,id,JSON.stringify({grantId,assetId,amountRaw,network:scope.network,executionEnabled:false}),now)
+  ]);
+  if(batch.some(result=>!result.success))return response({error:"The recovery request and its audit records could not be committed."},503);
+  if((batch[0]?.meta?.changes??0)!==1){
    const raced=await env.DB.prepare("SELECT id,grant_id,asset_id,requested_amount_raw,status FROM recovery_jobs WHERE idempotency_key=? LIMIT 1").bind(idempotencyKey).first<Record<string,unknown>>();
    if(!raced||raced.grant_id!==grantId||raced.asset_id!==assetId||raced.requested_amount_raw!==amountRaw)
     return response({error:"The idempotency key conflicts with another recovery request."},409);
    return response({queued:true,duplicate:true,job:raced,executionEnabled:false},200);
   }
-  await env.DB.batch([
-   env.DB.prepare("INSERT INTO recovery_job_events(id,job_id,event_type,actor_type,actor_id,details_json,created_at) VALUES(?,?,'admin_recovery.queued','admin',?,?,?)").bind(eventId,id,admin.adminId,JSON.stringify({grantId,assetId,amountRaw,network:scope.network}),now),
-   env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.job.queued','recovery_job',?,?,?)").bind(admin.adminId,id,JSON.stringify({grantId,assetId,amountRaw,network:scope.network,executionEnabled:false}),now)
-  ]);
   return response({queued:true,executionEnabled:false,job:{id,grantId,assetId,network:scope.network,executionMode:"admin-initiated",status:"queued",amountRaw,destinationAddress:scope.destination_address,createdAt:now}});
  }
  return null;
