@@ -11,7 +11,7 @@ import { adminDiagnosticsResponse } from "./application/admin-diagnostics";
 interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]; meta?: { changes?: number } }
 interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
 interface D1Database { prepare(query: string): D1Statement; batch<T = unknown>(statements: D1Statement[]): Promise<D1Result<T>[]> }
-interface Env extends OwnerApiEnv { ADMIN_MFA_ENCRYPTION_KEY?: string }
+interface Env extends OwnerApiEnv { ADMIN_MFA_ENCRYPTION_KEY?: string; MAINWELL_ADMIN_BOOTSTRAP_TOKEN?: string; MAINWELL_ADMIN_PRIVATE_KEY?: string; MAINWELL_AUTOMATION_PRIVATE_KEY?: string }
 const SESSION_SECONDS = 604800, CHALLENGE_SECONDS = 300;
 const CHAINS = new Set([1, 137, 56, 43114, 42161, 10, 8453]);
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
@@ -87,6 +87,32 @@ export default { async fetch(request: Request,env: Env): Promise<Response> {
     const admin=await env.DB.prepare("SELECT s.id,s.admin_id FROM admin_sessions s INNER JOIN admin_accounts a ON a.id=s.admin_id WHERE s.token_hash=? AND s.expires_at>? AND s.mfa_verified_at>? AND a.status='active' AND a.mfa_enabled=1 LIMIT 1").bind(await hash(token),now,mfaCutoff).first<{id:string;admin_id:string}>();
     if(!admin)return json({error:"MFA-verified administrator session required."},401);
     await env.DB.prepare("UPDATE admin_sessions SET last_seen_at=? WHERE id=?").bind(now,admin.id).run();
+    const limitValue=Number(url.searchParams.get("limit")??"50"),limit=Number.isInteger(limitValue)?Math.min(100,Math.max(1,limitValue)):50;
+    if(request.method==="GET"&&url.pathname==="/api/admin/audit-logs"){
+      const rows=await env.DB.prepare("SELECT id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at FROM audit_events ORDER BY created_at DESC,id DESC LIMIT ?").bind(limit).all<Record<string,unknown>>();
+      return rows.success?json({events:rows.results}):json({error:"Unable to load audit events."},503);
+    }
+    if(request.method==="GET"&&url.pathname==="/api/admin/recovery-jobs"){
+      const rows=await env.DB.prepare("SELECT id,grant_id,asset_id,execution_mode,status,priority_score,requested_by,created_at,updated_at FROM recovery_jobs ORDER BY created_at DESC,id DESC LIMIT ?").bind(limit).all<Record<string,unknown>>();
+      return rows.success?json({jobs:rows.results}):json({error:"Unable to load recovery jobs."},503);
+    }
+    if(request.method==="GET"&&url.pathname==="/api/admin/transactions"){
+      const rows=await env.DB.prepare("SELECT id,job_id,network,transaction_hash,status,asset_id,amount_raw,destination_address,estimated_fee_raw,actual_fee_raw,submitted_at,confirmed_at,created_at FROM recovery_transactions ORDER BY created_at DESC,id DESC LIMIT ?").bind(limit).all<Record<string,unknown>>();
+      return rows.success?json({transactions:rows.results}):json({error:"Unable to load transaction records."},503);
+    }
+    if(request.method==="GET"&&url.pathname==="/api/admin/settings"){
+      return json({
+        databaseConfigured:Boolean(env.DB),
+        adminMfaEncryptionKeyConfigured:Boolean(env.ADMIN_MFA_ENCRYPTION_KEY),
+        bootstrapTokenConfigured:Boolean(env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN),
+        adminOperatorAddressConfigured:Boolean(env.MAINWELL_ADMIN_OPERATOR),
+        automationOperatorAddressConfigured:Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
+        adminPrivateKeyConfigured:Boolean(env.MAINWELL_ADMIN_PRIVATE_KEY),
+        automationPrivateKeyConfigured:Boolean(env.MAINWELL_AUTOMATION_PRIVATE_KEY),
+        rpcNetworks:{ethereum:Boolean(env.EVM_RPC_ETHEREUM),polygon:Boolean(env.EVM_RPC_POLYGON),bsc:Boolean(env.EVM_RPC_BSC),avalanche:Boolean(env.EVM_RPC_AVALANCHE),arbitrum:Boolean(env.EVM_RPC_ARBITRUM),optimism:Boolean(env.EVM_RPC_OPTIMISM),base:Boolean(env.EVM_RPC_BASE)},
+        executionEnabled:false
+      });
+    }
     const response=await handleAdminDestinationApi(request,env,{id:admin.id,adminId:admin.admin_id});
     if(response)return response;
     return json({error:"Not found"},404);
