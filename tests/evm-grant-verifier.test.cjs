@@ -158,3 +158,33 @@ test("rejects revocation transactions sent by a different wallet", async () => {
 test("rejects successful-looking revocation transactions when executor is not revoked", async () => {
   await assert.rejects(makeVerifier().verifyRevocation(grant, owner, "0x" + "d".repeat(64), now), /does not report an on-chain revoked state/);
 });
+
+test("verifies an owner-signed per-asset revocation and confirms its on-chain cap is closed", async () => {
+  const selectorValue = selector("revokeAsset(address)");
+  const input = "0x" + selectorValue + token.slice(2).toLowerCase().padStart(64, "0");
+  const result = await makeVerifier({
+    tx: { from: owner, to: executor, input },
+    limit: 500000,
+    recovered: 500000,
+    blockTimestamp: new Date(now + 60_000).toISOString()
+  }).verifyAssetRevocation(grant, owner, token, "0x" + "e".repeat(64), now);
+  assert.equal(result.tokenAddress, token);
+  assert.equal(result.revokedAt, new Date(now + 60_000).toISOString());
+});
+
+test("rejects per-asset revocation when the token is outside the owner grant", async () => {
+  await assert.rejects(
+    makeVerifier().verifyAssetRevocation(grant, owner, destination, "0x" + "e".repeat(64), now),
+    /not part of this owner grant/
+  );
+});
+
+test("rejects per-asset revocation if the on-chain cap remains spendable", async () => {
+  const input = "0x" + selector("revokeAsset(address)") + token.slice(2).toLowerCase().padStart(64, "0");
+  await assert.rejects(makeVerifier({
+    tx: { from: owner, to: executor, input },
+    limit: 2500000,
+    recovered: 500000,
+    blockTimestamp: new Date(now + 60_000).toISOString()
+  }).verifyAssetRevocation(grant, owner, token, "0x" + "e".repeat(64), now), /not disabled/);
+});
