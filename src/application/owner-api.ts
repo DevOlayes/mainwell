@@ -65,7 +65,9 @@ async function readGrantBody(request: Request): Promise<Record<string, unknown> 
 function grantVerifierConfig(env: OwnerApiEnv, network: NetworkId, chainId: number) {
   const rpcName = GRANT_RPC[network], hashName = GRANT_HASH[network];
   const rpcUrl = rpcName ? env[rpcName] as string | undefined : undefined;
-  const trustedExecutorCodeHash = (hashName ? env[hashName] : undefined) || EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH;
+  const configuredExecutorCodeHash = hashName ? env[hashName] : undefined;
+  if (configuredExecutorCodeHash && configuredExecutorCodeHash.toLowerCase() !== EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase()) return null;
+  const trustedExecutorCodeHash = EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH;
   const expectedAutomationOperator = env.MAINWELL_AUTOMATION_OPERATOR;
   const expectedAdminOperator = env.MAINWELL_ADMIN_OPERATOR;
   if (!rpcUrl || !trustedExecutorCodeHash || !expectedAutomationOperator || !expectedAdminOperator) throw new Error("GRANT_VERIFIER_NOT_CONFIGURED");
@@ -108,7 +110,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       network, chainId: session.chainId, ownerWallet: owner,
       sourceWallet: null, assets: [], policies: [],
       readiness: { sourceWalletLocked: false, rpcConfigured: Boolean(env[GRANT_RPC[network] as keyof OwnerApiEnv]),
-        executorCodeHashConfigured: true,
+        executorCodeHashConfigured: !env[GRANT_HASH[network] as keyof OwnerApiEnv] || env[GRANT_HASH[network] as keyof OwnerApiEnv]?.toLowerCase() === EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase(),
         automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
         adminOperatorConfigured: Boolean(env.MAINWELL_ADMIN_OPERATOR),
         executorArtifactAvailable: true },
