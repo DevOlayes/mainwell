@@ -3,24 +3,33 @@
 ## Non-negotiable controls
 
 - Never ask for or handle seed phrases, private keys, keystore passwords, or wallet passwords.
-- Do not persist secrets. This project contains no secret-handling code.
-- Wallet discovery uses public addresses and read-only RPC/indexer adapters.
-- No automatic sweeping or silent transfers.
-- Only owner-authorized asset IDs may be eligible in a plan.
-- Authorization is bound to wallet, network, asset list, destination, confirmation reference, and expiry.
-- Recovery destinations are admin-configured and locked; asset overrides are explicit.
-- Production destination changes require authenticated admin role, MFA, persistence, and immutable audit logging.
+- Wallet connection is read-only and never implies transfer authority.
+- A persistent authorization must be verifiable and bound to the owner wallet, chain, reviewed executor, destination, assets, amount/allowance scope, execution modes, expiry, and revocation state.
+- Automatic and administrator-initiated transfers are separate modes explicitly included in the owner's grant.
+- Admin role, configured wallet lists, and dashboard controls never create or expand transfer authority.
+- Admin-configured recovery destinations are network-specific, locked, and audited. Asset overrides must also be covered by the owner's grant.
+- Any unlimited token allowance must be an explicit owner choice and may only target a reviewed executor whose on-chain code enforces the approved destination and asset scope. Never request blanket allowances to an arbitrary administrator wallet or generic spender.
+- Native assets, NFTs, and non-EVM chains require their own authorization mechanisms; ERC-20 allowance is not universal permission.
 - A gas sponsor is a fee payer, not a transfer authority.
-- Transaction execution is disabled in this release.
+- All authorization and transaction activity must be transparent to the owner and recorded in the audit trail. "No fresh popup for every transfer" does not mean invisible or unlogged execution.
 
 ## Threat considerations
 
-A malicious website may obtain authority through a signed transaction, token allowance, permit, session key, or leaked signing secret. Merely connecting a wallet does not itself grant token-transfer authority. Permission inspection must report spender, asset, scope, observed time, risk, and revocability. Revocation must be a separate owner-approved action with a clear network fee preview.
+A malicious website may obtain authority through a signed transaction, token allowance, permit, session key, or leaked signing secret. Merely connecting a wallet does not itself grant token-transfer authority. Permission inspection must report spender, asset, scope, observed time, risk, and revocability. Revocation must be supported where the underlying authorization standard permits it.
 
 ## Wallet privacy
 
-Do not expose recovery destinations in public pages, analytics, or unnecessary logs. Avoid automatically creating public transaction links between wallets. Do not promise anonymity: public-chain activity can be correlated.
+Do not expose recovery destinations in public pages, analytics, or unnecessary logs. Do not promise anonymity: public-chain activity can be correlated. Provide wallet safety and separation guidance, not transaction obfuscation or evasion features.
 
 ## Production gate
 
-Before any transaction feature is enabled, require independent security review, chain-specific simulation, explicit confirmation of each transaction, replay protection, destination revalidation, bounded fee policy, monitoring, incident response, and testnet plus controlled mainnet testing.
+Before execution is enabled, require:
+- independent review of the executor contract and admin services;
+- on-chain verification of executor bytecode and authorization evidence;
+- destination and scope enforcement in the executor, not just frontend/backend code;
+- exact transaction simulation and bounded fee policy;
+- replay/nonce protection and revalidation immediately before submission;
+- durable audit logs, monitoring, incident response, and revocation;
+- testnet plus controlled mainnet testing.
+
+The current repository is not production-ready and has no enabled transaction execution.
