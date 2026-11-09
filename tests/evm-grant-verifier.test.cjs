@@ -14,6 +14,7 @@ const grant = {
   executorAddress: executor, executorCodeHash: codeHash, destinationAddress: destination,
   assets: [{ assetId: "usdc-ethereum", tokenAddress: token, destinationAddress: destination, amount: { kind: "capped", maxAmountRaw: "2500000" } }],
   executionModes: ["automatic-priority", "admin-initiated"],
+  executionOperators: { automation: "0x6666666666666666666666666666666666666666", administrator: "0x7777777777777777777777777777777777777777" },
   approvedAt: "2026-11-09T06:00:00.000Z", expiresAt: "2026-12-09T06:00:00.000Z",
   evidence: { kind: "onchain-approval", reference: "0x" + "a".repeat(64) }
 };
@@ -24,7 +25,7 @@ const selector = signature => keccak256Hex("0x" + Buffer.from(signature).toStrin
 
 function makeVerifier(overrides = {}) {
   const selectors = {
-    owner: selector("owner()"), destination: selector("destination()"),
+    owner: selector("owner()"), automationOperator: selector("automationOperator()"), adminOperator: selector("adminOperator()"), destination: selector("destination()"),
     expires: selector("expiresAt()"), revoked: selector("revoked()"),
     limit: selector("assetLimit(address)"), recovered: selector("amountRecovered(address)"),
     allowance: selector("allowance(address,address)"),
@@ -49,6 +50,8 @@ function makeVerifier(overrides = {}) {
       const sig = data.slice(2, 10);
       const values = {
         [selectors.owner]: "0x" + addressWord(owner),
+        [selectors.automationOperator]: "0x" + addressWord(overrides.automationOperator || "0x6666666666666666666666666666666666666666"),
+        [selectors.adminOperator]: "0x" + addressWord(overrides.adminOperator || "0x7777777777777777777777777777777777777777"),
         [selectors.destination]: "0x" + addressWord(destination),
         [selectors.expires]: "0x" + word(Math.floor(Date.parse(grant.expiresAt) / 1000)),
         [selectors.revoked]: "0x" + word(0),
@@ -68,7 +71,7 @@ function makeVerifier(overrides = {}) {
     return { ok: true, status: 200, json: async () => ({ jsonrpc: "2.0", id: req.id, result }) };
   };
   return new EvmGrantVerifier({
-    rpcUrl: "https://trusted-rpc.example", trustedExecutorCodeHash: codeHash, expectedChainId: 1, fetcher
+    rpcUrl: "https://trusted-rpc.example", trustedExecutorCodeHash: codeHash, expectedChainId: 1, expectedAutomationOperator: "0x6666666666666666666666666666666666666666", expectedAdminOperator: "0x7777777777777777777777777777777777777777", fetcher
   });
 }
 
@@ -194,4 +197,8 @@ test("rejects per-asset revocation if the on-chain cap remains spendable", async
     recovered: 500000,
     blockTimestamp: new Date(now + 60_000).toISOString()
   }).verifyAssetRevocation(grant, owner, token, "0x" + "e".repeat(64), now), /not disabled/);
+});
+
+test("fails closed when executor operator identities do not match trusted Mainwell operators", async () => {
+  await assert.rejects(makeVerifier({ automationOperator: owner }).verify(grant, owner, now), /trusted Mainwell service identities/);
 });
