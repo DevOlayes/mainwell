@@ -19,7 +19,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{max-width:1180px;m
 .metric strong{font-size:26px;letter-spacing:-.04em}
 .metric span{display:block;color:#8297a4;font-size:11px;margin-top:5px}
 .section-note{background:#142630;border:1px solid #35515a;border-radius:14px;padding:18px;color:#b8c9d1;font-size:13px;line-height:1.65;margin-bottom:18px}
-.section-note b{color:#dcece8}
+.section-note b{color:#dcece8}.setup-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin:14px 0 18px}.setup-step{background:#14222e;border:1px solid #2b414c;border-radius:12px;padding:14px}.setup-step .step-no{font-size:10px;color:#8fcdbb;font-weight:800;letter-spacing:.12em}.setup-step b{display:block;font-size:13px;margin:8px 0 5px}.setup-step p{font-size:11px;color:#8fa2ae;line-height:1.55;margin:0}.setup-step a{display:inline-block;margin-top:10px;color:#a6dece;font-size:11px;text-decoration:none;font-weight:700}@media(max-width:1050px){.setup-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:480px){.setup-steps{grid-template-columns:1fr}}
 .section-note a{color:#a8e0d0}
 [data-admin-section].view-hidden,.placeholder-view.view-hidden{display:none!important}
 .console-head,#overviewView,.placeholder-view,.console-grid{margin-left:220px}.console-grid{align-items:start}
@@ -55,7 +55,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{max-width:1180px;m
 </nav>
 <section id="overviewView">
 <div class="view-head"><div><div class="eyebrow">LIVE CONFIGURATION SUMMARY</div><h2>System overview</h2><p class="muted">A quick view of the policy and wallet configuration currently registered in Mainwell.</p></div></div>
-<div class="overview-grid">
+<div class="section-note"><b>Mainwell setup guide:</b> follow these steps in order. A wallet connection is only a read-only sign-in; it does not authorize Mainwell to move funds.</div><div class="setup-steps"><article class="setup-step"><span class="step-no">STEP 01</span><b>Set destination wallets</b><p>Choose the receiving address for each supported network.</p><a href="#" data-go-view="destinations">Configure destinations →</a></article><article class="setup-step"><span class="step-no">STEP 02</span><b>Register supported assets</b><p>Add verified ERC-20 contracts that Mainwell should monitor on each network.</p><a href="#" data-go-view="assets">Manage assets →</a></article><article class="setup-step"><span class="step-no">STEP 03</span><b>Connect the source wallet</b><p>Open the owner home page, connect the compromised wallet and refresh its asset balances. Then register and lock it here.</p><a href="/" target="_blank" rel="noopener">Open owner workspace →</a></article><article class="setup-step"><span class="step-no">STEP 04</span><b>Set policy and get owner approval</b><p>Set per-asset caps and expiry. The wallet owner must separately approve the exact on-chain authorization.</p><a href="#" data-go-view="policies">Configure policies →</a></article></div><div class="overview-grid">
 <div class="metric"><small>LOCKED SOURCE WALLETS</small><strong id="metricWallets">—</strong><span>Administrator-registered</span></div>
 <div class="metric"><small>RECOVERY DESTINATIONS</small><strong id="metricDestinations">—</strong><span>Configured destinations</span></div>
 <div class="metric"><small>SUPPORTED ERC-20 ASSETS</small><strong id="metricAssets">—</strong><span>Registered token contracts</span></div>
@@ -97,6 +97,7 @@ $("supportedAssetForm").addEventListener("submit",async e=>{e.preventDefault();c
 $("policyForm").addEventListener("submit",async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));try{await api("/api/admin/recovery-destination-policies/"+encodeURIComponent(b.network)+"/"+encodeURIComponent(b.assetId),{method:"PUT",body:JSON.stringify({destinationId:b.destinationId,maxAmountRaw:b.maxAmountRaw,expiresInSeconds:Number(b.expiresInSeconds),automaticPriorityEnabled:b.automaticPriorityEnabled==="on",adminInitiatedEnabled:b.adminInitiatedEnabled==="on"})});$("policyStatus").textContent="Asset policy saved. Owner approval is still required.";await load()}catch(err){$("policyStatus").className="status error";$("policyStatus").textContent=err.message}});
 $("logout").addEventListener("click",async()=>{try{await api("/api/admin/auth/logout",{method:"POST",body:"{}"})}finally{location.reload()}});
 document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>setView(b.dataset.view)));
+document.querySelectorAll("[data-go-view]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();setView(a.dataset.goView)}));
 api("/api/admin/auth/me").then(showConsole).catch(()=>{});
 </script></body></html>`;
 export function adminDashboardResponse():Response{return new Response(HTML,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}});}
