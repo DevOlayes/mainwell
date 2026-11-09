@@ -102,8 +102,9 @@ test("authorization preflight returns admin lock, asset inventory and fail-close
   assert.equal(data.readiness.sourceWalletLocked, true);
   assert.equal(data.assets[0].symbol, "USDC");
   assert.equal(data.policies[0].destinationAddress, "0x3333333333333333333333333333333333333333");
-  assert.equal(data.readiness.executorArtifactAvailable, false);
-  assert.ok(data.blockers.some(x => x.includes("deployment artifact")));
+  assert.equal(data.readiness.executorArtifactAvailable, true);
+  assert.equal(data.readiness.securityReviewPassed, false);
+  assert.ok(data.blockers.some(x => x.includes("security review")));
   assert.ok(calls.some(sql => sql.includes("admin_locked")));
 });
 
