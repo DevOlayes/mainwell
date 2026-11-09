@@ -4,6 +4,7 @@ import { handleAdminDestinationApi } from "./application/admin-destination-api";
 import { handleAdminAuthApi } from "./application/admin-auth";
 import { adminDashboardResponse } from "./application/admin-dashboard";
 import { ownerDashboardResponse } from "./application/owner-dashboard";
+import { ownerAuthorizationResponse } from "./application/owner-authorization";
 interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]; meta?: { changes?: number } }
 interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
 interface D1Database { prepare(query: string): D1Statement; batch<T = unknown>(statements: D1Statement[]): Promise<D1Result<T>[]> }
@@ -30,6 +31,7 @@ export default { async fetch(request: Request,env: Env): Promise<Response> {
   const url=new URL(request.url);
   if(request.method==="GET"&&url.pathname==="/admin")return adminDashboardResponse();
   if(request.method==="GET"&&url.pathname==="/")return ownerDashboardResponse();
+  if(request.method==="GET"&&url.pathname==="/authorize")return ownerAuthorizationResponse();
   if(request.method==="GET"&&url.pathname==="/health")return json({service:"mainwell",status:"ok",database:"configured",timestamp:new Date().toISOString()});
   if(request.method==="GET"&&url.pathname==="/api/health/db")try{
     const db=await env.DB.prepare("SELECT 1 AS ok").first<{ok:number}>();
