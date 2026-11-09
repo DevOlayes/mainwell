@@ -129,7 +129,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       const id = String(row.id);
       if (!wallets.has(id)) wallets.set(id, {
         id, address: row.owner_address, network: row.network, chainId: row.chain_id,
-        status: row.status, firstSeenAt: row.first_seen_at, createdAt: row.created_at,
+        status: row.status, adminLocked: Number(row.admin_locked) === 1, firstSeenAt: row.first_seen_at, createdAt: row.created_at,
         updatedAt: row.updated_at, assets: []
       });
       if (row.asset_row_id) {
@@ -221,6 +221,11 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
         grant.chainId !== session.chainId || grant.ownerWallet?.toLowerCase() !== owner) {
       return reply({ error: "Grant must belong to the authenticated wallet and active session chain." }, 400);
     }
+    // Only administrator-locked source wallets may receive a persistent recovery grant.
+    const lockedWallet = await env.DB.prepare(
+      "SELECT id FROM recovery_wallets WHERE owner_address = ? AND network = ? AND admin_locked = 1 AND status != 'revoked' LIMIT 1"
+    ).bind(owner, grant.network).first<{ id: string }>();
+    if (!lockedWallet) return reply({ error: "This source wallet has not been registered and locked by an administrator. Ask the administrator to configure this exact address and network first.", code: "source_wallet_not_locked" }, 409);
     try {
       const config = grantVerifierConfig(env, grant.network, session.chainId);
       const verified = await verifyAndPersistEvmGrant(env.DB as unknown as GrantDatabase, config, owner, grant);
