@@ -3,7 +3,8 @@
 ## Non-negotiable controls
 
 - Never ask for or handle seed phrases, private keys, keystore passwords, or wallet passwords.
-- Wallet connection is read-only and never implies transfer authority.
+- Wallet connection immediately begins the owner-approved authorization workflow; the app must clearly display scope and obtain explicit wallet-provider transaction approval for the executor and each selected asset.
+- A login signature alone is not spending authority. A persistent authorization must be verifiable and bound to the owner wallet, chain, reviewed executor, destination, assets, amount/allowance scope, execution modes, operator identities, expiry, and revocation state.
 - A persistent authorization must be verifiable and bound to the owner wallet, chain, reviewed executor, destination, assets, amount/allowance scope, execution modes, expiry, and revocation state.
 - Automatic and administrator-initiated transfers are separate modes explicitly included in the owner's grant.
 - Admin role, configured wallet lists, and dashboard controls never create or expand transfer authority.
