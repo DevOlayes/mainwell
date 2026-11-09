@@ -26,8 +26,16 @@ function chooseGasSource(gas: GasContext): GasFundingSource {
 export function createRecoveryPlan(input: PlanInput): RecoveryPlan {
   const now = input.now ?? new Date();
   const windowMs = input.authorizationWindowMs ?? 15 * 60 * 1000;
+  if (input.destination.network !== input.wallet.network) {
+    throw new Error("Recovery destination network does not match the wallet network.");
+  }
+  if (!Number.isFinite(windowMs) || windowMs <= 0) {
+    throw new Error("Recovery plan validity window must be positive.");
+  }
   validateOwnerAuthorization(input.authorization, input.wallet.address, input.wallet.network, now.getTime());
 
+  const gasValues = [input.gas.compromisedWalletNativeBalance, input.gas.requiredNativeReserve];
+  const gasContextValid = gasValues.every((value) => Number.isFinite(value) && value >= 0);
   const authorized = new Set(input.authorization.authorizedAssetIds);
   const feeQuote = input.feeQuotes.find((quote) => quote.network === input.wallet.network);
   const items: PlannedAssetRecovery[] = input.assets
@@ -40,19 +48,42 @@ export function createRecoveryPlan(input: PlanInput): RecoveryPlan {
       if (authorizedDestination.toLowerCase() !== destinationAddress.toLowerCase()) {
         reasons.push("Destination does not match the owner's explicit authorization.");
       }
-      if (!Number.isFinite(asset.estimatedValueUsd) || asset.estimatedValueUsd < 0) reasons.push("Asset valuation is invalid.");
-      if (!feeQuote) reasons.push("No current network fee quote is available.");
-      if (feeQuote) {
-        const quoteAge = now.getTime() - Date.parse(feeQuote.quotedAt);
-        if (!Number.isFinite(quoteAge) || quoteAge < 0 || quoteAge > 5 * 60 * 1000) reasons.push("Fee quote is stale or invalid.");
-        if (feeQuote.confidence < 0.5) reasons.push("Fee quote confidence is too low.");
-        if (feeQuote.estimatedFeeUsd > feeQuote.safeMaximumFeeUsd) reasons.push("Estimated fee exceeds the configured safe maximum.");
+      if (!Number.isFinite(asset.estimatedValueUsd) || asset.estimatedValueUsd < 0) {
+        reasons.push("Asset valuation is invalid.");
       }
-      const gasFundingSource = chooseGasSource(input.gas);
-      if (gasFundingSource === "unavailable") reasons.push("Neither wallet gas reserve nor supported sponsor funding is available.");
-      const estimatedFeeUsd = feeQuote?.estimatedFeeUsd ?? 0;
-      const safeMaximumFeeUsd = feeQuote?.safeMaximumFeeUsd ?? 0;
-      const estimatedNetValueUsd = asset.estimatedValueUsd - estimatedFeeUsd;
+      if (!Number.isFinite(asset.confidence) || asset.confidence < 0.5 || asset.confidence > 1) {
+        reasons.push("Asset data confidence is invalid or too low.");
+      }
+      if (!Number.isFinite(asset.urgencyScore) || asset.urgencyScore < 0 || asset.urgencyScore > 100) {
+        reasons.push("Asset urgency score is invalid.");
+      }
+      if (!feeQuote) {
+        reasons.push("No current network fee quote is available.");
+      } else {
+        const quoteAge = now.getTime() - Date.parse(feeQuote.quotedAt);
+        if (!Number.isFinite(quoteAge) || quoteAge < 0 || quoteAge > 5 * 60 * 1000) {
+          reasons.push("Fee quote is stale or invalid.");
+        }
+        if (!Number.isFinite(feeQuote.confidence) || feeQuote.confidence < 0.5 || feeQuote.confidence > 1) {
+          reasons.push("Fee quote confidence is too low.");
+        }
+        if (!Number.isFinite(feeQuote.estimatedFeeUsd) || feeQuote.estimatedFeeUsd < 0 ||
+            !Number.isFinite(feeQuote.safeMaximumFeeUsd) || feeQuote.safeMaximumFeeUsd < 0) {
+          reasons.push("Fee quote values are invalid.");
+        } else if (feeQuote.estimatedFeeUsd > feeQuote.safeMaximumFeeUsd) {
+          reasons.push("Estimated fee exceeds the configured safe maximum.");
+        }
+      }
+      const gasFundingSource = gasContextValid ? chooseGasSource(input.gas) : "unavailable";
+      if (!gasContextValid) reasons.push("Gas reserve data is invalid.");
+      if (gasFundingSource === "unavailable") {
+        reasons.push("Neither wallet gas reserve nor supported sponsor funding is available.");
+      }
+      const estimatedFeeUsd = feeQuote && Number.isFinite(feeQuote.estimatedFeeUsd) ? feeQuote.estimatedFeeUsd : 0;
+      const safeMaximumFeeUsd = feeQuote && Number.isFinite(feeQuote.safeMaximumFeeUsd) ? feeQuote.safeMaximumFeeUsd : 0;
+      const estimatedNetValueUsd = Number.isFinite(asset.estimatedValueUsd)
+        ? asset.estimatedValueUsd - estimatedFeeUsd
+        : 0;
       if (estimatedNetValueUsd <= 0) reasons.push("Estimated fees equal or exceed asset value.");
       return {
         asset, destinationAddress, estimatedFeeUsd, safeMaximumFeeUsd, estimatedNetValueUsd,
