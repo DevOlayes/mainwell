@@ -62,8 +62,9 @@ async function audit(env:EngineEnv,jobId:string,action:string,details:Record<str
       env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES(?,'system','mainwell-execution-engine',?,'recovery_job',?,?,?)")
         .bind(crypto.randomUUID(),action,jobId,JSON.stringify(details),at)
     ]);
-  } catch {
-    // Never rewrite a submitted/confirmed transaction state because an audit write failed.
+  } catch (error) {
+    // Preserve transaction state; log only a sanitized code, never secrets or raw RPC payloads.
+    console.error("mainwell_recovery_audit_write_failed", safeCode(error));
   }
 }
 async function queueAutomaticJobs(env:EngineEnv):Promise<number>{
