@@ -25,7 +25,7 @@ test("creates and verifies Worker-compatible chained PBKDF2 hashes", async () =>
   };
   try {
     const encoded = await hashAdminPassword("a-strong-test-password-123");
-    assert.match(encoded, /^pbkdf2-sha256-chain\\$310000\\$/);
+    assert.match(encoded, /^pbkdf2-sha256-chain\$310000\$/);
     assert.equal(await verifyAdminPassword(encoded, "a-strong-test-password-123"), true);
     assert.equal(await verifyAdminPassword(encoded, "wrong-password"), false);
   } finally {
