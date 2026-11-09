@@ -28,7 +28,18 @@ A new wallet popup for every transfer is **not** the intended universal workflow
 
 ## Current implementation status
 
-The repository currently contains the domain model, policy checks, deterministic recovery planner, and a generic **read-only** EVM JSON-RPC adapter for native balances, configured ERC-20 balances, and configured spender allowance checks. The current planner is review-only. Persistent authorization storage, a reviewed on-chain recovery executor, admin authentication/MFA, UI, asset indexing/pricing, transaction simulation, execution adapters, and receipt tracking are **not yet implemented**. Do not treat this repository as ready to move real funds.
+**Phase One authorization and policy foundation is implemented** in the repository and deployed to Cloudflare. It includes:
+
+- EVM read-only monitoring and the recovery planning foundation across the seven configured EVM networks.
+- Cloudflare D1 persistence for recovery grants, owner sessions, admin accounts/sessions, locked source wallets and destinations, supported ERC-20 assets, per-asset caps, execution modes, and expiry.
+- Administrator authentication with MFA, rate limiting, and a one-time recovery path.
+- Owner authorization flow that deploys the pinned, non-upgradeable `ScopedRecoveryExecutor`, requests exact per-token allowances, and submits evidence for independent server-side verification.
+- Server-side checks for owner, chain, executor runtime code hash, asset scope, destination, amount cap, execution modes, expiry, operator identities, and allowance evidence.
+- Separate automation and administrator operator identities, with client-side wallet generation and encrypted local backup.
+- CI checks and reproducibly generated/pinned Worker and executor artifacts. Production deployment is performed separately and verified.
+- An authenticated admin console for wallet, destination, asset, and policy configuration.
+
+**Phase Two execution is not implemented or enabled.** The automatic-priority worker, administrator-initiated recovery execution, sponsor/gas handling, exact-call simulation, transaction submission, confirmation/replacement tracking, and execution reconciliation remain outstanding. The app must not be treated as ready to move real funds. The executor has not received an independent third-party security audit.
 
 ## Hybrid gas policy
 
