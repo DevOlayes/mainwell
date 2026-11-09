@@ -31,6 +31,9 @@ contract ScopedRecoveryExecutor {
     uint64 public expiresAt;
 
     bool public revoked;
+    bool public automaticPriorityEnabled;
+    bool public adminInitiatedEnabled;
+    address[] private _authorizedAssets;
     uint256 private _entered = 1;
 
     mapping(address => uint256) public assetLimit;
@@ -56,10 +59,13 @@ contract ScopedRecoveryExecutor {
         address destination_,
         uint64 expiresAt_,
         address[] memory assets_,
-        uint256[] memory maxAmounts_
+        uint256[] memory maxAmounts_,
+        bool automaticPriorityEnabled_,
+        bool adminInitiatedEnabled_
     ) {
         if (destination_ == address(0)) revert ZeroAddress();
         if (expiresAt_ <= block.timestamp) revert InvalidExpiry();
+        if (!automaticPriorityEnabled_ && !adminInitiatedEnabled_) revert InvalidAssetConfiguration();
         if (assets_.length == 0 || assets_.length != maxAmounts_.length) {
             revert InvalidAssetConfiguration();
         }
@@ -67,6 +73,8 @@ contract ScopedRecoveryExecutor {
         owner = msg.sender;
         destination = destination_;
         expiresAt = expiresAt_;
+        automaticPriorityEnabled = automaticPriorityEnabled_;
+        adminInitiatedEnabled = adminInitiatedEnabled_;
 
         for (uint256 i = 0; i < assets_.length; i++) {
             address asset = assets_[i];
@@ -74,7 +82,17 @@ contract ScopedRecoveryExecutor {
             if (asset == address(0) || cap == 0) revert InvalidAssetConfiguration();
             if (assetLimit[asset] != 0) revert DuplicateAsset(asset);
             assetLimit[asset] = cap;
+            _authorizedAssets.push(asset);
         }
+    }
+
+    /// @notice Enumerates the exact owner-approved token scope for independent verification.
+    function authorizedAssetCount() external view returns (uint256) {
+        return _authorizedAssets.length;
+    }
+
+    function authorizedAssetAt(uint256 index) external view returns (address) {
+        return _authorizedAssets[index];
     }
 
     /// @notice Anyone may pay gas, but the transfer destination and asset scope cannot be changed.
