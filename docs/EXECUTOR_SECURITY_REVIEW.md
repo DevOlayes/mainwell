@@ -34,7 +34,7 @@
 
 ## Deployment gate
 
-The owner authorization page is intentionally disabled unless all readiness checks pass, including the independent security review approval flag. Do not set MAINWELL_EXECUTOR_SECURITY_REVIEW_APPROVED=true until an independent reviewer has reviewed the exact deployed source commit and build artifact. Do not enable recovery operators until their signing infrastructure, access controls, key rotation and gas funding arrangements have been reviewed.
+The owner authorization page requires the internal code review and explicit owner acknowledgement that the contract has not received an independent third-party audit. An independent audit is strongly recommended before high-value use. Do not configure or enable recovery operators until their signing infrastructure, access controls, key rotation and gas funding arrangements have been reviewed.
 
 ## Reproducible build
 
