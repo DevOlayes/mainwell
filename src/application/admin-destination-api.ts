@@ -56,7 +56,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
     return response({error:"Provide a supported network, token contract address, symbol, name and decimals from 0 to 36."},400);
   }
   const normalized=address.toLowerCase(),id=network+":erc20:"+normalized;
-  try{await verifyRegisteredToken(env,network,normalized,decimals);}
+  try{await verifyRegisteredToken(env,network as keyof typeof RPC_BY_NETWORK,normalized,decimals);}
   catch(error){
    const reason=error instanceof Error?error.message:"";
    if(reason==="RPC_NOT_CONFIGURED")return response({error:"A trusted RPC endpoint must be configured for this network before registering tokens."},503);
