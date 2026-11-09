@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "../ScopedRecoveryExecutor.sol";
+import "../src/ScopedRecoveryExecutor.sol";
 
 interface Vm {
     function warp(uint256 timestamp) external;
