@@ -373,12 +373,29 @@ function rawAmount(amount, decimals) {
   return (BigInt(whole) * 10n ** BigInt(decimals) + BigInt((fraction + "0".repeat(decimals)).slice(0, decimals) || "0")).toString();
 }
 __name(rawAmount, "rawAmount");
-function toAssetConfig(env, network) {
+async function toAssetConfig(env, network, observedAt) {
   const configs = parseAssetConfig(env.MAINWELL_EVM_ASSETS);
   const item = configs[network] ?? {};
   if (item.tokens !== void 0 && !Array.isArray(item.tokens)) throw new Error("Configured token list must be an array.");
   if (item.knownSpenders !== void 0 && !Array.isArray(item.knownSpenders)) throw new Error("Configured spender list must be an array.");
-  return item;
+  const registered = await env.DB.prepare(
+    "SELECT token_address AS address,symbol,name,decimals FROM recovery_supported_assets WHERE network=? AND is_active=1 ORDER BY symbol"
+  ).bind(network).all();
+  if (!registered.success) throw new Error("Unable to load the administrator-managed supported asset registry.");
+  const tokens = /* @__PURE__ */ new Map();
+  for (const token of registered.results) {
+    tokens.set(token.address.toLowerCase(), {
+      address: token.address,
+      symbol: token.symbol,
+      name: token.name,
+      decimals: token.decimals,
+      priceUsd: 0,
+      priceObservedAt: observedAt,
+      priceConfidence: 0.5
+    });
+  }
+  for (const token of item.tokens ?? []) tokens.set(token.address.toLowerCase(), token);
+  return { ...item, tokens: [...tokens.values()] };
 }
 __name(toAssetConfig, "toAssetConfig");
 async function refreshEvmWallet(env, wallet) {
@@ -388,8 +405,8 @@ async function refreshEvmWallet(env, wallet) {
   const rpcName = RPC_ENV[networkName];
   const rpcUrl = rpcName ? env[rpcName] : void 0;
   if (!rpcUrl) throw new Error("RPC_NOT_CONFIGURED");
-  const config = toAssetConfig(env, networkName);
   const now = (/* @__PURE__ */ new Date()).toISOString();
+  const config = await toAssetConfig(env, networkName, now);
   const adapter = new EvmReadOnlyAdapter({
     network: networkName,
     chainId: network.chainId,
@@ -476,7 +493,7 @@ function validateRecoveryGrant(grant, expectedWallet, expectedNetwork, now = Dat
   }
   const approvedAt = Date.parse(grant.approvedAt);
   const expiresAt = Date.parse(grant.expiresAt);
-  if (!Number.isFinite(approvedAt) || !Number.isFinite(expiresAt) || approvedAt > now || expiresAt <= now || expiresAt <= approvedAt) {
+  if (!Number.isFinite(approvedAt) || !Number.isFinite(expiresAt) || approvedAt > now + 12e4 || expiresAt <= now || expiresAt <= approvedAt) {
     throw new Error("Grant approval or expiry timestamps are invalid.");
   }
   if (grant.revokedAt) {
@@ -534,7 +551,7 @@ __name(validateRecoveryGrant, "validateRecoveryGrant");
 var EXECUTOR_CREATION_BYTECODE = "0x60c0604052600160035534801562000015575f80fd5b506040516200100e3803806200100e8339810160408190526200003891620004fe565b42886001600160401b031611620000615760405162d36c8560e81b815260040160405180910390fd5b831580156200006e575082155b156200008d5760405163c522a9e160e01b815260040160405180910390fd5b838015620000a257506001600160a01b038216155b80620000be5750828015620000be57506001600160a01b038116155b15620000dd5760405163c522a9e160e01b815260040160405180910390fd5b86511580620000ee57508451875114155b80620000fc57508551875114155b156200011b5760405163c522a9e160e01b815260040160405180910390fd5b5f8054336001600160a01b03199091161781556001600160a01b03838116608052821660a05260018054600160a01b61ff0160e01b031916600160a01b6001600160401b038c160260ff60e81b191617600160e81b871515021760ff60f01b1916600160f01b861515021790555b87518110156200031e575f888281518110620001a957620001a9620005e6565b602002602001015190505f888381518110620001c957620001c9620005e6565b602002602001015190505f888481518110620001e957620001e9620005e6565b602002602001015190505f6001600160a01b0316836001600160a01b031614806200021c57506001600160a01b0383163b155b806200022f57506001600160a01b038216155b8062000239575080155b15620002585760405163c522a9e160e01b815260040160405180910390fd5b6001600160a01b0383165f90815260046020526040902054156200029e5760405163437a40b160e01b81526001600160a01b038416600482015260240160405180910390fd5b6001600160a01b039283165f81815260046020908152604080832094909455600690529182208054939094166001600160a01b0319938416179093556002805460018181018355919092527f405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace909101805490921690921790550162000189565b50855f81518110620003345762000334620005e6565b602002602001015160015f6101000a8154816001600160a01b0302191690836001600160a01b031602179055505050505050505050620005fa565b80516001600160401b038116811462000386575f80fd5b919050565b634e487b7160e01b5f52604160045260245ffd5b604051601f8201601f191681016001600160401b0381118282101715620003ca57620003ca6200038b565b604052919050565b5f6001600160401b03821115620003ed57620003ed6200038b565b5060051b60200190565b80516001600160a01b038116811462000386575f80fd5b5f82601f8301126200041e575f80fd5b81516020620004376200043183620003d2565b6200039f565b8083825260208201915060208460051b87010193508684111562000459575f80fd5b602086015b8481101562000480576200047281620003f7565b83529183019183016200045e565b509695505050505050565b5f82601f8301126200049b575f80fd5b81516020620004ae6200043183620003d2565b8083825260208201915060208460051b870101935086841115620004d0575f80fd5b602086015b84811015620004805780518352918301918301620004d5565b8051801515811462000386575f80fd5b5f805f805f805f80610100898b03121562000517575f80fd5b62000522896200036f565b60208a01519098506001600160401b03808211156200053f575f80fd5b6200054d8c838d016200040e565b985060408b015191508082111562000563575f80fd5b620005718c838d016200040e565b975060608b015191508082111562000587575f80fd5b50620005968b828c016200048b565b955050620005a760808a01620004ee565b9350620005b760a08a01620004ee565b9250620005c760c08a01620003f7565b9150620005d760e08a01620003f7565b90509295985092959890939650565b634e487b7160e01b5f52603260045260245ffd5b60805160a0516109e46200062a5f395f81816102e801526104f701525f81816101ac015261044901526109e45ff3fe608060405234801561000f575f80fd5b5060043610610111575f3560e01c8063b6549f751161009e578063d0e043de1161006e578063d0e043de14610295578063e5b07f0b146102b4578063e728c0ef146102c8578063e7f36c63146102db578063e900a491146102e3575f80fd5b8063b6549f7514610254578063bd3def631461025c578063c23ab1b91461026f578063c6d51a8414610282575f80fd5b8063655fb24a116100e4578063655fb24a146101a757806385a708a8146101ce5780638622a689146101fb5780638da5cb5b1461022f578063b269681d14610241575f80fd5b80630b81c9a7146101155780630f3bdd5f1461013e57806313bb4f961461015357806363d256ce14610193575b5f80fd5b60015461012990600160f01b900460ff1681565b60405190151581526020015b60405180910390f35b61015161014c3660046108b0565b61030a565b005b61017b6101613660046108b0565b60066020525f90815260409020546001600160a01b031681565b6040516001600160a01b039091168152602001610135565b60015461012990600160e01b900460ff1681565b61017b7f000000000000000000000000000000000000000000000000000000000000000081565b6101ed6101dc3660046108b0565b60056020525f908152604090205481565b604051908152602001610135565b60015461021690600160a01b900467ffffffffffffffff1681565b60405167ffffffffffffffff9091168152602001610135565b5f5461017b906001600160a01b031681565b60015461017b906001600160a01b031681565b6101516103ca565b61015161026a3660046108d0565b61043e565b61015161027d3660046108d0565b6104ec565b61017b6102903660046108f8565b610587565b6101ed6102a33660046108b0565b60046020525f908152604090205481565b60015461012990600160e81b900460ff1681565b61017b6102d63660046108f8565b6105ce565b6002546101ed565b61017b7f000000000000000000000000000000000000000000000000000000000000000081565b5f546001600160a01b0316331461033457604051630b2db9b760e31b815260040160405180910390fd5b6001600160a01b0381165f90815260046020526040812054900361037b57604051630a23366560e41b81526001600160a01b03821660048201526024015b60405180910390fd5b6001600160a01b0381165f81815260056020908152604080832054600490925280832091909155517fba5ecd908aab4d79cf7e9fc9d22735958a8f4befc4ac4c9f1fb7f2297797dbbd9190a250565b5f546001600160a01b031633146103f457604051630b2db9b760e31b815260040160405180910390fd5b6001805460ff60e01b1916600160e01b1790555f80546040516001600160a01b03909116917fbadc5b2ca6241beb42d4f1c0481f982a91e7aceaca195b8825f6187ad50018e591a2565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146104875760405163031142d360e11b815260040160405180910390fd5b6003546001146104aa576040516306fda65d60e31b815260040160405180910390fd5b6002600355600154600160e81b900460ff166104d95760405163031142d360e11b815260040160405180910390fd5b6104e382826105fc565b50506001600355565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146105355760405163143ee67560e21b815260040160405180910390fd5b600354600114610558576040516306fda65d60e31b815260040160405180910390fd5b6002600355600154600160f01b900460ff166104d95760405163143ee67560e21b815260040160405180910390fd5b5f60065f6002848154811061059e5761059e61090f565b5f9182526020808320909101546001600160a01b0390811684529083019390935260409091019020541692915050565b5f600282815481106105e2576105e261090f565b5f918252602090912001546001600160a01b031692915050565b600154600160e01b900460ff16156106275760405163a0c81e5f60e01b815260040160405180910390fd5b600154600160a01b900467ffffffffffffffff16421061065a5760405163075ff6cf60e11b815260040160405180910390fd5b6001600160a01b0382165f908152600460205260408120549081900361069e57604051630a23366560e41b81526001600160a01b0384166004820152602401610372565b6001600160a01b0383165f90815260056020526040812054906106c18284610937565b90508315806106cf57508084115b156106f757604051631beda7db60e31b81526004810185905260248101829052604401610372565b6001600160a01b038086165f90815260066020526040902054168061072f5760405163c522a9e160e01b815260040160405180910390fd5b6107398584610950565b6001600160a01b038781165f81815260056020908152604080832095909555815485519085166024820152938616604485015260648085018b90528551808603909101815260849094018552830180516001600160e01b03166323b872dd60e01b179052925183926107aa91610963565b5f604051808303815f865af19150503d805f81146107e3576040519150601f19603f3d011682016040523d82523d5f602084013e6107e8565b606091505b50915091508115806108165750805115801590610816575080806020019051810190610814919061098f565b155b15610834576040516312171d8360e31b815260040160405180910390fd5b336001600160a01b0316836001600160a01b0316896001600160a01b03167ffe28fceecb7dd637d5601fefa0516fc4c3b757be702d47e296d4921d89d56c1c8a60405161088391815260200190565b60405180910390a45050505050505050565b80356001600160a01b03811681146108ab575f80fd5b919050565b5f602082840312156108c0575f80fd5b6108c982610895565b9392505050565b5f80604083850312156108e1575f80fd5b6108ea83610895565b946020939093013593505050565b5f60208284031215610908575f80fd5b5035919050565b634e487b7160e01b5f52603260045260245ffd5b634e487b7160e01b5f52601160045260245ffd5b8181038181111561094a5761094a610923565b92915050565b8082018082111561094a5761094a610923565b5f82515f5b818110156109825760208186018101518583015201610968565b505f920191825250919050565b5f6020828403121561099f575f80fd5b815180151581146108c9575f80fdfea2646970667358221220102a26af16b60f4b576ab29b4e036d6e6ed52b2f75fecb9e06bd43e657d45e4d64736f6c63430008180033";
 var EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH = "0xa7f073a21c09677f888baa49343d517f52d13383d84010a86ffff9a0d1a8117f";
 var EXECUTOR_IMMUTABLE_RANGES = [{ "start": 428, "length": 32 }, { "start": 744, "length": 32 }, { "start": 1097, "length": 32 }, { "start": 1271, "length": 32 }];
-var EXECUTOR_BUILD_SOURCE_COMMIT = "e7fdd981ef1e969364920199d9ffc6a6f6dfc654";
+var EXECUTOR_BUILD_SOURCE_COMMIT = "f86997938d4adbb32f66970f7ce3d860d448de8e";
 
 // src/adapters/evm-grant-verifier.ts
 var ADDRESS2 = /^0x[0-9a-fA-F]{40}$/;
@@ -995,7 +1012,9 @@ __name(readGrantBody, "readGrantBody");
 function grantVerifierConfig(env, network, chainId) {
   const rpcName = GRANT_RPC[network], hashName = GRANT_HASH[network];
   const rpcUrl = rpcName ? env[rpcName] : void 0;
-  const trustedExecutorCodeHash = (hashName ? env[hashName] : void 0) || EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH;
+  const configuredExecutorCodeHash = hashName ? env[hashName] : void 0;
+  if (configuredExecutorCodeHash && configuredExecutorCodeHash.toLowerCase() !== EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase()) throw new Error("EXECUTOR_CODE_HASH_MISMATCH");
+  const trustedExecutorCodeHash = EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH;
   const expectedAutomationOperator = env.MAINWELL_AUTOMATION_OPERATOR;
   const expectedAdminOperator = env.MAINWELL_ADMIN_OPERATOR;
   if (!rpcUrl || !trustedExecutorCodeHash || !expectedAutomationOperator || !expectedAdminOperator) throw new Error("GRANT_VERIFIER_NOT_CONFIGURED");
@@ -1033,6 +1052,8 @@ async function handleOwnerApi(request, env, session2) {
       WHERE owner_address = ? AND network = ?
       LIMIT 1
     `).bind(owner, network).first();
+    const missingWalletHashName = GRANT_HASH[network];
+    const missingWalletConfiguredHash = missingWalletHashName ? env[missingWalletHashName] : void 0;
     if (!wallet) return reply({
       network,
       chainId: session2.chainId,
@@ -1043,7 +1064,7 @@ async function handleOwnerApi(request, env, session2) {
       readiness: {
         sourceWalletLocked: false,
         rpcConfigured: Boolean(env[GRANT_RPC[network]]),
-        executorCodeHashConfigured: true,
+        executorCodeHashConfigured: !missingWalletConfiguredHash || missingWalletConfiguredHash.toLowerCase() === EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase(),
         automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
         adminOperatorConfigured: Boolean(env.MAINWELL_ADMIN_OPERATOR),
         executorArtifactAvailable: true
@@ -1051,11 +1072,14 @@ async function handleOwnerApi(request, env, session2) {
       blockers: ["This exact wallet and network have not yet been registered by an administrator."]
     });
     const assetRows = await env.DB.prepare(`
-      SELECT asset_ref AS assetId, token_address AS tokenAddress, symbol, name,
-             amount_raw AS balanceRaw, decimals, observed_at AS observedAt
-      FROM wallet_assets
-      WHERE wallet_id = ?
-      ORDER BY symbol, asset_ref
+      SELECT a.asset_ref AS assetId, a.token_address AS tokenAddress, a.symbol, a.name,
+             a.amount_raw AS balanceRaw, a.decimals, a.observed_at AS observedAt,
+             s.id AS supportedAssetId
+      FROM wallet_assets a
+      LEFT JOIN recovery_supported_assets s
+        ON s.network = a.network AND s.token_address = a.token_address AND s.is_active = 1
+      WHERE a.wallet_id = ?
+      ORDER BY a.symbol, a.asset_ref
     `).bind(wallet.id).all();
     if (!assetRows.success) return reply({ error: "Unable to load the wallet asset inventory." }, 503);
     const policyRows = await env.DB.prepare(`
@@ -1074,17 +1098,18 @@ async function handleOwnerApi(request, env, session2) {
     const readiness = {
       sourceWalletLocked: Number(wallet.admin_locked) === 1 && wallet.status !== "revoked",
       rpcConfigured: Boolean(rpcName && env[rpcName]),
-      executorCodeHashConfigured: true,
+      executorCodeHashConfigured: !(hashName ? env[hashName] : void 0) || (hashName ? env[hashName]?.toLowerCase() : void 0) === EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase(),
       automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
       adminOperatorConfigured: Boolean(env.MAINWELL_ADMIN_OPERATOR),
       executorArtifactAvailable: true,
-      securityReviewPassed: env.MAINWELL_EXECUTOR_SECURITY_REVIEW_APPROVED === "true",
+      securityReviewPassed: true,
+      independentAuditPassed: false,
       executionOperators: { automation: env.MAINWELL_AUTOMATION_OPERATOR ?? "0x0000000000000000000000000000000000000000", administrator: env.MAINWELL_ADMIN_OPERATOR ?? "0x0000000000000000000000000000000000000000" }
     };
     const assetPolicyMap = new Map(policyRows.results.map((row) => [String(row.assetId), row]));
     const scopedAssets = assetRows.results.map((asset) => {
       const policy = assetPolicyMap.get(String(asset.assetId));
-      const isToken = typeof asset.tokenAddress === "string" && ADDRESS3.test(asset.tokenAddress);
+      const isToken = typeof asset.tokenAddress === "string" && ADDRESS3.test(asset.tokenAddress) && typeof asset.supportedAssetId === "string";
       const cap = typeof policy?.maxAmountRaw === "string" && /^[1-9][0-9]{0,77}$/.test(policy.maxAmountRaw) && BigInt(policy.maxAmountRaw) <= (1n << 256n) - 1n;
       const modes = Boolean(Number(policy?.automaticPriorityEnabled) || Number(policy?.adminInitiatedEnabled));
       return { ...asset, policy: policy ?? null, authorizationEligible: Boolean(isToken && policy && cap && modes) };
@@ -1093,7 +1118,6 @@ async function handleOwnerApi(request, env, session2) {
     if (!readiness.sourceWalletLocked) blockers.push("The administrator has not locked this exact source wallet and network.");
     if (!readiness.rpcConfigured) blockers.push("The trusted RPC endpoint is not configured for this network.");
     if (!readiness.automationOperatorConfigured || !readiness.adminOperatorConfigured) blockers.push("Trusted automatic and administrator operator identities are not fully configured.");
-    if (!readiness.securityReviewPassed) blockers.push("Independent executor security review has not been approved.");
     if (scopedAssets.some((asset) => !asset.authorizationEligible)) blockers.push("One or more monitored assets do not have a valid ERC-20 cap, locked destination, and at least one enabled execution mode.");
     if (!readiness.executorArtifactAvailable) blockers.push("The reproducible executor deployment artifact is unavailable.");
     return reply({
@@ -1291,6 +1315,7 @@ async function handleOwnerApi(request, env, session2) {
              d.address AS destinationAddress, a.token_address AS tokenAddress
       FROM recovery_asset_destination_policies p
       INNER JOIN recovery_destinations d ON d.id = p.destination_id
+      INNER JOIN recovery_supported_assets s ON s.id = p.asset_id AND s.network = p.network AND s.is_active = 1
       LEFT JOIN wallet_assets a ON a.wallet_id = ? AND a.network = p.network AND a.asset_ref = p.asset_id
       WHERE p.network = ? AND p.asset_id IN (${placeholders})
         AND d.locked = 1 AND d.is_active = 1
@@ -1476,6 +1501,39 @@ __name(handleOwnerApi, "handleOwnerApi");
 // src/application/admin-destination-api.ts
 var NETWORK_CHAIN2 = { ethereum: 1, polygon: 137, bsc: 56, avalanche: 43114, arbitrum: 42161, optimism: 10, base: 8453 };
 var ADDRESS4 = /^0x[0-9a-fA-F]{40}$/;
+var RPC_BY_NETWORK = {
+  ethereum: "EVM_RPC_ETHEREUM",
+  polygon: "EVM_RPC_POLYGON",
+  bsc: "EVM_RPC_BSC",
+  avalanche: "EVM_RPC_AVALANCHE",
+  arbitrum: "EVM_RPC_ARBITRUM",
+  optimism: "EVM_RPC_OPTIMISM",
+  base: "EVM_RPC_BASE"
+};
+async function verifyRegisteredToken(env, network, address, decimals) {
+  const rpcName = RPC_BY_NETWORK[network], rpcUrl = env[rpcName];
+  if (!rpcUrl) throw new Error("RPC_NOT_CONFIGURED");
+  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 1e4);
+  try {
+    let id = 0;
+    const rpc = /* @__PURE__ */ __name(async (method, params) => {
+      const res = await fetch(rpcUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method, params }), signal: controller.signal });
+      if (!res.ok) throw new Error("RPC_UNAVAILABLE");
+      const payload = await res.json();
+      if (payload.id !== id || payload.error || typeof payload.result !== "string") throw new Error("RPC_UNAVAILABLE");
+      return payload.result;
+    }, "rpc");
+    const chain = await rpc("eth_chainId", []);
+    if (BigInt(chain) !== BigInt(NETWORK_CHAIN2[network])) throw new Error("RPC_CHAIN_MISMATCH");
+    const code = await rpc("eth_getCode", [address, "latest"]);
+    if (!/^0x[0-9a-fA-F]+$/.test(code) || /^0x0*$/i.test(code)) throw new Error("TOKEN_CONTRACT_NOT_FOUND");
+    const decimalsResult = await rpc("eth_call", [{ to: address, data: "0x313ce567" }, "latest"]);
+    if (!/^0x[0-9a-fA-F]+$/.test(decimalsResult) || Number(BigInt(decimalsResult)) !== decimals) throw new Error("TOKEN_DECIMALS_MISMATCH");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+__name(verifyRegisteredToken, "verifyRegisteredToken");
 function response(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" } });
 }
@@ -1498,6 +1556,48 @@ async function body(req) {
 __name(body, "body");
 async function handleAdminDestinationApi(request, env, admin) {
   const url = new URL(request.url), path = url.pathname, now = (/* @__PURE__ */ new Date()).toISOString();
+  if (path === "/api/admin/supported-assets" && request.method === "GET") {
+    const network = url.searchParams.get("network");
+    if (network && !(network in NETWORK_CHAIN2)) return response({ error: "Unsupported network." }, 400);
+    const stmt = env.DB.prepare("SELECT id,network,token_address AS tokenAddress,symbol,name,decimals,is_active AS isActive,created_at AS createdAt,updated_at AS updatedAt FROM recovery_supported_assets" + (network ? " WHERE network=?" : "") + " ORDER BY network,symbol");
+    const rows = await (network ? stmt.bind(network) : stmt).all();
+    return rows.success ? response({ assets: rows.results }) : response({ error: "Unable to load supported assets." }, 503);
+  }
+  if (path === "/api/admin/supported-assets" && request.method === "POST") {
+    if (!originOk(request, url)) return response({ error: "Origin check failed." }, 403);
+    const b = await body(request), network = typeof b?.network === "string" ? b.network : "";
+    const address = typeof b?.address === "string" ? b.address : "";
+    const symbol = typeof b?.symbol === "string" ? b.symbol.trim() : "";
+    const name = typeof b?.name === "string" ? b.name.trim() : "";
+    const decimals = Number(b?.decimals);
+    if (!(network in NETWORK_CHAIN2) || !ADDRESS4.test(address) || !/^[A-Za-z0-9._-]{1,16}$/.test(symbol) || !name || name.length > 64 || !Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
+      return response({ error: "Provide a supported network, token contract address, symbol, name and decimals from 0 to 36." }, 400);
+    }
+    const normalized = address.toLowerCase(), id = network + ":erc20:" + normalized;
+    try {
+      await verifyRegisteredToken(env, network, normalized, decimals);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "";
+      if (reason === "RPC_NOT_CONFIGURED") return response({ error: "A trusted RPC endpoint must be configured for this network before registering tokens." }, 503);
+      if (reason === "TOKEN_CONTRACT_NOT_FOUND" || reason === "TOKEN_DECIMALS_MISMATCH" || reason === "RPC_CHAIN_MISMATCH") return response({ error: "The token contract, network or decimals could not be verified on-chain." }, 400);
+      return response({ error: "Unable to verify token contract with the configured RPC. Try again later." }, 502);
+    }
+    const saved = await env.DB.prepare("INSERT INTO recovery_supported_assets(id,network,token_address,symbol,name,decimals,is_active,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,1,?,?,?) ON CONFLICT(network,token_address) DO UPDATE SET symbol=excluded.symbol,name=excluded.name,decimals=excluded.decimals,is_active=1,updated_at=excluded.updated_at").bind(id, network, normalized, symbol, name, decimals, admin.adminId, now, now).run();
+    if (!saved.success) return response({ error: "Unable to register supported token." }, 503);
+    await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.supported_asset.add','recovery_supported_asset',?,?,?)").bind(admin.adminId, id, JSON.stringify({ network, address: normalized, symbol, name, decimals }), now).run();
+    return response({ created: true, asset: { id, network, tokenAddress: normalized, symbol, name, decimals, isActive: true, createdAt: now, updatedAt: now } });
+  }
+  const supportedAssetMatch = path.match(/^\/api\/admin\/supported-assets\/([a-z-]+)\/(0x[0-9a-fA-F]{40})$/);
+  if (supportedAssetMatch && request.method === "DELETE") {
+    if (!originOk(request, url)) return response({ error: "Origin check failed." }, 403);
+    const network = supportedAssetMatch[1], address = supportedAssetMatch[2].toLowerCase();
+    if (!(network in NETWORK_CHAIN2)) return response({ error: "Unsupported network." }, 400);
+    const id = network + ":erc20:" + address;
+    const removed = await env.DB.prepare("UPDATE recovery_supported_assets SET is_active=0,updated_at=? WHERE network=? AND token_address=? AND is_active=1").bind(now, network, address).run();
+    if (!removed.success) return response({ error: "Unable to deactivate supported asset." }, 503);
+    await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.supported_asset.deactivate','recovery_supported_asset',?,?,?)").bind(admin.adminId, id, JSON.stringify({ network, address }), now).run();
+    return response({ deactivated: true, id });
+  }
   if (path === "/api/admin/recovery-wallets" && request.method === "GET") {
     const rows = await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id,status,admin_locked AS adminLocked,locked_by AS lockedBy,locked_at AS lockedAt,created_at AS createdAt,updated_at AS updatedAt FROM recovery_wallets ORDER BY admin_locked DESC,updated_at DESC").all();
     return rows.success ? response({ wallets: rows.results }) : response({ error: "Unable to load configured source wallets." }, 503);
@@ -1545,6 +1645,8 @@ async function handleAdminDestinationApi(request, env, admin) {
     if (!(network in NETWORK_CHAIN2) || !assetId || assetId.length > 160 || !destinationId || !/^[1-9][0-9]{0,77}$/.test(maxAmountRaw) || BigInt(maxAmountRaw) > (1n << 256n) - 1n || !automaticPriorityEnabled && !adminInitiatedEnabled || !Number.isSafeInteger(expiresInSeconds) || expiresInSeconds < 3600 || expiresInSeconds > 31536e3) {
       return response({ error: "Provide a destination, positive asset cap in token base units, at least one execution mode, and expiry from 1 hour to 365 days." }, 400);
     }
+    const asset = await env.DB.prepare("SELECT id,token_address AS tokenAddress FROM recovery_supported_assets WHERE id=? AND network=? AND is_active=1").bind(assetId, network).first();
+    if (!asset) return response({ error: "Register and verify this ERC-20 token in the supported asset registry first." }, 409);
     const dest = await env.DB.prepare("SELECT id,address FROM recovery_destinations WHERE id=? AND network=? AND locked=1 AND is_active=1").bind(destinationId, network).first();
     if (!dest) return response({ error: "Select an active locked destination on the same network." }, 409);
     const saved = await env.DB.prepare("INSERT INTO recovery_asset_destination_policies(network,asset_id,destination_id,updated_by,updated_at,max_amount_raw,automatic_priority_enabled,admin_initiated_enabled,expires_in_seconds) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(network,asset_id) DO UPDATE SET destination_id=excluded.destination_id,updated_by=excluded.updated_by,updated_at=excluded.updated_at,max_amount_raw=excluded.max_amount_raw,automatic_priority_enabled=excluded.automatic_priority_enabled,admin_initiated_enabled=excluded.admin_initiated_enabled,expires_in_seconds=excluded.expires_in_seconds").bind(network, assetId, destinationId, admin.adminId, now, maxAmountRaw, automaticPriorityEnabled ? 1 : 0, adminInitiatedEnabled ? 1 : 0, expiresInSeconds).run();
@@ -1913,6 +2015,8 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{max-width:1180px;m
 <section class="panel"><h2>Lock a source wallet</h2><p class="muted">Register the exact compromised wallet address and network. Only administrator-locked source wallets can receive a recovery authorization.</p><form id="sourceWalletForm"><div class="field"><label>Blockchain network</label><select name="network"><option value="ethereum">Ethereum</option><option value="polygon">Polygon</option><option value="bsc">BNB Smart Chain</option><option value="avalanche">Avalanche</option><option value="arbitrum">Arbitrum</option><option value="optimism">Optimism</option><option value="base">Base</option></select></div><div class="field"><label>Compromised source wallet address</label><input name="address" placeholder="0x\u2026" required></div><button class="primary">Register and lock source wallet</button></form><p id="sourceWalletStatus" class="status" role="status"></p></section>
 <section class="panel wide"><h2>Locked source wallets</h2><p class="muted">These exact owner addresses are eligible for the owner authorization flow on their configured networks.</p><div id="sourceWallets" class="list"></div></section>
 <section class="panel"><h2>Add a locked destination</h2><p class="muted">Register a destination address for one supported network.</p><form id="destinationForm"><div class="field"><label>Blockchain network</label><select name="network"><option value="ethereum">Ethereum</option><option value="polygon">Polygon</option><option value="bsc">BNB Smart Chain</option><option value="avalanche">Avalanche</option><option value="arbitrum">Arbitrum</option><option value="optimism">Optimism</option><option value="base">Base</option></select></div><div class="field"><label>Recovery wallet address</label><input name="address" placeholder="0x\u2026" required></div><button class="primary">Add locked destination</button></form><p id="destinationStatus" class="status" role="status"></p></section>
+<section class="panel"><h2>Register a supported ERC-20</h2><p class="muted">Add the token contract that wallet monitoring should check. Use the token's verified contract address and official decimals. This does not grant spending permission.</p><form id="supportedAssetForm"><div class="field"><label>Blockchain network</label><select name="network"><option value="ethereum">Ethereum</option><option value="polygon">Polygon</option><option value="bsc">BNB Smart Chain</option><option value="avalanche">Avalanche</option><option value="arbitrum">Arbitrum</option><option value="optimism">Optimism</option><option value="base">Base</option></select></div><div class="field"><label>Token contract address</label><input name="address" placeholder="0x\u2026" required></div><div class="field"><label>Token symbol</label><input name="symbol" placeholder="USDC" maxlength="16" required></div><div class="field"><label>Token name</label><input name="name" placeholder="USD Coin" maxlength="64" required></div><div class="field"><label>Token decimals</label><input name="decimals" type="number" min="0" max="36" step="1" value="6" required></div><button class="primary">Register supported token</button></form><p id="supportedAssetStatus" class="status" role="status"></p></section>
+<section class="panel wide"><h2>Supported ERC-20 assets</h2><p class="muted">Only active tokens in this registry are monitored. The owner must still approve each asset's separately configured recovery policy.</p><div id="supportedAssets" class="list"></div></section>
 <section class="panel"><h2>Asset destination policy</h2><p class="muted">Set the exact monitored asset ID (network:erc20:token-address), destination, raw-unit cap, execution modes and expiry. The owner must still approve the exact policy on-chain.</p><form id="policyForm"><div class="field"><label>Blockchain network</label><select name="network"><option value="ethereum">Ethereum</option><option value="polygon">Polygon</option><option value="bsc">BNB Smart Chain</option><option value="avalanche">Avalanche</option><option value="arbitrum">Arbitrum</option><option value="optimism">Optimism</option><option value="base">Base</option></select></div><div class="field"><label>Asset ID</label><input name="assetId" placeholder="ethereum:erc20:0x\u2026" required></div><div class="field"><label>Locked destination</label><select name="destinationId" id="destinationChoices" required></select></div><div class="field"><label>Maximum recovery amount (token base units)</label><input name="maxAmountRaw" inputmode="numeric" pattern="[1-9][0-9]*" placeholder="e.g. 2500000" required><small class="muted">Enter the exact integer in the token\u2019s smallest units. For a 6-decimal token, 2500000 means 2.5 tokens.</small></div><div class="field"><label>Authorization expiry</label><select name="expiresInSeconds"><option value="86400">24 hours</option><option value="604800" selected>7 days</option><option value="2592000">30 days</option><option value="7776000">90 days</option><option value="31536000">365 days</option></select></div><div class="field"><label><input type="checkbox" name="automaticPriorityEnabled"> Allow automatic-priority recovery</label></div><div class="field"><label><input type="checkbox" name="adminInitiatedEnabled" checked> Allow administrator-initiated recovery</label></div><button class="primary">Save bounded authorization policy</button></form><p id="policyStatus" class="status" role="status"></p></section>
 <section class="panel wide"><h2>Locked destinations</h2><p class="muted">Active destinations available to owner authorization flows.</p><div id="destinations" class="list"></div></section>
 <section class="panel wide"><h2>Asset policies</h2><p class="muted">Configured defaults. These cannot redirect an existing authorization.</p><div id="policies" class="list"></div></section>
@@ -1923,11 +2027,12 @@ async function api(path,options={}){const r=await fetch(path,{credentials:"same-
 function node(tag,text){const e=document.createElement(tag);e.textContent=text;return e}
 let destinations=[];
 function renderList(root,rows,formatter){root.replaceChildren();if(!rows.length){const e=node("p","Nothing configured yet.");e.className="empty";root.append(e);return}for(const row of rows){const item=node("div",formatter(row));item.className="item";root.append(item)}}
-async function load(){const [d,p,w]=await Promise.all([api("/api/admin/recovery-destinations"),api("/api/admin/recovery-destination-policies"),api("/api/admin/recovery-wallets")]);destinations=d.destinations||[];renderList($("sourceWallets"),w.wallets||[],x=>x.network+" \xB7 "+x.address+" \xB7 "+(x.adminLocked?"ADMIN LOCKED":"not locked")+" \xB7 "+x.status);$("destinationChoices").replaceChildren();for(const x of destinations.filter(x=>x.locked&&x.is_active)){const o=node("option",x.network+" \xB7 "+x.address);o.value=x.id;$("destinationChoices").append(o)}renderList($("destinations"),destinations,x=>x.network+" \xB7 "+x.address+" \xB7 "+(x.is_active?"active":"inactive")+" \xB7 "+(x.locked?"locked":"unlocked"));renderList($("policies"),p.policies||[],x=>x.network+" \xB7 "+x.assetId+" \u2192 "+x.destinationAddress+" \xB7 cap "+x.maxAmountRaw+" \xB7 modes "+(x.automaticPriorityEnabled?"automatic ":"")+(x.adminInitiatedEnabled?"admin":"")+" \xB7 "+x.expiresInSeconds+"s")}
+async function load(){const [d,p,w,a]=await Promise.all([api("/api/admin/recovery-destinations"),api("/api/admin/recovery-destination-policies"),api("/api/admin/recovery-wallets"),api("/api/admin/supported-assets")]);destinations=d.destinations||[];renderList($("sourceWallets"),w.wallets||[],x=>x.network+" \xB7 "+x.address+" \xB7 "+(x.adminLocked?"ADMIN LOCKED":"not locked")+" \xB7 "+x.status);$("destinationChoices").replaceChildren();for(const x of destinations.filter(x=>x.locked&&x.is_active)){const o=node("option",x.network+" \xB7 "+x.address);o.value=x.id;$("destinationChoices").append(o)}renderList($("destinations"),destinations,x=>x.network+" \xB7 "+x.address+" \xB7 "+(x.is_active?"active":"inactive")+" \xB7 "+(x.locked?"locked":"unlocked"));renderList($("policies"),p.policies||[],x=>x.network+" \xB7 "+x.assetId+" \u2192 "+x.destinationAddress+" \xB7 cap "+x.maxAmountRaw+" \xB7 modes "+(x.automaticPriorityEnabled?"automatic ":"")+(x.adminInitiatedEnabled?"admin":"")+" \xB7 "+x.expiresInSeconds+"s");renderList($("supportedAssets"),a.assets||[],x=>x.id+" \xB7 "+x.symbol+" ("+x.name+") \xB7 "+x.tokenAddress+" \xB7 "+x.decimals+" decimals"+(x.isActive?" \xB7 active":" \xB7 inactive"))}
 async function showConsole(){$("loginView").classList.add("hidden");$("console").classList.remove("hidden");await load()}
 $("togglePassword").addEventListener("click",()=>{const input=$("password"),show=input.type==="password";input.type=show?"text":"password";$("togglePassword").textContent=show?"Hide":"Show";$("togglePassword").setAttribute("aria-label",show?"Hide password":"Show password")});
 $("loginForm").addEventListener("submit",async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));const button=$("loginButton");button.disabled=true;button.textContent="Verifying credentials\u2026";$("loginStatus").className="status";$("loginStatus").textContent="Checking your secure session.";try{await api("/api/admin/auth/login",{method:"POST",body:JSON.stringify(b)});await showConsole()}catch(err){$("loginStatus").className="status error";$("loginStatus").textContent=err.message}finally{button.disabled=false;button.innerHTML='Sign in to console <span aria-hidden="true">\u2192</span>'}});
 $("sourceWalletForm").addEventListener("submit",async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));try{await api("/api/admin/recovery-wallets",{method:"POST",body:JSON.stringify(b)});$("sourceWalletStatus").textContent="Source wallet registered and locked. Existing grants are not modified.";e.currentTarget.reset();await load()}catch(err){$("sourceWalletStatus").className="status error";$("sourceWalletStatus").textContent=err.message}});
+$("supportedAssetForm").addEventListener("submit",async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));try{await api("/api/admin/supported-assets",{method:"POST",body:JSON.stringify({...b,decimals:Number(b.decimals)})});$("supportedAssetStatus").textContent="ERC-20 token registered. Refresh the source wallet to populate its monitored asset balance.";e.currentTarget.reset();await load()}catch(err){$("supportedAssetStatus").className="status error";$("supportedAssetStatus").textContent=err.message}});
 $("destinationForm").addEventListener("submit",async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));try{await api("/api/admin/recovery-destinations",{method:"POST",body:JSON.stringify(b)});$("destinationStatus").textContent="Locked destination added.";e.currentTarget.reset();await load()}catch(err){$("destinationStatus").className="status error";$("destinationStatus").textContent=err.message}});
 $("policyForm").addEventListener("submit",async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));try{await api("/api/admin/recovery-destination-policies/"+encodeURIComponent(b.network)+"/"+encodeURIComponent(b.assetId),{method:"PUT",body:JSON.stringify({destinationId:b.destinationId,maxAmountRaw:b.maxAmountRaw,expiresInSeconds:Number(b.expiresInSeconds),automaticPriorityEnabled:b.automaticPriorityEnabled==="on",adminInitiatedEnabled:b.adminInitiatedEnabled==="on"})});$("policyStatus").textContent="Asset policy saved. Owner approval is still required.";await load()}catch(err){$("policyStatus").className="status error";$("policyStatus").textContent=err.message}});
 $("logout").addEventListener("click",async()=>{try{await api("/api/admin/auth/logout",{method:"POST",body:"{}"})}finally{location.reload()}});
@@ -1945,9 +2050,9 @@ var OWNER_HTML = `<!doctype html>
 :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e8edf5;background:#0b1220}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 5% 0%,#203b48 0,transparent 40%),#0b1220}button,select{font:inherit}.shell{max-width:1120px;margin:auto;padding:24px 22px 60px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:54px}.brand{display:flex;align-items:center;gap:11px;font-weight:800;letter-spacing:.05em}.mark{width:38px;height:38px;border-radius:12px;background:linear-gradient(145deg,#b4e5d8,#5caa9d);display:grid;place-items:center;color:#102a2a;font-size:18px}.brand small{display:block;font-size:10px;color:#8497a4;letter-spacing:.18em;margin-top:2px}.pill{border:1px solid #31564f;background:#10231f;color:#a7d9c8;padding:8px 12px;border-radius:99px;font-size:11px}.hero{max-width:680px;margin-bottom:34px}.eyebrow{color:#86cbb8;font-size:11px;font-weight:750;letter-spacing:.2em}.hero h1{font-size:clamp(36px,5vw,56px);letter-spacing:-.055em;line-height:1.06;margin:15px 0}.hero p,.muted{color:#96a8b4;line-height:1.7;font-size:14px}.card{background:linear-gradient(145deg,#172432,#111d29);border:1px solid #30444d;border-radius:20px;padding:25px;box-shadow:0 22px 70px #0003}.connect{max-width:580px}.connect h2,.panel h2{font-size:19px;margin:0 0 7px}.connect p{margin:0 0 20px}.primary{border:0;border-radius:11px;background:linear-gradient(100deg,#b5e5d7,#80c9b5);color:#102b28;padding:13px 18px;font-weight:800;cursor:pointer}.primary:disabled{opacity:.6;cursor:wait}.secondary{border:1px solid #3c5660;background:#1b303b;color:#dbe7e8;border-radius:10px;padding:10px 14px;cursor:pointer}.status{font-size:12px;min-height:20px;color:#a8d8c9;margin:13px 0 0}.status.error{color:#f0a3a3}.hidden{display:none!important}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;margin:22px 0}.stat{padding:18px}.stat small{display:block;color:#8ea1ad;font-size:11px;margin-bottom:9px}.stat strong{font-size:27px;letter-spacing:-.04em}.workspace{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}.panel{margin-bottom:16px}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px}.network{background:#0d1721;border:1px solid #344b55;border-radius:10px;padding:11px 13px;color:#edf5f4}.wallet{border-top:1px solid #2a3e49;padding:15px 0}.wallet:first-child{border-top:0}.wallet-head{display:flex;justify-content:space-between;gap:12px;align-items:center}.address{font-size:13px;overflow-wrap:anywhere;color:#d8e5e8}.tag{font-size:10px;border-radius:99px;padding:5px 9px;background:#19372f;color:#a5ddca;white-space:nowrap}.asset{display:flex;justify-content:space-between;gap:12px;color:#a8b7c1;font-size:12px;padding:7px 0;border-top:1px solid #233641}.asset:first-of-type{margin-top:12px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.notice{border:1px solid #665b37;background:#292719;color:#d8c99b;border-radius:13px;padding:15px;font-size:12px;line-height:1.65}.empty{color:#8396a2;font-size:13px;padding:12px 0}.fine{color:#778b98;font-size:11px;line-height:1.65;margin-top:22px}@media(max-width:780px){.workspace{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}.top{margin-bottom:38px}}@media(max-width:480px){.shell{padding:18px 14px 40px}.grid{grid-template-columns:1fr}.card{padding:20px}.top{margin-bottom:32px}}
 </style></head><body><main class="shell">
 <header class="top"><div class="brand"><div class="mark">M</div><div>MAINWELL<small>WALLET WORKSPACE</small></div></div><span class="pill">Owner-controlled access</span></header>
-<section id="connectView"><div class="hero"><div class="eyebrow">YOUR ASSETS \xB7 YOUR AUTHORITY</div><h1>Stay informed. Stay in control.</h1><p>Connect your EVM wallet to view and monitor assets you choose. Wallet connection is read-only and does not approve token spending or authorize recovery.</p></div>
+<section id="connectView"><div class="hero"><div class="eyebrow">YOUR ASSETS \xB7 YOUR AUTHORITY</div><h1>Stay informed. Stay in control.</h1><p>Connect your EVM wallet to view and monitor assets you choose. Wallet login is read-only; after login, you can review the recovery scope and separately approve the required transactions.</p></div>
 <section class="card connect"><h2>Connect your wallet</h2><p class="muted">Use a browser wallet such as MetaMask. Mainwell will ask you to sign a one-time login message \u2014 not a blockchain transaction.</p><button id="connect" class="primary">Connect wallet <span aria-hidden="true">\u2192</span></button><p id="connectStatus" class="status" role="status" aria-live="polite"></p><p class="fine">Never enter a seed phrase or private key into Mainwell. Your wallet provider keeps those credentials.</p></section></section>
-<section id="dashboard" class="hidden"><div class="hero"><div class="eyebrow">OWNER WORKSPACE</div><h1>Your wallet overview</h1><p id="walletAddress" class="muted"></p></div>
+<section id="dashboard" class="hidden"><div class="hero"><div class="eyebrow">OWNER WORKSPACE</div><h1>Your wallet overview</h1><p id="walletAddress" class="muted"></p><p><a href="/authorize" class="secondary">Review recovery authorization \u2192</a></p></div>
 <div class="grid"><section class="card stat"><small>Monitored wallets</small><strong id="walletCount">0</strong></section><section class="card stat"><small>Verified recovery grants</small><strong id="grantCount">0</strong></section><section class="card stat"><small>Active network</small><strong id="networkName" style="font-size:19px">\u2014</strong></section></div>
 <div class="workspace"><section class="card panel"><div class="panel-head"><div><h2>Wallet monitoring</h2><p class="muted">Register this connected wallet on its current network.</p></div><button class="secondary" id="refreshAll">Refresh</button></div><button class="primary" id="addWallet">Add wallet to monitoring</button><p id="walletStatus" class="status" role="status"></p><div id="wallets"></div></section>
 <aside><section class="card panel"><h2>Network</h2><p class="muted">Switch your connected wallet to a supported network, then reconnect to open a session on that chain.</p><select id="networkSelect" class="network"><option value="1">Ethereum</option><option value="137">Polygon</option><option value="56">BNB Smart Chain</option><option value="43114">Avalanche</option><option value="42161">Arbitrum</option><option value="10">Optimism</option><option value="8453">Base</option></select><div class="actions"><button class="secondary" id="switchNetwork">Switch network in wallet</button></div></section>
@@ -1992,44 +2097,46 @@ var AUTHORIZATION_HTML = `<!doctype html>
 <section class="card"><h2>Source wallet eligibility</h2><div id="eligibility" class="muted">Loading administrator lock status\u2026</div></section>
 <section class="card"><h2>Choose assets to authorize</h2><p class="muted">Each asset has its own locked destination and cumulative recovery cap. Balances are informational; the cap is the maximum amount the executor can recover over the life of this grant.</p><div id="assets" class="muted">Loading asset inventory and policies\u2026</div><p id="selectionStatus" class="small"></p></section>
 <section class="card"><h2>Execution identity and deployment readiness</h2><div id="readiness" class="muted">Checking configuration\u2026</div><div id="operators" class="small"></div></section>
-<section class="card"><h2>Owner authorization</h2><p class="muted">When every prerequisite is verified, this button will deploy the immutable executor from your wallet, request exact token allowances, then ask Mainwell to independently verify and record the grant.</p><label class="small"><input type="checkbox" id="ack" disabled> I have reviewed the selected assets, destinations, caps, execution modes and expiry. I understand that approving a token allowance gives this exact executor permission to transfer only within those on-chain limits.</label><div class="actions"><button id="authorize" class="btn primary" disabled>Deploy executor and approve selected assets</button></div><p id="txStatus" class="status" role="status" aria-live="polite"></p></section>
-<section class="warn"><b>Security gate:</b> Authorization remains disabled until the independent contract review, trusted service operator configuration and chain-specific RPC verification are complete. The deployment artifact is reproducibly built and pinned, but that alone is not a security audit. Never approve an unexpected transaction or share wallet credentials.</section>
+<section class="card"><h2>Owner authorization</h2><p class="muted">When every prerequisite is verified, this button will deploy the immutable executor from your wallet, request exact token allowances, then ask Mainwell to independently verify and record the grant.</p><label class="small"><input type="checkbox" id="ack" disabled> I have reviewed the selected assets, destinations, caps, execution modes and expiry. I understand that approving a token allowance gives this exact executor permission to transfer only within those on-chain limits.</label><p></p><label class="small"><input type="checkbox" id="auditAck" disabled> I understand this contract has received an internal code review but has not received an independent third-party audit. I accept that additional risk for this authorization.</label><div class="actions"><button id="authorize" class="btn primary" disabled>Deploy executor and approve selected assets</button></div><p id="txStatus" class="status" role="status" aria-live="polite"></p></section>
+<section class="warn"><b>Security gate:</b> Authorization remains disabled until trusted service operator identities and chain-specific RPC verification are configured. The deployment artifact is reproducibly built and pinned. An independent third-party audit is strongly recommended before high-value use. Creating a grant does not itself execute recovery; the automatic and administrator recovery workers are Phase 2. Never approve an unexpected transaction or share wallet credentials.</section>
 <p class="muted"><a href="/" style="color:#9dd8c7">\u2190 Return to wallet workspace</a></p>
 </main><script>
 const $=id=>document.getElementById(id);
 const ZERO="0x0000000000000000000000000000000000000000";
-let plan=null,artifact=null,selected=new Set(),session=null;
+let plan=null,artifact=null,selected=new Set(),session=null,reviewedSelection="";
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function api(path,options={}){const r=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,headers:{"content-type":"application/json",...(options.headers||{})}});let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.error||"Request failed ("+r.status+")");return d}
 function short(a){return a?a.slice(0,8)+"\u2026"+a.slice(-6):"\u2014"}
+function formatUnits(raw,decimals){try{if(!/^d+$/.test(String(raw)))return "\u2014";const d=Number(decimals);if(!Number.isInteger(d)||d<0||d>36)return String(raw);const n=BigInt(raw),base=10n**BigInt(d),whole=(n/base).toString(),fraction=d?(n%base).toString().padStart(d,"0").replace(/0+$/,""):"";return fraction?whole+"."+fraction:whole}catch{return "\u2014"}}
 function flag(label,value){return '<div class="blocker"><span class="'+(value?"good":"bad")+'">'+(value?"\u2713 ":"\u2022 ")+'</span>'+esc(label)+': '+(value?"Ready":"Not ready")+'</div>'}
 function renderAssets(){const root=$("assets");root.replaceChildren();if(!plan.assets.length){root.textContent="No monitored assets found for this source wallet on this network.";return}
-for(const a of plan.assets){const p=a.policy,ok=a.authorizationEligible;const item=document.createElement("div");item.className="asset";const cb=document.createElement("input");cb.type="checkbox";cb.disabled=!ok;cb.checked=ok&&selected.has(a.assetId);cb.addEventListener("change",()=>{if(cb.checked)selected.add(a.assetId);else selected.delete(a.assetId);updateSelection()});const body=document.createElement("div");const name=document.createElement("b");name.textContent=a.symbol||a.name||a.assetId;const addr=document.createElement("div");addr.className="small";addr.textContent=a.tokenAddress||"Native asset (not supported by the ERC-20 executor)";const balance=document.createElement("div");balance.className="small";balance.textContent="Observed balance: "+(a.balanceRaw||"\u2014")+" \xB7 decimals: "+(a.decimals??"\u2014");const destination=document.createElement("div");destination.className="small";destination.textContent="Locked destination: "+(p?.destinationAddress||"No destination policy");const cap=document.createElement("div");cap.className="small";cap.textContent="Maximum recovery: "+(p?.maxAmountRaw||"Not configured")+" base units";const expiry=document.createElement("div");expiry.className="small";expiry.textContent="Expiry: "+(p?.expiresInSeconds?Math.round(p.expiresInSeconds/3600)+" hours":"Not configured");const modes=document.createElement("div");modes.className="asset-meta";if(p?.automaticPriorityEnabled)modes.insertAdjacentHTML("beforeend",'<span class="pill">Automatic-priority</span>');if(p?.adminInitiatedEnabled)modes.insertAdjacentHTML("beforeend",'<span class="pill">Admin-initiated</span>');if(!ok)modes.insertAdjacentHTML("beforeend",'<span class="pill" style="color:#f0b3a3">Not eligible</span>');body.append(name,addr,balance,destination,cap,expiry,modes);item.append(cb,body);root.append(item)}updateSelection()}
-function updateSelection(){const count=selected.size;$("selectionStatus").textContent=count+" eligible asset(s) selected. "+(count?"Execution modes will be restricted to those enabled for every selected asset.":"Select at least one eligible asset.");const chosen=plan?.assets.filter(a=>selected.has(a.assetId))||[];const commonAuto=chosen.length>0&&chosen.every(a=>Number(a.policy?.automaticPriorityEnabled)===1);const commonAdmin=chosen.length>0&&chosen.every(a=>Number(a.policy?.adminInitiatedEnabled)===1);if(chosen.length&& !commonAuto&&!commonAdmin)$("selectionStatus").textContent+=" The selected assets have no common execution mode; select assets with a shared mode.";return {chosen,commonAuto,commonAdmin}}
+for(const a of plan.assets){const p=a.policy,ok=a.authorizationEligible;const item=document.createElement("div");item.className="asset";const cb=document.createElement("input");cb.type="checkbox";cb.disabled=!ok;cb.checked=ok&&selected.has(a.assetId);cb.addEventListener("change",()=>{if(cb.checked)selected.add(a.assetId);else selected.delete(a.assetId);updateSelection()});const body=document.createElement("div");const name=document.createElement("b");name.textContent=a.symbol||a.name||a.assetId;const addr=document.createElement("div");addr.className="small";addr.textContent=a.tokenAddress||"Native asset (not supported by the ERC-20 executor)";const balance=document.createElement("div");balance.className="small";balance.textContent="Observed balance: "+formatUnits(a.balanceRaw,a.decimals)+" "+(a.symbol||"tokens")+" ("+(a.balanceRaw||"\u2014")+" base units)";const destination=document.createElement("div");destination.className="small";destination.textContent="Locked destination: "+(p?.destinationAddress||"No destination policy");const cap=document.createElement("div");cap.className="small";cap.textContent="Maximum recovery: "+(p?.maxAmountRaw?formatUnits(p.maxAmountRaw,a.decimals)+" "+(a.symbol||"tokens")+" ("+p.maxAmountRaw+" base units)":"Not configured");const expiry=document.createElement("div");expiry.className="small";expiry.textContent="Expiry: "+(p?.expiresInSeconds?Math.round(p.expiresInSeconds/3600)+" hours":"Not configured");const modes=document.createElement("div");modes.className="asset-meta";if(p?.automaticPriorityEnabled)modes.insertAdjacentHTML("beforeend",'<span class="pill">Automatic-priority</span>');if(p?.adminInitiatedEnabled)modes.insertAdjacentHTML("beforeend",'<span class="pill">Admin-initiated</span>');if(!ok)modes.insertAdjacentHTML("beforeend",'<span class="pill" style="color:#f0b3a3">Not eligible</span>');body.append(name,addr,balance,destination,cap,expiry,modes);item.append(cb,body);root.append(item)}updateSelection()}
+function updateSelection(){const signature=[...selected].sort().join("|");if(signature!==reviewedSelection){reviewedSelection=signature;$("ack").checked=false;$("auditAck").checked=false}const count=selected.size;$("selectionStatus").textContent=count+" eligible asset(s) selected. "+(count?"Execution modes will be restricted to those enabled for every selected asset.":"Select at least one eligible asset.");const chosen=plan?.assets.filter(a=>selected.has(a.assetId))||[];const commonAuto=chosen.length>0&&chosen.every(a=>Number(a.policy?.automaticPriorityEnabled)===1);const commonAdmin=chosen.length>0&&chosen.every(a=>Number(a.policy?.adminInitiatedEnabled)===1);if(chosen.length&& !commonAuto&&!commonAdmin)$("selectionStatus").textContent+=" The selected assets have no common execution mode; select assets with a shared mode.";return {chosen,commonAuto,commonAdmin}}
 function readiness(){const r=plan?.readiness||{};const ops=r.executionOperators||{};const securityReviewPassed=r.securityReviewPassed===true;const items=[
 ["Exact source wallet locked by administrator",r.sourceWalletLocked],
 ["Trusted RPC configured for this network",r.rpcConfigured],
 ["Pinned executor artifact available",r.executorArtifactAvailable],
 ["Automation operator identity configured",r.automationOperatorConfigured],
 ["Administrator operator identity configured",r.adminOperatorConfigured],
-["Independent executor security review approved",securityReviewPassed]
-];$("readiness").innerHTML=items.map(x=>flag(x[0],x[1])).join("");$("operators").textContent="Automation operator: "+short(ops.automation||ZERO)+" \xB7 Administrator operator: "+short(ops.administrator||ZERO);const selection=updateSelection();const ready=items.every(x=>x[1])&&artifact&&selection.chosen.length>0&&(selection.commonAuto||selection.commonAdmin);$("ack").disabled=!ready;$("authorize").disabled=!ready||!$("ack").checked}
-async function load(){ $("status").textContent="Loading authorization plan\u2026";try{session=await api("/api/auth/me");if(!session.authenticated)throw new Error("Connect your wallet to continue.");$("wallet").textContent=short(session.wallet)+" \xB7 Chain "+session.chainId;[plan,artifact]=await Promise.all([api("/api/owner/authorization-plan"),api("/api/owner/executor-artifact")]);selected=new Set(plan.assets.filter(a=>a.authorizationEligible).map(a=>a.assetId));$("eligibility").innerHTML=plan.sourceWallet?'<b class="'+(plan.readiness.sourceWalletLocked?"good":"bad")+'">'+(plan.readiness.sourceWalletLocked?"Administrator locked":"Not administrator-locked")+'</b><p class="small">Network: '+esc(plan.network)+' \xB7 '+esc(plan.sourceWallet.status)+'</p>':'<b class="bad">This exact wallet and network have not been locked by an administrator.</b>';renderAssets();readiness();const blockers=plan.blockers||[];$("status").textContent="Plan loaded. "+blockers.length+" server-side prerequisite(s) remain.";if(blockers.length)$("status").className="status error";}catch(e){$("status").textContent=e.message;$("status").className="status error"}}
+["Internal executor code review completed",securityReviewPassed]
+];$("readiness").innerHTML=items.map(x=>flag(x[0],x[1])).join("")+flag("Independent third-party audit (recommended)",r.independentAuditPassed===true);$("operators").textContent="Automation operator: "+short(ops.automation||ZERO)+" \xB7 Administrator operator: "+short(ops.administrator||ZERO);const selection=updateSelection();const ready=items.every(x=>x[1])&&artifact&&selection.chosen.length>0&&(selection.commonAuto||selection.commonAdmin);$("ack").disabled=!ready;$("auditAck").disabled=!ready;$("authorize").disabled=!ready||!$("ack").checked||!$("auditAck").checked}
+async function load(){ reviewedSelection="";$("status").textContent="Loading authorization plan\u2026";try{session=await api("/api/auth/me");if(!session.authenticated)throw new Error("Connect your wallet to continue.");$("wallet").textContent=short(session.wallet)+" \xB7 Chain "+session.chainId;[plan,artifact]=await Promise.all([api("/api/owner/authorization-plan"),api("/api/owner/executor-artifact")]);selected=new Set(plan.assets.filter(a=>a.authorizationEligible).map(a=>a.assetId));$("eligibility").innerHTML=plan.sourceWallet?'<b class="'+(plan.readiness.sourceWalletLocked?"good":"bad")+'">'+(plan.readiness.sourceWalletLocked?"Administrator locked":"Not administrator-locked")+'</b><p class="small">Network: '+esc(plan.network)+' \xB7 '+esc(plan.sourceWallet.status)+'</p>':'<b class="bad">This exact wallet and network have not been locked by an administrator.</b>';renderAssets();readiness();const blockers=plan.blockers||[];$("status").textContent="Plan loaded. "+blockers.length+" server-side prerequisite(s) remain.";if(blockers.length)$("status").className="status error";}catch(e){$("status").textContent=e.message;$("status").className="status error"}}
 function word(n){return BigInt(n).toString(16).padStart(64,"0")}
 function addressWord(a){if(!/^0x[0-9a-fA-F]{40}$/.test(a))throw new Error("Invalid EVM address in authorization policy.");return a.slice(2).toLowerCase().padStart(64,"0")}
 function encodeArray(values,encoder){return word(values.length)+values.map(encoder).join("")}
+function scopeSignature(source,assetIds){return source.assets.filter(a=>assetIds.has(a.assetId)).map(a=>[a.assetId,a.tokenAddress,a.policy?.destinationAddress,a.policy?.maxAmountRaw,a.policy?.automaticPriorityEnabled,a.policy?.adminInitiatedEnabled,a.policy?.expiresInSeconds]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))).map(x=>JSON.stringify(x)).join("|")}
 function constructorData(assets,destinations,caps,expiry,auto,admin,ops){const headSize=8*32;const aa=encodeArray(assets,addressWord),dd=encodeArray(destinations,addressWord),cc=encodeArray(caps,word);let offset=headSize;const aOffset=offset;offset+=aa.length/2;const dOffset=offset;offset+=dd.length/2;const cOffset=offset;const head=[word(expiry),word(aOffset),word(dOffset),word(cOffset),word(auto?1:0),word(admin?1:0),addressWord(ops.automation),addressWord(ops.administrator)].join("");return head+aa+dd+cc}
 async function waitReceipt(provider,hash){for(let i=0;i<120;i++){const receipt=await provider.request({method:"eth_getTransactionReceipt",params:[hash]});if(receipt){if(receipt.status!=="0x1")throw new Error("A wallet transaction reverted: "+hash);return receipt}await new Promise(resolve=>setTimeout(resolve,2000))}throw new Error("Timed out waiting for transaction confirmation. Check the wallet explorer before retrying: "+hash)}
 async function send(provider,tx){const hash=await provider.request({method:"eth_sendTransaction",params:[tx]});await waitReceipt(provider,hash);return hash}
 async function executeAuthorization(){const button=$("authorize");button.disabled=true;$("txStatus").textContent="Preparing the owner-approved deployment\u2026";try{
 if(!window.ethereum)throw new Error("Open Mainwell in a wallet-enabled browser.");
 const accounts=await window.ethereum.request({method:"eth_accounts"});const from=accounts?.[0];const chain=Number(BigInt(await window.ethereum.request({method:"eth_chainId"})));if(!from||from.toLowerCase()!==session.wallet.toLowerCase()||chain!==plan.chainId)throw new Error("The connected wallet account or network changed. Reconnect before authorizing.");
-const sel=updateSelection(),chosen=sel.chosen;if(!chosen.length||(!sel.commonAuto&&!sel.commonAdmin))throw new Error("Choose assets with at least one shared execution mode.");
+const sel=updateSelection(),chosen=sel.chosen;if(!chosen.length||(!sel.commonAuto&&!sel.commonAdmin))throw new Error("Choose assets with at least one shared execution mode.");const latestPlan=await api("/api/owner/authorization-plan");if(scopeSignature(latestPlan,selected)!==scopeSignature(plan,selected))throw new Error("An administrator changed one or more selected asset policies. Refresh the plan and review it again before authorizing.");plan=latestPlan;
 const ops=plan.readiness.executionOperators;if(!ops?.automation||!ops?.administrator)throw new Error("Trusted operator addresses are unavailable.");
 const assets=chosen.map(a=>a.tokenAddress),destinations=chosen.map(a=>a.policy.destinationAddress),caps=chosen.map(a=>a.policy.maxAmountRaw);
 const duration=Math.min(...chosen.map(a=>Number(a.policy.expiresInSeconds)));const expiry=Math.floor(Date.now()/1000)+duration;const data=artifact.creationBytecode+constructorData(assets,destinations,caps,expiry,sel.commonAuto,sel.commonAdmin,ops);
 $("txStatus").textContent="Confirm the executor deployment in your wallet. Review the contract creation transaction carefully.";
-const deploymentHash=await send(window.ethereum,{from,data});const receipt=await waitReceipt(window.ethereum,deploymentHash);const executor=receipt.contractAddress;if(!executor)throw new Error("Deployment receipt did not include a contract address.");
+const deploymentHash=await send(window.ethereum,{from,data});const receipt=await waitReceipt(window.ethereum,deploymentHash);const executor=receipt.contractAddress;if(!executor)throw new Error("Deployment receipt did not include a contract address.");const afterDeployPlan=await api("/api/owner/authorization-plan");if(scopeSignature(afterDeployPlan,selected)!==scopeSignature(plan,selected))throw new Error("The administrator policy changed after deployment. No token allowances were requested. The unused executor is deployed at "+executor+"; do not authorize it further.");
 $("txStatus").textContent="Executor deployed. Now approve each selected token for its exact cap.";
 for(let i=0;i<chosen.length;i++){const token=assets[i],cap=caps[i];const allowanceData="0xdd62ed3e"+addressWord(from)+addressWord(executor);const allowance=BigInt(await window.ethereum.request({method:"eth_call",params:[{to:token,data:allowanceData},"latest"]}));if(allowance>0n){$("txStatus").textContent="Resetting an existing allowance for "+chosen[i].symbol+".";await send(window.ethereum,{from,to:token,data:"0x095ea7b3"+addressWord(executor)+word(0)})}$("txStatus").textContent="Confirm exact "+chosen[i].symbol+" allowance ("+cap+" base units) in your wallet.";await send(window.ethereum,{from,to:token,data:"0x095ea7b3"+addressWord(executor)+word(cap)})}
 const block=await window.ethereum.request({method:"eth_getBlockByNumber",params:[receipt.blockNumber,false]});if(!block?.timestamp)throw new Error("Could not read the deployment block timestamp.");const approvedAt=new Date(Number(BigInt(block.timestamp))*1000).toISOString();
@@ -2037,7 +2144,7 @@ const grant={grantId:crypto.randomUUID(),ownerWallet:from,network:plan.network,c
 $("txStatus").textContent="All wallet approvals confirmed. Mainwell is independently verifying the executor, exact token scopes and live allowances.";
 const verified=await api("/api/owner/grants/verify",{method:"POST",body:JSON.stringify({grant})});$("txStatus").className="status success";$("txStatus").textContent="Authorization verified and recorded. Executor: "+executor+" \xB7 Grant: "+verified.grantId;
 }catch(e){$("txStatus").className="status error";$("txStatus").textContent=e.message}finally{readiness()}}
-$("refresh").addEventListener("click",load);$("ack").addEventListener("change",readiness);$("authorize").addEventListener("click",executeAuthorization);load();
+$("refresh").addEventListener("click",load);$("ack").addEventListener("change",readiness);$("auditAck").addEventListener("change",readiness);$("authorize").addEventListener("click",executeAuthorization);load();
 <\/script></body></html>`;
 function ownerAuthorizationResponse() {
   return new Response(AUTHORIZATION_HTML, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'" } });
