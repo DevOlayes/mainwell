@@ -14,7 +14,7 @@ contract ScopedRecoveryExecutor {
     error InvalidExpiry();
     error InvalidAssetConfiguration();
     error DuplicateAsset(address asset);
-    error GrantRevoked();
+    error GrantAlreadyRevoked();
     error GrantExpired();
     error AssetNotAuthorized(address asset);
     error AmountExceedsRemainingLimit(uint256 requested, uint256 remaining);
@@ -83,7 +83,7 @@ contract ScopedRecoveryExecutor {
     }
 
     function executeToken(address token, uint256 amount) external nonReentrant {
-        if (revoked) revert GrantRevoked();
+        if (revoked) revert GrantAlreadyRevoked();
         if (block.timestamp >= expiresAt) revert GrantExpired();
         uint256 cap = assetLimit[token];
         if (cap == 0) revert AssetNotAuthorized(token);
