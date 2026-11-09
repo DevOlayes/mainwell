@@ -66,7 +66,7 @@ async function queueAutomaticJobs(env:EngineEnv):Promise<number>{
   const rows=await env.DB.prepare(`
     SELECT g.grant_id,g.owner_wallet,g.network,g.execution_modes_json,g.expires_at,
            a.asset_id,a.token_address,a.amount_kind,a.max_amount_raw,a.destination_address,
-           w.status AS wallet_status,w.admin_locked,d.locked AS destination_locked,d.is_active AS destination_active
+           w.id AS wallet_id,w.status AS wallet_status,w.admin_locked,d.locked AS destination_locked,d.is_active AS destination_active
     FROM recovery_grants g
     INNER JOIN recovery_grant_assets a ON a.grant_id=g.grant_id
     INNER JOIN recovery_wallets w ON lower(w.owner_address)=lower(g.owner_wallet) AND w.network=g.network
@@ -84,9 +84,15 @@ async function queueAutomaticJobs(env:EngineEnv):Promise<number>{
     const active=await env.DB.prepare("SELECT id FROM recovery_jobs WHERE grant_id=? AND asset_id=? AND status IN ('queued','simulating','ready','submitted') LIMIT 1")
       .bind(row.grant_id,row.asset_id).first<{id:string}>();
     if(active)continue;
+    const valuation=await env.DB.prepare("SELECT estimated_value_usd,valuation_confidence,price_observed_at FROM wallet_assets WHERE wallet_id=? AND asset_ref=? LIMIT 1")
+      .bind(row.wallet_id,row.asset_id).first<{estimated_value_usd:number|null;valuation_confidence:number|null;price_observed_at:string|null}>();
+    const priceAge=valuation?.price_observed_at?Date.now()-Date.parse(valuation.price_observed_at):Number.POSITIVE_INFINITY;
+    const score=valuation&&typeof valuation.estimated_value_usd==="number"&&Number.isFinite(valuation.estimated_value_usd)&&valuation.estimated_value_usd>0&&
+      typeof valuation.valuation_confidence==="number"&&valuation.valuation_confidence>=0.75&&priceAge>=0&&priceAge<=5*60_000
+      ? valuation.estimated_value_usd*valuation.valuation_confidence : 0;
     const id=crypto.randomUUID(),key="auto:"+String(row.grant_id)+":"+String(row.asset_id)+":"+minute;
-    const result=await env.DB.prepare("INSERT INTO recovery_jobs(id,grant_id,asset_id,execution_mode,status,priority_score,idempotency_key,requested_by,created_at,updated_at,requested_amount_raw,destination_address,next_attempt_at) VALUES(?,?,?,'automatic-priority','queued',0,?,'system:auto',?,?,NULL,?,?) ON CONFLICT(idempotency_key) DO NOTHING")
-      .bind(id,row.grant_id,row.asset_id,key,now,now,row.destination_address,now).run();
+    const result=await env.DB.prepare("INSERT INTO recovery_jobs(id,grant_id,asset_id,execution_mode,status,priority_score,idempotency_key,requested_by,created_at,updated_at,requested_amount_raw,destination_address,next_attempt_at) VALUES(?,?,?,'automatic-priority','queued',?,?,'system:auto',?,?,NULL,?,?) ON CONFLICT(idempotency_key) DO NOTHING")
+      .bind(id,row.grant_id,row.asset_id,score,key,now,now,row.destination_address,now).run();
     if((result.meta?.changes??0)===1){
       await audit(env,id,"automatic_recovery.queued",{grantId:row.grant_id,assetId:row.asset_id,network:row.network},now);
       queued++;
