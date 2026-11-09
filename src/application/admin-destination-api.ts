@@ -42,7 +42,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.destination.add','recovery_destination',?,?,?)").bind(admin.adminId,String(row?.id??id),JSON.stringify({network,address:normalized,locked:true}),now).run();
   return response({created:true,destination:row});
  }
- const policyMatch=path.match(/^\\/api\\/admin\\/recovery-destination-policies\\/([a-z-]+)\\/([^/]+)$/);
+ const policyMatch=path.match(/^\/api\/admin\/recovery-destination-policies\/([a-z-]+)\/([^/]+)$/);
  if(policyMatch&&request.method==="PUT"){
   if(!originOk(request,url))return response({error:"Origin check failed."},403);
   const network=policyMatch[1],b=await body(request),destinationId=typeof b?.destinationId==="string"?b.destinationId:"";
