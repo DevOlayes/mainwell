@@ -23,7 +23,7 @@ export async function verifyAdminPassword(stored:string,password:string):Promise
 }
 function base32(s:string):Uint8Array{
  const alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";let bits=0,value=0;const out:number[]=[];
- for(const ch of s.toUpperCase().replace(/=+$/,"").replace(/\s/g,"")){const n=alphabet.indexOf(ch);if(n<0)throw new Error("Invalid TOTP secret.");value=(value<<5)|n;bits+=5;if(bits>=8){out.push((value>>(bits-8))&255);bits-=8;}}
+ for(const ch of s.toUpperCase().replace(/=+$/,"").replace(/\s/g,"")){const n=alphabet.indexOf(ch);if(n<0)throw new Error("Invalid TOTP secret.");value=(value<<5)|n;bits+=5;if(bits>=8){out.push((value>>(bits-8))&255);bits-=8;value&=(1<<bits)-1;}}
  return new Uint8Array(out);
 }
 async function decryptTotpSecret(ciphertext:string,keyText:string):Promise<Uint8Array>{
