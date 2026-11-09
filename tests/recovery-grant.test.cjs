@@ -11,7 +11,7 @@ const base = {
   executorAddress: "0x2222222222222222222222222222222222222222",
   executorCodeHash: "0x" + "a".repeat(64),
   destinationAddress: "0x3333333333333333333333333333333333333333",
-  assets: [{ assetId: "usdc", tokenAddress: "0x4444444444444444444444444444444444444444", amount: { kind: "capped", maxAmountRaw: "1000000" } }],
+  assets: [{ assetId: "usdc", destinationAddress: "0x3333333333333333333333333333333333333333", tokenAddress: "0x4444444444444444444444444444444444444444", amount: { kind: "capped", maxAmountRaw: "1000000" } }],
   executionModes: ["automatic-priority", "admin-initiated"],
   approvedAt: "2026-11-09T11:00:00.000Z",
   expiresAt: "2026-11-09T13:00:00.000Z",
