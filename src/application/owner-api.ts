@@ -150,7 +150,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     const scopedAssets = assetRows.results.map(asset => {
       const policy = assetPolicyMap.get(String(asset.assetId));
       const isToken = typeof asset.tokenAddress === "string" && ADDRESS.test(asset.tokenAddress);
-      const cap = typeof policy?.maxAmountRaw === "string" && /^[1-9][0-9]{0,77}$/.test(policy.maxAmountRaw);
+      const cap = typeof policy?.maxAmountRaw === "string" && /^[1-9][0-9]{0,77}$/.test(policy.maxAmountRaw) && BigInt(policy.maxAmountRaw) <= ((1n << 256n) - 1n);
       const modes = Boolean(Number(policy?.automaticPriorityEnabled) || Number(policy?.adminInitiatedEnabled));
       return { ...asset, policy: policy ?? null, authorizationEligible: Boolean(isToken && policy && cap && modes) };
     });
@@ -349,7 +349,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       const policy = configuredPolicies.results.find(row => String(row.assetId) === asset.assetId);
       if (!policy || typeof policy.tokenAddress !== "string" || !ADDRESS.test(policy.tokenAddress) ||
           !asset.tokenAddress || asset.tokenAddress.toLowerCase() !== policy.tokenAddress.toLowerCase() ||
-          !asset.amount || asset.amount.kind !== "capped" || asset.amount.maxAmountRaw !== String(policy.maxAmountRaw) ||
+          !asset.amount || asset.amount.kind !== "capped" || asset.amount.maxAmountRaw !== String(policy.maxAmountRaw) || BigInt(String(policy.maxAmountRaw)) > ((1n << 256n) - 1n) ||
           typeof asset.destinationAddress !== "string" || asset.destinationAddress.toLowerCase() !== String(policy.destinationAddress).toLowerCase()) {
         return reply({ error: "The token, cap or destination in the grant does not exactly match the administrator's current asset policy." }, 409);
       }
