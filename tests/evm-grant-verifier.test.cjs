@@ -37,6 +37,9 @@ function makeVerifier(overrides = {}) {
     if (req.method === "eth_chainId") result = overrides.chainId || "0x1";
     else if (req.method === "eth_getCode") result = overrides.code || code;
     else if (req.method === "eth_getBlockByNumber") result = { timestamp: "0x" + Math.floor(Date.parse(grant.approvedAt) / 1000).toString(16) };
+    else if (req.method === "eth_getTransactionByHash") result = overrides.tx === undefined ? {
+      from: owner, to: executor, input: "0x" + selector("revoke()")
+    } : overrides.tx;
     else if (req.method === "eth_getTransactionReceipt") result = overrides.receipt === undefined ? {
       status: "0x1", from: owner, contractAddress: executor, blockNumber: "0x10"
     } : overrides.receipt;
@@ -136,4 +139,22 @@ test("fails closed when on-chain asset count includes undeclared assets", async 
 test("fails closed when grant approval timestamp is not the deployment block timestamp", async () => {
   const changed = { ...grant, approvedAt: "2026-11-09T06:01:00.000Z" };
   await assert.rejects(makeVerifier().verify(changed, owner, now), /timestamp does not match/);
+});
+
+test("verifies owner-signed executor revocation only after the chain reports revoked", async () => {
+  const revokedSelector = selector("revoked()");
+  const result = await makeVerifier({ callResult: { selector: revokedSelector, value: "0x" + word(1) } })
+    .verifyRevocation(grant, owner, "0x" + "d".repeat(64), now);
+  assert.equal(result.transactionHash, "0x" + "d".repeat(64));
+  assert.equal(result.revokedAt, grant.approvedAt);
+});
+
+test("rejects revocation transactions sent by a different wallet", async () => {
+  await assert.rejects(makeVerifier({
+    tx: { from: destination, to: executor, input: "0x" + selector("revoke()") }
+  }).verifyRevocation(grant, owner, "0x" + "d".repeat(64), now), /authenticated owner successfully called revoke/);
+});
+
+test("rejects successful-looking revocation transactions when executor is not revoked", async () => {
+  await assert.rejects(makeVerifier().verifyRevocation(grant, owner, "0x" + "d".repeat(64), now), /does not report an on-chain revoked state/);
 });
