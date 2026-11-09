@@ -81,6 +81,9 @@ export function validateRecoveryGrant(
       throw new Error("Token contract address is invalid.");
     }
   }
+  if (EVM_NETWORKS.has(grant.network) && grant.assets[0].destinationAddress.toLowerCase() !== grant.destinationAddress.toLowerCase()) {
+    throw new Error("The grant default destination must match the first asset's immutable destination.");
+  }
 }
 
 /** Ensures the requested execution path was explicitly included in the owner's grant. */
