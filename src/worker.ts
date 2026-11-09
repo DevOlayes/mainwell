@@ -111,7 +111,10 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
         adminPrivateKeyConfigured:Boolean(env.MAINWELL_ADMIN_PRIVATE_KEY),
         automationPrivateKeyConfigured:Boolean(env.MAINWELL_AUTOMATION_PRIVATE_KEY),
         rpcNetworks:{ethereum:Boolean(env.EVM_RPC_ETHEREUM),polygon:Boolean(env.EVM_RPC_POLYGON),bsc:Boolean(env.EVM_RPC_BSC),avalanche:Boolean(env.EVM_RPC_AVALANCHE),arbitrum:Boolean(env.EVM_RPC_ARBITRUM),optimism:Boolean(env.EVM_RPC_OPTIMISM),base:Boolean(env.EVM_RPC_BASE)},
-        executionEnabled:false
+        executionEnabled:env.MAINWELL_EXECUTION_ENABLED==="true",
+        automationEnabled:env.MAINWELL_AUTOMATION_ENABLED==="true",
+        maxRecoveryFeeConfigured:Boolean(env.MAINWELL_MAX_RECOVERY_FEE_WEI),
+        sponsorReserveConfigured:Boolean(env.MAINWELL_SPONSOR_RESERVE_WEI)
       });
     }
     const response=await handleAdminDestinationApi(request,env,{id:admin.id,adminId:admin.admin_id});
