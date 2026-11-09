@@ -31,7 +31,7 @@ async function toggleWallet(w){try{await api("/api/owner/wallets/"+w.id,{method:
 $("refreshAll").addEventListener("click",async()=>{try{await load();setStatus("dashboardStatus","Workspace refreshed.")}catch(e){setStatus("dashboardStatus",e.message,true)}});
 $("switchNetwork").addEventListener("click",async()=>{try{const p=await provider(),id=Number($("networkSelect").value);await p.request({method:"wallet_switchEthereumChain",params:[{chainId:"0x"+id.toString(16)}]});setStatus("dashboardStatus","Network switched. Reconnect to create a session for the selected chain.")}catch(e){setStatus("dashboardStatus",e.message,true)}});
 $("logout").addEventListener("click",async()=>{try{await api("/api/auth/logout",{method:"POST",body:"{}"})}finally{location.reload()}});
-api("/api/auth/me").then(async s=>{account=s.wallet;chainId=s.chainId;location.assign("/authorize")}).catch(()=>{});
+api("/api/auth/me").then(async s=>{account=s.wallet;chainId=s.chainId;await showDashboard()}).catch(()=>{});
 if(window.ethereum){window.ethereum.on?.("chainChanged",()=>setStatus("dashboardStatus","Wallet network changed. Reconnect to refresh the authenticated session."));window.ethereum.on?.("accountsChanged",()=>setStatus("dashboardStatus","Wallet account changed. Disconnect and reconnect to refresh your session."))}
 </script></main></body></html>`;
 export function ownerDashboardResponse():Response{return new Response(OWNER_HTML,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}});}
