@@ -96,6 +96,7 @@ async function queueAutomaticJobs(env:EngineEnv):Promise<number>{
 }
 async function processOne(env:EngineEnv):Promise<boolean>{
   const now=new Date().toISOString(),leaseId=crypto.randomUUID(),leaseUntil=new Date(Date.now()+90_000).toISOString();
+  await env.DB.prepare("UPDATE recovery_jobs SET status='blocked',last_error_code='worker_lease_expired',last_error_at=?,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE status='simulating' AND lease_expires_at IS NOT NULL AND lease_expires_at<?").bind(now,now,now).run();
   const candidate=await env.DB.prepare("SELECT id FROM recovery_jobs WHERE status='queued' AND (next_attempt_at IS NULL OR next_attempt_at<=?) AND (lease_expires_at IS NULL OR lease_expires_at<?) ORDER BY priority_score DESC,created_at ASC LIMIT 1")
     .bind(now,now).first<{id:string}>();
   if(!candidate)return false;
@@ -222,8 +223,21 @@ async function trackTransactions(env:EngineEnv):Promise<number>{
     const chain=makeChain(network,rpcUrl),client=createPublicClient({chain,transport:http(rpcUrl)});
     const at=new Date().toISOString();
     try{
-      const receipt=await client.getTransactionReceipt({hash:String(row.transaction_hash) as Hex});
       const transaction=await client.getTransaction({hash:String(row.transaction_hash) as Hex});
+      if(transaction.to?.toLowerCase()!==String(row.executor_address).toLowerCase()||transaction.from.toLowerCase()!==String(row.sender_address).toLowerCase()){
+        await env.DB.prepare("UPDATE recovery_transactions SET status='unknown',failure_code='transaction_identity_mismatch',last_checked_at=? WHERE id=?").bind(at,row.id).run();
+        continue;
+      }
+      let receipt;
+      try{receipt=await client.getTransactionReceipt({hash:String(row.transaction_hash) as Hex});}
+      catch{
+        await env.DB.batch([
+          env.DB.prepare("UPDATE recovery_transactions SET status='pending',last_checked_at=? WHERE id=?").bind(at,row.id),
+          env.DB.prepare("UPDATE recovery_jobs SET status='submitted',updated_at=?,lease_owner=NULL,lease_expires_at=NULL WHERE id=? AND status IN ('simulating','blocked','ready')").bind(at,row.job_id),
+          env.DB.prepare("UPDATE recovery_execution_attempts SET phase='submitted',updated_at=? WHERE transaction_hash=?").bind(at,row.transaction_hash)
+        ]);
+        continue;
+      }
       const latest=await client.getBlockNumber();
       const canonicalBlock=await client.getBlock({blockNumber:receipt.blockNumber});
       if(canonicalBlock.hash.toLowerCase()!==receipt.blockHash.toLowerCase())continue;
@@ -238,7 +252,7 @@ async function trackTransactions(env:EngineEnv):Promise<number>{
       await env.DB.batch([
         env.DB.prepare("UPDATE recovery_transactions SET status=?,block_number=?,block_hash=?,gas_used_raw=?,effective_gas_price_raw=?,actual_fee_raw=?,confirmed_at=?,last_checked_at=?,failure_code=? WHERE id=?")
           .bind(status,Number(receipt.blockNumber),receipt.blockHash,receipt.gasUsed.toString(),receipt.effectiveGasPrice.toString(),(receipt.gasUsed*receipt.effectiveGasPrice).toString(),at,at,ok?null:"receipt_or_event_verification_failed",row.id),
-        env.DB.prepare("UPDATE recovery_jobs SET status=?,completed_at=?,updated_at=?,last_error_code=? WHERE id=? AND status IN ('submitted','ready')")
+        env.DB.prepare("UPDATE recovery_jobs SET status=?,completed_at=?,updated_at=?,last_error_code=? WHERE id=? AND status IN ('submitted','ready','simulating','blocked')")
           .bind(ok?"confirmed":"failed",at,at,ok?null:"receipt_or_event_verification_failed",row.job_id),
         env.DB.prepare("UPDATE recovery_execution_attempts SET phase=?,updated_at=? WHERE transaction_hash=?")
           .bind(ok?"confirmed":"failed",at,row.transaction_hash)
