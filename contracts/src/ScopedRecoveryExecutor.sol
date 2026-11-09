@@ -26,9 +26,9 @@ contract ScopedRecoveryExecutor {
     error ReentrantCall();
     error OwnerOnly();
 
-    address public immutable owner;
-    address public immutable destination;
-    uint64 public immutable expiresAt;
+    address public owner;
+    address public destination;
+    uint64 public expiresAt;
 
     bool public revoked;
     uint256 private _entered = 1;
