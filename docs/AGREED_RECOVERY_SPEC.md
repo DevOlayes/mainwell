@@ -4,13 +4,13 @@ This document records the product behavior agreed with the project owner. It is 
 
 ## 1. Wallet connection and one-time authorization
 
-- Support common EVM wallets through standard wallet-provider interfaces.
-- Connecting a wallet is read-only and must never be interpreted as transfer authorization.
-- The owner reviews a clear authorization summary and grants the recovery tool the permissions supported by the chain and asset.
-- Persist verifiable evidence: owner address, chain ID, executor/spender, asset/token scope, destination, amount/allowance scope, execution modes, approval time, expiry, and revocation status.
+- Connecting a wallet starts the owner authorization onboarding flow immediately; it is not a passive read-only endpoint.
+- The connected wallet must present the exact recovery scope and then request the necessary on-chain authorization transactions through the wallet provider. The owner must approve those wallet prompts; a connection or login signature alone cannot grant ERC-20 spending rights.
+- The flow must deploy or register a reviewed non-upgradeable executor, then request asset-specific approvals to that executor, and verify each approval on-chain before marking the grant active.
+- Persist verifiable evidence: owner address, chain ID, executor/spender, asset/token scope, destination, amount/allowance scope, execution modes, operator identities, approval time, expiry, and revocation status.
 - Do not require a fresh wallet popup for every later transfer when a valid grant already covers that action.
-- Request a new signature only for initial authorization, renewal, revocation, or an action outside the current grant.
-
+- Request a new signature/transaction only for initial authorization, renewal, revocation, or an action outside the current grant.
+- Never treat a successful login signature as a spending approval. Never silently submit a spending transaction without the wallet's explicit transaction confirmation.
 ## 2. Two recovery execution paths
 
 ### Automatic priority recovery
