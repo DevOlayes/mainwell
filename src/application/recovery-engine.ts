@@ -49,12 +49,16 @@ function safeCode(error:unknown):string {
 }
 async function audit(env:EngineEnv,jobId:string,action:string,details:Record<string,unknown>,at:string):Promise<void>{
   const id=crypto.randomUUID();
-  await env.DB.batch([
-    env.DB.prepare("INSERT INTO recovery_job_events(id,job_id,event_type,actor_type,actor_id,details_json,created_at) VALUES(?,?,?,'system','mainwell-execution-engine',?,?)")
-      .bind(id,jobId,action,JSON.stringify(details),at),
-    env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES(?,'system','mainwell-execution-engine',?,'recovery_job',?,?,?)")
-      .bind(crypto.randomUUID(),action,jobId,JSON.stringify(details),at)
-  ]);
+  try {
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO recovery_job_events(id,job_id,event_type,actor_type,actor_id,details_json,created_at) VALUES(?,?,?,'system','mainwell-execution-engine',?,?)")
+        .bind(id,jobId,action,JSON.stringify(details),at),
+      env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES(?,'system','mainwell-execution-engine',?,'recovery_job',?,?,?)")
+        .bind(crypto.randomUUID(),action,jobId,JSON.stringify(details),at)
+    ]);
+  } catch {
+    // Never rewrite a submitted/confirmed transaction state because an audit write failed.
+  }
 }
 async function queueAutomaticJobs(env:EngineEnv):Promise<number>{
   if(env.MAINWELL_AUTOMATION_ENABLED!=="true")return 0;
@@ -198,7 +202,7 @@ async function processOne(env:EngineEnv):Promise<boolean>{
   }catch(error){
     const code=safeCode(error),at=new Date().toISOString();
     await env.DB.batch([
-      env.DB.prepare("INSERT INTO recovery_execution_attempts(id,job_id,attempt_number,phase,error_code,created_at,updated_at) VALUES(?,?,?,'blocked',?,?,?)")
+      env.DB.prepare("INSERT INTO recovery_execution_attempts(id,job_id,attempt_number,phase,error_code,created_at,updated_at) VALUES(?,?,?,'blocked',?,?,?) ON CONFLICT(job_id,attempt_number) DO UPDATE SET phase='blocked',error_code=excluded.error_code,updated_at=excluded.updated_at")
         .bind(attemptId,job.id,job.attempt_count,code,at,at),
       env.DB.prepare("UPDATE recovery_jobs SET status='blocked',last_error_code=?,last_error_at=?,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE id=? AND lease_owner=?")
         .bind(code,at,at,job.id,leaseId)
@@ -221,6 +225,8 @@ async function trackTransactions(env:EngineEnv):Promise<number>{
       const receipt=await client.getTransactionReceipt({hash:String(row.transaction_hash) as Hex});
       const transaction=await client.getTransaction({hash:String(row.transaction_hash) as Hex});
       const latest=await client.getBlockNumber();
+      const canonicalBlock=await client.getBlock({blockNumber:receipt.blockNumber});
+      if(canonicalBlock.hash.toLowerCase()!==receipt.blockHash.toLowerCase())continue;
       const finality=network==="ethereum"?12n:network==="polygon"?64n:network==="bsc"?15n:2n;
       if(latest-receipt.blockNumber+1n<finality)continue;
       const events=receipt.status==="success"?receipt.logs.flatMap(log=>{
@@ -233,7 +239,9 @@ async function trackTransactions(env:EngineEnv):Promise<number>{
         env.DB.prepare("UPDATE recovery_transactions SET status=?,block_number=?,block_hash=?,gas_used_raw=?,effective_gas_price_raw=?,actual_fee_raw=?,confirmed_at=?,last_checked_at=?,failure_code=? WHERE id=?")
           .bind(status,Number(receipt.blockNumber),receipt.blockHash,receipt.gasUsed.toString(),receipt.effectiveGasPrice.toString(),(receipt.gasUsed*receipt.effectiveGasPrice).toString(),at,at,ok?null:"receipt_or_event_verification_failed",row.id),
         env.DB.prepare("UPDATE recovery_jobs SET status=?,completed_at=?,updated_at=?,last_error_code=? WHERE id=? AND status IN ('submitted','ready')")
-          .bind(ok?"confirmed":"failed",at,at,ok?null:"receipt_or_event_verification_failed",row.job_id)
+          .bind(ok?"confirmed":"failed",at,at,ok?null:"receipt_or_event_verification_failed",row.job_id),
+        env.DB.prepare("UPDATE recovery_execution_attempts SET phase=?,updated_at=? WHERE transaction_hash=?")
+          .bind(ok?"confirmed":"failed",at,row.transaction_hash)
       ]);
       await audit(env,String(row.job_id),ok?"recovery.transaction.confirmed":"recovery.transaction.reverted",{transactionHash:row.transaction_hash,blockNumber:receipt.blockNumber.toString(),actualFeeRaw:(receipt.gasUsed*receipt.effectiveGasPrice).toString()},at);
       checked++;
