@@ -51,3 +51,8 @@ npm run build
 ```
 
 See [the agreed recovery specification](docs/AGREED_RECOVERY_SPEC.md), [architecture](docs/ARCHITECTURE.md), and [security model](docs/SECURITY.md).
+
+
+## Cloudflare deployment
+
+Mainwell runs on Cloudflare Workers with Cloudflare D1 as its primary relational database. The production D1 database is bound as `DB`; schema changes live in `migrations/`. See [Cloudflare D1 deployment notes](docs/CLOUDFLARE_D1.md).
