@@ -58,7 +58,13 @@ export default { async fetch(request: Request,env: Env): Promise<Response> {
     return json({authenticated:true,wallet:c.wallet_address,chainId,expiresAt:expires},200,{"set-cookie":"mw_owner_session="+token+"; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age="+SESSION_SECONDS});
   }
   if(url.pathname==="/api/auth/me"&&request.method==="GET"){const s=await session(request,env);return s?json({authenticated:true,...s}):json({authenticated:false},401);}
-  if(url.pathname.startsWith("/api/owner/")){\n    const authenticated = await session(request,env);\n    if(!authenticated)return json({error:"Authentication required."},401);\n    const response = await handleOwnerApi(request,env,authenticated);\n    if(response)return response;\n  }\n  if(url.pathname==="/api/auth/logout"&&request.method==="POST"){
+  if(url.pathname.startsWith("/api/owner/")){
+    const authenticated = await session(request,env);
+    if(!authenticated)return json({error:"Authentication required."},401);
+    const response = await handleOwnerApi(request,env,authenticated);
+    if(response)return response;
+  }
+  if(url.pathname==="/api/auth/logout"&&request.method==="POST"){
     if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
     const token=cookie(request);if(token&&/^[0-9a-f]{64}$/.test(token))await env.DB.prepare("UPDATE wallet_sessions SET revoked_at=? WHERE token_hash=? AND revoked_at IS NULL").bind(new Date().toISOString(),await hash(token)).run();
     return json({authenticated:false},200,{"set-cookie":"mw_owner_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0"});
