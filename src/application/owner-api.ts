@@ -1,10 +1,21 @@
 import { refreshEvmWallet, type MonitorEnv } from "./evm-monitor";
 import type { NetworkId } from "../domain/types";
+import type { RecoveryAuthorizationGrant } from "../domain/recovery-grant";
+import { EvmGrantVerifier } from "../adapters/evm-grant-verifier";
+import { verifyAndPersistEvmGrant } from "./verify-and-persist-evm-grant";
+import { D1GrantRepository, type D1Database as GrantDatabase } from "../persistence/d1-grant-repository";
 
 interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]; meta?: { changes?: number } }
 interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
-interface D1Database { prepare(query: string): D1Statement }
-export interface OwnerApiEnv extends Omit<MonitorEnv, "DB"> { DB: D1Database }
+interface D1Database { prepare(query: string): D1Statement; batch<T = unknown>(statements: D1Statement[]): Promise<D1Result<T>[]> }
+type GrantHashBinding = "MAINWELL_EXECUTOR_CODE_HASH_ETHEREUM" | "MAINWELL_EXECUTOR_CODE_HASH_POLYGON" | "MAINWELL_EXECUTOR_CODE_HASH_BSC" | "MAINWELL_EXECUTOR_CODE_HASH_AVALANCHE" | "MAINWELL_EXECUTOR_CODE_HASH_ARBITRUM" | "MAINWELL_EXECUTOR_CODE_HASH_OPTIMISM" | "MAINWELL_EXECUTOR_CODE_HASH_BASE";
+export interface OwnerApiEnv extends Omit<MonitorEnv, "DB"> {
+  DB: D1Database;
+  MAINWELL_EXECUTOR_CODE_HASH_ETHEREUM?: string; MAINWELL_EXECUTOR_CODE_HASH_POLYGON?: string;
+  MAINWELL_EXECUTOR_CODE_HASH_BSC?: string; MAINWELL_EXECUTOR_CODE_HASH_AVALANCHE?: string;
+  MAINWELL_EXECUTOR_CODE_HASH_ARBITRUM?: string; MAINWELL_EXECUTOR_CODE_HASH_OPTIMISM?: string;
+  MAINWELL_EXECUTOR_CODE_HASH_BASE?: string;
+}
 export interface OwnerSession { wallet: string; chainId: number }
 const NETWORK_CHAIN: Partial<Record<NetworkId, number>> = {
   ethereum: 1, polygon: 137, bsc: 56, avalanche: 43114,
@@ -28,6 +39,32 @@ async function readBody(request: Request): Promise<Record<string, unknown> | nul
     const value: unknown = JSON.parse(raw);
     return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
   } catch { return null; }
+}
+const GRANT_RPC: Partial<Record<NetworkId, keyof MonitorEnv>> = {
+  ethereum: "EVM_RPC_ETHEREUM", polygon: "EVM_RPC_POLYGON", bsc: "EVM_RPC_BSC",
+  avalanche: "EVM_RPC_AVALANCHE", arbitrum: "EVM_RPC_ARBITRUM", optimism: "EVM_RPC_OPTIMISM", base: "EVM_RPC_BASE"
+};
+const GRANT_HASH: Partial<Record<NetworkId, GrantHashBinding>> = {
+  ethereum: "MAINWELL_EXECUTOR_CODE_HASH_ETHEREUM", polygon: "MAINWELL_EXECUTOR_CODE_HASH_POLYGON",
+  bsc: "MAINWELL_EXECUTOR_CODE_HASH_BSC", avalanche: "MAINWELL_EXECUTOR_CODE_HASH_AVALANCHE",
+  arbitrum: "MAINWELL_EXECUTOR_CODE_HASH_ARBITRUM", optimism: "MAINWELL_EXECUTOR_CODE_HASH_OPTIMISM",
+  base: "MAINWELL_EXECUTOR_CODE_HASH_BASE"
+};
+async function readGrantBody(request: Request): Promise<Record<string, unknown> | null> {
+  if (Number(request.headers.get("content-length") ?? "0") > 16384) return null;
+  try {
+    const raw = await request.text();
+    if (raw.length > 16384) return null;
+    const value: unknown = JSON.parse(raw);
+    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  } catch { return null; }
+}
+function grantVerifierConfig(env: OwnerApiEnv, network: NetworkId, chainId: number) {
+  const rpcName = GRANT_RPC[network], hashName = GRANT_HASH[network];
+  const rpcUrl = rpcName ? env[rpcName] as string | undefined : undefined;
+  const trustedExecutorCodeHash = hashName ? env[hashName] : undefined;
+  if (!rpcUrl || !trustedExecutorCodeHash) throw new Error("GRANT_VERIFIER_NOT_CONFIGURED");
+  return { rpcUrl, trustedExecutorCodeHash, expectedChainId: chainId };
 }
 function limitFrom(url: URL): number {
   const value = Number(url.searchParams.get("limit") ?? "50");
