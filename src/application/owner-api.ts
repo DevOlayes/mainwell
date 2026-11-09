@@ -313,7 +313,8 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     const body = await readGrantBody(request);
     const grant = body?.grant as RecoveryAuthorizationGrant | undefined;
     if (!grant || typeof grant.network !== "string" || NETWORK_CHAIN[grant.network] !== session.chainId ||
-        grant.chainId !== session.chainId || grant.ownerWallet?.toLowerCase() !== owner) {
+        grant.chainId !== session.chainId || typeof grant.ownerWallet !== "string" || grant.ownerWallet.toLowerCase() !== owner ||
+        !Array.isArray(grant.assets) || !Array.isArray(grant.executionModes) || !grant.executionOperators) {
       return reply({ error: "Grant must belong to the authenticated wallet and active session chain." }, 400);
     }
     // Only administrator-locked source wallets may receive a persistent recovery grant.
@@ -348,8 +349,8 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       const policy = configuredPolicies.results.find(row => String(row.assetId) === asset.assetId);
       if (!policy || typeof policy.tokenAddress !== "string" || !ADDRESS.test(policy.tokenAddress) ||
           !asset.tokenAddress || asset.tokenAddress.toLowerCase() !== policy.tokenAddress.toLowerCase() ||
-          asset.amount.kind !== "capped" || asset.amount.maxAmountRaw !== String(policy.maxAmountRaw) ||
-          asset.destinationAddress.toLowerCase() !== String(policy.destinationAddress).toLowerCase()) {
+          !asset.amount || asset.amount.kind !== "capped" || asset.amount.maxAmountRaw !== String(policy.maxAmountRaw) ||
+          typeof asset.destinationAddress !== "string" || asset.destinationAddress.toLowerCase() !== String(policy.destinationAddress).toLowerCase()) {
         return reply({ error: "The token, cap or destination in the grant does not exactly match the administrator's current asset policy." }, 409);
       }
       if (grant.executionModes.includes("automatic-priority") && Number(policy.automaticPriorityEnabled) !== 1) {
