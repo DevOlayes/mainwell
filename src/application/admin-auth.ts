@@ -25,7 +25,7 @@ function stageSalt(salt:Uint8Array,index:number):Uint8Array{
 }
 export async function hashAdminPassword(password:string):Promise<string>{
  const salt=new Uint8Array(16);crypto.getRandomValues(salt);
- let derived=new TextEncoder().encode(password);
+ let derived:Uint8Array<ArrayBufferLike>=new TextEncoder().encode(password);
  for(let i=0;i<HASH_STAGE_ITERATIONS.length;i++)derived=await pbkdf2Stage(derived,stageSalt(salt,i+1),HASH_STAGE_ITERATIONS[i]);
  const enc=(x:Uint8Array)=>btoa(String.fromCharCode(...x));
  return "pbkdf2-sha256-chain$310000$"+enc(salt)+"$"+enc(derived);
@@ -35,7 +35,7 @@ export async function verifyAdminPassword(stored:string,password:string):Promise
  try{
   const salt=b64(p[2]),expected=b64(p[3]);if(salt.length<16||expected.length!==32)return false;
   if(p[0]==="pbkdf2-sha256-chain"&&p[1]==="310000"){
-   let derived=new TextEncoder().encode(password);
+   let derived:Uint8Array<ArrayBufferLike>=new TextEncoder().encode(password);
    for(let i=0;i<HASH_STAGE_ITERATIONS.length;i++)derived=await pbkdf2Stage(derived,stageSalt(salt,i+1),HASH_STAGE_ITERATIONS[i]);
    return equal(derived,expected);
   }
