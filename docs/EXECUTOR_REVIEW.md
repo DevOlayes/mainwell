@@ -4,12 +4,12 @@
 
 **Source implementation and Foundry tests added. Not audited. Not deployed. Not enabled for production transfers.**
 
-The contract is the first EVM execution primitive for Mainwell. It is deliberately narrow: it can call only ERC-20 `transferFrom(owner, immutableDestination, amount)` for constructor-allowlisted token contracts, subject to a per-token cumulative cap and grant expiry/revocation.
+The contract is the first EVM execution primitive for Mainwell. It is deliberately narrow: it can call only ERC-20 `transferFrom(owner, destination, amount)` for constructor-allowlisted token contracts, subject to a per-token cumulative cap and grant expiry/revocation. Owner, destination, and expiry are constructor-set storage values with no setter or arbitrary-call path; this keeps deployed runtime bytecode identical across owner deployments so the server can pin one reviewed runtime code hash per chain.
 
 ## Enforced on-chain invariants
 
 - The owner is the account that deploys the executor.
-- The destination is immutable and cannot be changed by an administrator or caller.
+- The destination is constructor-fixed and cannot be changed by an administrator or caller; the owner and expiry are likewise constructor-fixed with no setter.
 - The asset allowlist and raw-unit limits are set in the constructor.
 - A token can be recovered only if it is allowlisted and has remaining cap.
 - The owner must separately grant the executor ERC-20 allowance for each selected token.
