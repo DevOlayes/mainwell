@@ -93,7 +93,7 @@ export default { async fetch(request: Request,env: Env): Promise<Response> {
       return rows.success?json({events:rows.results}):json({error:"Unable to load audit events."},503);
     }
     if(request.method==="GET"&&url.pathname==="/api/admin/recovery-jobs"){
-      const rows=await env.DB.prepare("SELECT id,grant_id,asset_id,execution_mode,status,priority_score,requested_by,created_at,updated_at FROM recovery_jobs ORDER BY created_at DESC,id DESC LIMIT ?").bind(limit).all<Record<string,unknown>>();
+      const rows=await env.DB.prepare("SELECT id,grant_id,asset_id,execution_mode,status,priority_score,requested_by,created_at,updated_at,requested_amount_raw,destination_address,attempt_count,last_error_code FROM recovery_jobs ORDER BY created_at DESC,id DESC LIMIT ?").bind(limit).all<Record<string,unknown>>();
       return rows.success?json({jobs:rows.results}):json({error:"Unable to load recovery jobs."},503);
     }
     if(request.method==="GET"&&url.pathname==="/api/admin/transactions"){
