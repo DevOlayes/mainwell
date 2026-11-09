@@ -12,7 +12,7 @@ const codeHash = keccak256Hex(code);
 const grant = {
   grantId: "evm-check-001", ownerWallet: owner, network: "ethereum", chainId: 1,
   executorAddress: executor, executorCodeHash: codeHash, destinationAddress: destination,
-  assets: [{ assetId: "usdc-ethereum", tokenAddress: token, amount: { kind: "capped", maxAmountRaw: "2500000" } }],
+  assets: [{ assetId: "usdc-ethereum", tokenAddress: token, destinationAddress: destination, amount: { kind: "capped", maxAmountRaw: "2500000" } }],
   executionModes: ["automatic-priority", "admin-initiated"],
   approvedAt: "2026-11-09T06:00:00.000Z", expiresAt: "2026-12-09T06:00:00.000Z",
   evidence: { kind: "onchain-approval", reference: "0x" + "a".repeat(64) }
@@ -29,7 +29,8 @@ function makeVerifier(overrides = {}) {
     limit: selector("assetLimit(address)"), recovered: selector("amountRecovered(address)"),
     allowance: selector("allowance(address,address)"),
     automatic: selector("automaticPriorityEnabled()"), admin: selector("adminInitiatedEnabled()"),
-    assetCount: selector("authorizedAssetCount()"), assetAt: selector("authorizedAssetAt(uint256)")
+    assetCount: selector("authorizedAssetCount()"), assetAt: selector("authorizedAssetAt(uint256)"),
+    assetDestination: selector("assetDestination(address)"), destinationAt: selector("authorizedAssetDestinationAt(uint256)")
   };
   const fetcher = async (_url, init) => {
     const req = JSON.parse(init.body);
@@ -57,7 +58,9 @@ function makeVerifier(overrides = {}) {
         [selectors.automatic]: "0x" + word(overrides.automatic === undefined ? 1 : overrides.automatic),
         [selectors.admin]: "0x" + word(overrides.admin === undefined ? 1 : overrides.admin),
         [selectors.assetCount]: "0x" + word(overrides.assetCount === undefined ? 1 : overrides.assetCount),
-        [selectors.assetAt]: "0x" + addressWord(overrides.assetAt || token)
+        [selectors.assetAt]: "0x" + addressWord(overrides.assetAt || token),
+        [selectors.assetDestination]: "0x" + addressWord(overrides.assetDestination || destination),
+        [selectors.destinationAt]: "0x" + addressWord(overrides.destinationAt || destination)
       };
       result = values[sig];
       if (overrides.callResult && sig === overrides.callResult.selector) result = overrides.callResult.value;
@@ -132,7 +135,7 @@ test("fails closed when on-chain asset list contains a different scope", async (
   await assert.rejects(makeVerifier({ assetAt: destination }).verify(grant, owner, now), /asset order or token address/);
 });
 
-test("fails closed when on-chain asset count includes undeclared assets", async () => {
+test("fails closed when per-asset on-chain destination differs from owner approval", async () => {\n  await assert.rejects(makeVerifier({ assetDestination: owner }).verify(grant, owner, now), /destination for asset.*does not match/);\n});\n\ntest("fails closed when on-chain asset count includes undeclared assets", async () => {
   await assert.rejects(makeVerifier({ assetCount: 2 }).verify(grant, owner, now), /asset count does not match/);
 });
 
