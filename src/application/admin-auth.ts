@@ -75,6 +75,43 @@ const passwordHash=hashAdminPassword;
 export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promise<Response|null>{
  const url=new URL(request.url),now=new Date().toISOString();
 
+ if(url.pathname==="/api/admin/auth/diagnostics"&&request.method==="POST"){
+  if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
+  if(!env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN)return json({error:"Diagnostic authorization is not configured."},503);
+  const b=await read(request),token=typeof b?.bootstrapToken==="string"?b.bootstrapToken:"";
+  const supplied=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(token)));
+  const expectedToken=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN)));
+  if(!equal(supplied,expectedToken))return json({error:"Diagnostic authorization failed."},401);
+  try{
+   const row=await env.DB.prepare("SELECT password_hash FROM admin_accounts LIMIT 1").first<{password_hash:string}>();
+   const parts=row?.password_hash?.split("$")??[];
+   let storedHashStructureValid=false;
+   if(parts.length===4&&parts[0]==="pbkdf2-sha256-chain"&&parts[1]==="310000"){
+    const salt=b64(parts[2]),digest=b64(parts[3]);
+    storedHashStructureValid=salt.length===16&&digest.length===32;
+   }
+   const testPassword="Mainwell synthetic diagnostic password 2026";
+   const syntheticHash=await hashAdminPassword(testPassword);
+   const syntheticRoundTrip=await verifyAdminPassword(syntheticHash,testPassword);
+   const wrongPasswordRejected=!(await verifyAdminPassword(syntheticHash,testPassword+"-wrong"));
+   const fixedSalt=Uint8Array.from({length:16},(_,i)=>i+1);
+   const fixedInput=new TextEncoder().encode("Mainwell buffer compatibility test");
+   let direct:Uint8Array=fixedInput, copied:Uint8Array=fixedInput;
+   let bufferCompatibility=true;
+   for(let i=0;i<HASH_STAGE_ITERATIONS.length;i++){
+    const salt=stageSalt(fixedSalt,i+1),iterations=HASH_STAGE_ITERATIONS[i];
+    const directKey=await crypto.subtle.importKey("raw",direct,"PBKDF2",false,["deriveBits"]);
+    const copiedKey=await crypto.subtle.importKey("raw",webBuffer(copied),"PBKDF2",false,["deriveBits"]);
+    const directBits=new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt,iterations},directKey,256));
+    const copiedBits=new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:webBuffer(salt),iterations},copiedKey,256));
+    if(!equal(directBits,copiedBits))bufferCompatibility=false;
+    direct=directBits;copied=copiedBits;
+   }
+   return json({diagnostic:"mainwell-admin-password-v1",checks:{storedAccountPresent:!!row,storedHashStructureValid,syntheticRoundTrip,wrongPasswordRejected,bufferCompatibility},note:"No administrator password, hash, salt, digest, MFA data, or account values are returned. No database records are changed."});
+  }catch{
+   return json({diagnostic:"mainwell-admin-password-v1",checks:{diagnosticExecution:false},error:"A diagnostic check could not complete. No account data was changed."},503);
+  }
+ }
  if(url.pathname==="/api/admin/auth/bootstrap"&&request.method==="POST"){
   if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
   if(!env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN||!env.ADMIN_MFA_ENCRYPTION_KEY)return json({error:"First-admin bootstrap secrets are not configured."},503);
