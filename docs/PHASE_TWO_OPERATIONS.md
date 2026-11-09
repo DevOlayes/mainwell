@@ -49,6 +49,6 @@ Prepared transactions whose broadcast outcome cannot be established are not blin
 
 ## Production readiness
 
-A successful TypeScript build and Foundry test suite are required. The generated `deploy/worker.js` and `deploy/worker-build.json` must match the latest main-branch source before deployment. Production D1 migration `0012_execution_lifecycle.sql` is additive and has been applied; this alone does not deploy the new Worker code.
+A successful TypeScript build and Foundry test suite are required. The generated `deploy/worker.js` and `deploy/worker-build.json` must match the latest main-branch source before deployment. Production D1 migrations `0012_execution_lifecycle.sql` and `0013_transfer_postconditions.sql` are additive and have been applied. The receipt tracker also checks the executor event and recipient token-balance increase before marking a transfer confirmed. Database migrations alone do not deploy the new Worker code.
 
 No independent third-party security audit has been completed. Keep live execution disabled until that review and controlled end-to-end tests are complete.
