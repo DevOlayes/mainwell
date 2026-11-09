@@ -98,7 +98,7 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
       return rows.success?json({jobs:rows.results}):json({error:"Unable to load recovery jobs."},503);
     }
     if(request.method==="GET"&&url.pathname==="/api/admin/transactions"){
-      const rows=await env.DB.prepare("SELECT id,job_id,network,transaction_hash,status,asset_id,amount_raw,destination_address,estimated_fee_raw,actual_fee_raw,submitted_at,confirmed_at,created_at FROM recovery_transactions ORDER BY created_at DESC,id DESC LIMIT ?").bind(limit).all<Record<string,unknown>>();
+      const rows=await env.DB.prepare("SELECT id,job_id,network,transaction_hash,status,asset_id,amount_raw,destination_address,estimated_fee_raw,actual_fee_raw,submitted_at,confirmed_at,created_at,sender_address,nonce,gas_limit_raw,max_fee_per_gas_raw,max_priority_fee_per_gas_raw,block_number,block_hash,gas_used_raw,effective_gas_price_raw,failure_code,destination_balance_before_raw,destination_balance_after_raw,last_checked_at FROM recovery_transactions ORDER BY created_at DESC,id DESC LIMIT ?").bind(limit).all<Record<string,unknown>>();
       return rows.success?json({transactions:rows.results}):json({error:"Unable to load transaction records."},503);
     }
     if(request.method==="GET"&&url.pathname==="/api/admin/settings"){
