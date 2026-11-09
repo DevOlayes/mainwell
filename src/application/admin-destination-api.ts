@@ -125,6 +125,8 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
      !Number.isSafeInteger(expiresInSeconds)||expiresInSeconds<3600||expiresInSeconds>31536000){
     return response({error:"Provide a destination, positive asset cap in token base units, at least one execution mode, and expiry from 1 hour to 365 days."},400);
   }
+  const asset=await env.DB.prepare("SELECT id,token_address AS tokenAddress FROM recovery_supported_assets WHERE id=? AND network=? AND is_active=1").bind(assetId,network).first<{id:string;tokenAddress:string}>();
+  if(!asset)return response({error:"Register and verify this ERC-20 token in the supported asset registry first."},409);
   const dest=await env.DB.prepare("SELECT id,address FROM recovery_destinations WHERE id=? AND network=? AND locked=1 AND is_active=1").bind(destinationId,network).first<{id:string;address:string}>();
   if(!dest)return response({error:"Select an active locked destination on the same network."},409);
   const saved=await env.DB.prepare("INSERT INTO recovery_asset_destination_policies(network,asset_id,destination_id,updated_by,updated_at,max_amount_raw,automatic_priority_enabled,admin_initiated_enabled,expires_in_seconds) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(network,asset_id) DO UPDATE SET destination_id=excluded.destination_id,updated_by=excluded.updated_by,updated_at=excluded.updated_at,max_amount_raw=excluded.max_amount_raw,automatic_priority_enabled=excluded.automatic_priority_enabled,admin_initiated_enabled=excluded.admin_initiated_enabled,expires_in_seconds=excluded.expires_in_seconds").bind(network,assetId,destinationId,admin.adminId,now,maxAmountRaw,automaticPriorityEnabled?1:0,adminInitiatedEnabled?1:0,expiresInSeconds).run();
