@@ -15,6 +15,8 @@ export interface OwnerApiEnv extends Omit<MonitorEnv, "DB"> {
   MAINWELL_EXECUTOR_CODE_HASH_BSC?: string; MAINWELL_EXECUTOR_CODE_HASH_AVALANCHE?: string;
   MAINWELL_EXECUTOR_CODE_HASH_ARBITRUM?: string; MAINWELL_EXECUTOR_CODE_HASH_OPTIMISM?: string;
   MAINWELL_EXECUTOR_CODE_HASH_BASE?: string;
+  MAINWELL_AUTOMATION_OPERATOR?: string;
+  MAINWELL_ADMIN_OPERATOR?: string;
 }
 export interface OwnerSession { wallet: string; chainId: number }
 const NETWORK_CHAIN: Partial<Record<NetworkId, number>> = {
@@ -63,8 +65,10 @@ function grantVerifierConfig(env: OwnerApiEnv, network: NetworkId, chainId: numb
   const rpcName = GRANT_RPC[network], hashName = GRANT_HASH[network];
   const rpcUrl = rpcName ? env[rpcName] as string | undefined : undefined;
   const trustedExecutorCodeHash = hashName ? env[hashName] : undefined;
-  if (!rpcUrl || !trustedExecutorCodeHash) throw new Error("GRANT_VERIFIER_NOT_CONFIGURED");
-  return { rpcUrl, trustedExecutorCodeHash, expectedChainId: chainId };
+  const expectedAutomationOperator = env.MAINWELL_AUTOMATION_OPERATOR;
+  const expectedAdminOperator = env.MAINWELL_ADMIN_OPERATOR;
+  if (!rpcUrl || !trustedExecutorCodeHash || !expectedAutomationOperator || !expectedAdminOperator) throw new Error("GRANT_VERIFIER_NOT_CONFIGURED");
+  return { rpcUrl, trustedExecutorCodeHash, expectedChainId: chainId, expectedAutomationOperator, expectedAdminOperator };
 }
 function limitFrom(url: URL): number {
   const value = Number(url.searchParams.get("limit") ?? "50");
