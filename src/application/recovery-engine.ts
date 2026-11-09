@@ -40,6 +40,12 @@ function makeChain(network:Network,rpcUrl:string):Chain {
 function minBigInt(...values:bigint[]):bigint{return values.reduce((a,b)=>a<b?a:b);}
 function safeCode(error:unknown):string {
   const message=error instanceof Error?error.message:"";
+  const known=["grant_inactive","source_wallet_not_locked","asset_not_authorized","destination_not_locked","token_not_active",
+    "execution_mode_not_owner_authorized","operator_address_not_configured","operator_private_key_not_configured",
+    "operator_private_key_address_mismatch","onchain_asset_scope_mismatch","requested_amount_exceeds_live_authorization_or_balance",
+    "eip1559_fee_quote_unavailable","recovery_fee_cap_missing_or_exceeded","sponsor_gas_insufficient","executor_code_hash_mismatch",
+    "rpc_not_configured","unsupported_network"];
+  if(known.includes(message))return message;
   if(message.includes("GRANT_VERIFIER_NOT_CONFIGURED"))return "grant_verifier_not_configured";
   if(message.includes("RPC")||message.includes("fetch"))return "rpc_unavailable";
   if(message.includes("insufficient funds"))return "sponsor_gas_insufficient";
@@ -166,6 +172,8 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     const maxAllowed=env.MAINWELL_MAX_RECOVERY_FEE_WEI&&UINT.test(env.MAINWELL_MAX_RECOVERY_FEE_WEI)?BigInt(env.MAINWELL_MAX_RECOVERY_FEE_WEI):null;
     const reserve=env.MAINWELL_SPONSOR_RESERVE_WEI&&UINT.test(env.MAINWELL_SPONSOR_RESERVE_WEI)?BigInt(env.MAINWELL_SPONSOR_RESERVE_WEI):0n;
     const attemptBase={id:attemptId,job_id:job.id,attempt_number:job.attempt_count,phase:"simulated",simulation_block_number:Number(await publicClient.getBlockNumber()),gas_funding_source:"recovery-sponsor",estimated_fee_raw:estimatedFee.toString(),fee_cap_raw:maxAllowed?.toString()??null,transaction_hash:null,error_code:null,created_at:now,updated_at:now};
+    const sponsorBalance=await publicClient.getBalance({address:operatorAddress as Address});
+    const sponsorGasSufficient=sponsorBalance>=estimatedFee+reserve;
     if(env.MAINWELL_EXECUTION_ENABLED!=="true"){
       await env.DB.batch([
         env.DB.prepare("INSERT INTO recovery_execution_attempts(id,job_id,attempt_number,phase,simulation_block_number,gas_funding_source,estimated_fee_raw,fee_cap_raw,transaction_hash,error_code,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")
@@ -173,15 +181,14 @@ async function processOne(env:EngineEnv):Promise<boolean>{
         env.DB.prepare("UPDATE recovery_jobs SET status='ready',requested_amount_raw=?,destination_address=?,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE id=? AND lease_owner=?")
           .bind(amount.toString(),verifiedAsset.destinationAddress,now,job.id,leaseId)
       ]);
-      await audit(env,job.id,"recovery.preflight.simulated",{network,assetId:job.asset_id,amountRaw:amount.toString(),gasEstimate:gas.toString(),estimatedFeeRaw:estimatedFee.toString(),gasFundingSource:"recovery-sponsor",simulationSucceeded:true,executionEnabled:false},now);
+      await audit(env,job.id,"recovery.preflight.simulated",{network,assetId:job.asset_id,amountRaw:amount.toString(),gasEstimate:gas.toString(),estimatedFeeRaw:estimatedFee.toString(),gasFundingSource:"recovery-sponsor",sponsorBalanceRaw:sponsorBalance.toString(),sponsorGasSufficient,simulationSucceeded:true,executionEnabled:false},now);
       return true;
     }
     if(!privateKey)throw new Error("operator_private_key_not_configured");
     if(!maxAllowed||estimatedFee>maxAllowed)throw new Error("recovery_fee_cap_missing_or_exceeded");
     const account=privateKeyToAccount((privateKey.startsWith("0x")?privateKey:"0x"+privateKey) as Hex);
     if(account.address.toLowerCase()!==operatorAddress.toLowerCase())throw new Error("operator_private_key_address_mismatch");
-    const sponsorBalance=await publicClient.getBalance({address:account.address});
-    if(sponsorBalance<estimatedFee+reserve)throw new Error("sponsor_gas_insufficient");
+    if(!sponsorGasSufficient)throw new Error("sponsor_gas_insufficient");
     const nonce=await publicClient.getTransactionCount({address:account.address,blockTag:"pending"});
     const data=encodeFunctionData({abi:EXECUTOR_ABI,functionName,args:[token,amount]});
     const serialized=await account.signTransaction({chain,nonce,to:executor,data,value:0n,gas,maxFeePerGas,maxPriorityFeePerGas,type:"eip1559"});
@@ -247,9 +254,16 @@ async function trackTransactions(env:EngineEnv):Promise<number>{
       const latest=await client.getBlockNumber();
       const canonicalBlock=await client.getBlock({blockNumber:receipt.blockNumber});
       if(canonicalBlock.hash.toLowerCase()!==receipt.blockHash.toLowerCase())continue;
-      const finality=network==="ethereum"?12n:network==="polygon"?64n:network==="bsc"?15n:2n;
-      if(latest-receipt.blockNumber+1n<finality)continue;
-      const events=receipt.status==="success"?receipt.logs.flatMap(log=>{
+      if(network==="arbitrum"||network==="optimism"||network==="base"){
+        try{
+          const finalized=await client.getBlock({blockTag:"finalized"});
+          if(!finalized.number||finalized.number<receipt.blockNumber)continue;
+        }catch{continue;}
+      }else{
+        const finality=network==="ethereum"?12n:network==="polygon"?64n:network==="bsc"?15n:2n;
+        if(latest-receipt.blockNumber+1n<finality)continue;
+      }
+      const events=receipt.status==="success"?receipt.logs.filter(log=>log.address.toLowerCase()===String(row.executor_address).toLowerCase()).flatMap(log=>{
         try{return parseAbiEvent(log)}catch{return []}
       }):[];
       const event=events.find(e=>String(e.args.token).toLowerCase()===String(row.asset_id).split(":").pop()?.toLowerCase()&&String(e.args.destination).toLowerCase()===String(row.destination_address).toLowerCase()&&BigInt(e.args.amount as bigint)===BigInt(String(row.amount_raw))&&String(e.args.caller).toLowerCase()===String(row.sender_address).toLowerCase());
