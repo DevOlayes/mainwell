@@ -47,3 +47,13 @@ test("revocation confirmation cannot locate another owner's grant", async () => 
   }), env, session);
   assert.equal(response.status, 404);
 });
+
+test("per-asset revocation cannot access a grant owned by another wallet", async () => {
+  const env = { DB: { prepare() {
+    return { bind() { return this; }, async first() { return null; } };
+  } } };
+  const response = await handleOwnerApi(request("/api/owner/grants/grant-foreign/assets/token-1/revoke/confirm", {
+    transactionHash: "0x" + "d".repeat(64)
+  }), env, session);
+  assert.equal(response.status, 404);
+});
