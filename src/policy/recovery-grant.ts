@@ -37,9 +37,6 @@ export function validateRecoveryGrant(
       if (!EVM_ADDRESS.test(value)) throw new Error(`Grant ${label} is not a valid EVM address.`);
     }
     if (!HASH.test(grant.executorCodeHash)) throw new Error("A verified executor bytecode hash is required.");
-  } else if (!grant.chainId || !Number.isSafeInteger(grant.chainId)) {
-    // Non-EVM adapters may use a chain/network identifier represented as a positive integer.
-    throw new Error("A valid chain identifier is required.");
   }
 
   const approvedAt = Date.parse(grant.approvedAt);
@@ -80,5 +77,19 @@ export function validateRecoveryGrant(
     if (asset.tokenAddress && EVM_NETWORKS.has(grant.network) && !EVM_ADDRESS.test(asset.tokenAddress)) {
       throw new Error("Token contract address is invalid.");
     }
+  }
+}
+
+/** Ensures the requested execution path was explicitly included in the owner's grant. */
+export function assertGrantAllowsExecutionMode(
+  grant: RecoveryAuthorizationGrant,
+  mode: "automatic-priority" | "admin-initiated",
+  expectedWallet: string,
+  expectedNetwork: NetworkId,
+  now = Date.now()
+): void {
+  validateRecoveryGrant(grant, expectedWallet, expectedNetwork, now);
+  if (!grant.executionModes.includes(mode)) {
+    throw new Error(`Owner grant does not permit ${mode} execution.`);
   }
 }
