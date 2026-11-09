@@ -1,9 +1,10 @@
+import { refreshEvmWallet, type MonitorEnv } from "./evm-monitor";
 import type { NetworkId } from "../domain/types";
 
 interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]; meta?: { changes?: number } }
 interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
 interface D1Database { prepare(query: string): D1Statement }
-export interface OwnerApiEnv { DB: D1Database }
+export interface OwnerApiEnv extends Omit<MonitorEnv, "DB"> { DB: D1Database }
 export interface OwnerSession { wallet: string; chainId: number }
 const NETWORK_CHAIN: Partial<Record<NetworkId, number>> = {
   ethereum: 1, polygon: 137, bsc: 56, avalanche: 43114,
@@ -110,6 +111,28 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       VALUES ('owner', ?, 'wallet.monitoring.register', 'recovery_wallet', ?, ?, ?)
     `).bind(owner, wallet.id, JSON.stringify({ network, chainId }), now).run();
     return reply({ wallet, created: (result.meta?.changes ?? 0) === 1 }, 200);
+  }
+
+  const refreshMatch = path.match(/^\/api\/owner\/wallets\/([0-9a-fA-F-]{36})\/refresh$/);
+  if (refreshMatch && request.method === "POST") {
+    if (!validOrigin(request, url)) return reply({ error: "Origin check failed." }, 403);
+    const wallet = await env.DB.prepare(`
+      SELECT id, owner_address AS address, network, chain_id, status
+      FROM recovery_wallets WHERE id = ? AND owner_address = ? LIMIT 1
+    `).bind(refreshMatch[1], owner).first<{ id: string; address: string; network: string; chain_id: number | null; status: string }>();
+    if (!wallet || wallet.status === "revoked") return reply({ error: "Wallet not found or unavailable." }, 404);
+    if (wallet.status !== "monitoring") return reply({ error: "Monitoring is paused for this wallet." }, 409);
+    try {
+      const result = await refreshEvmWallet(env as OwnerApiEnv & MonitorEnv, wallet);
+      return reply({ refreshed: true, network: wallet.network, observedAt: result.observedAt,
+        assets: result.assets.map(a => ({ id: a.id, symbol: a.symbol, name: a.name, amount: a.amount,
+          decimals: a.decimals, contractAddress: a.contractAddress ?? null, estimatedValueUsd: a.estimatedValueUsd || null })),
+        permissions: result.permissions });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Monitoring failed.";
+      if (message === "RPC_NOT_CONFIGURED") return reply({ error: "This network's RPC endpoint is not configured on the server.", code: "rpc_not_configured" }, 503);
+      return reply({ error: "Wallet monitoring failed. Check the network RPC and configured asset list.", code: "monitoring_failed" }, 502);
+    }
   }
 
   const walletMatch = path.match(/^\/api\/owner\/wallets\/([0-9a-fA-F-]{36})$/);
