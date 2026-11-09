@@ -36,7 +36,7 @@ function makeVerifier(overrides = {}) {
     let result;
     if (req.method === "eth_chainId") result = overrides.chainId || "0x1";
     else if (req.method === "eth_getCode") result = overrides.code || code;
-    else if (req.method === "eth_getBlockByNumber") result = { timestamp: "0x" + Math.floor(Date.parse(grant.approvedAt) / 1000).toString(16) };
+    else if (req.method === "eth_getBlockByNumber") result = { timestamp: "0x" + Math.floor(Date.parse(overrides.blockTimestamp || grant.approvedAt) / 1000).toString(16) };
     else if (req.method === "eth_getTransactionByHash") result = overrides.tx === undefined ? {
       from: owner, to: executor, input: "0x" + selector("revoke()")
     } : overrides.tx;
@@ -143,10 +143,10 @@ test("fails closed when grant approval timestamp is not the deployment block tim
 
 test("verifies owner-signed executor revocation only after the chain reports revoked", async () => {
   const revokedSelector = selector("revoked()");
-  const result = await makeVerifier({ callResult: { selector: revokedSelector, value: "0x" + word(1) } })
+  const result = await makeVerifier({ blockTimestamp: new Date(now + 60_000).toISOString(), callResult: { selector: revokedSelector, value: "0x" + word(1) } })
     .verifyRevocation(grant, owner, "0x" + "d".repeat(64), now);
   assert.equal(result.transactionHash, "0x" + "d".repeat(64));
-  assert.equal(result.revokedAt, grant.approvedAt);
+  assert.equal(result.revokedAt, new Date(now + 60_000).toISOString());
 });
 
 test("rejects revocation transactions sent by a different wallet", async () => {
