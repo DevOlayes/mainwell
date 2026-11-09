@@ -12,9 +12,10 @@ function sameOrigin(req:Request,url:URL):boolean{return req.headers.get("origin"
 async function read(req:Request):Promise<Record<string,unknown>|null>{try{if(Number(req.headers.get("content-length")??"0")>4096)return null;const raw=await req.text();if(raw.length>4096)return null;const v:unknown=JSON.parse(raw);return v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:null;}catch{return null;}}
 function cookie(req:Request):string|null{for(const p of (req.headers.get("cookie")??"").split(";")){const [k,...v]=p.trim().split("=");if(k==="mw_admin_session")return v.join("=")||null;}return null;}
 function equal(a:Uint8Array,b:Uint8Array):boolean{if(a.length!==b.length)return false;let d=0;for(let i=0;i<a.length;i++)d|=a[i]^b[i];return d===0;}
+function webBuffer(bytes:Uint8Array):ArrayBuffer{const copy=new Uint8Array(bytes.length);copy.set(bytes);return copy.buffer;}
 async function pbkdf2Stage(passwordBytes:Uint8Array,salt:Uint8Array,iterations:number):Promise<Uint8Array>{
- const key=await crypto.subtle.importKey("raw",passwordBytes,"PBKDF2",false,["deriveBits"]);
- const bits=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt,iterations},key,256);
+ const key=await crypto.subtle.importKey("raw",webBuffer(passwordBytes),"PBKDF2",false,["deriveBits"]);
+ const bits=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:webBuffer(salt),iterations},key,256);
  return new Uint8Array(bits);
 }
 const HASH_STAGE_ITERATIONS=[100000,100000,100000,10000] as const;
