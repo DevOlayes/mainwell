@@ -45,10 +45,10 @@ The Worker cron runs every minute. It:
 3. Signs and broadcasts only when `MAINWELL_EXECUTION_ENABLED=true`, the matching operator secret exists, the key-derived address matches, the fee cap is configured, and sponsor balance covers the fee plus reserve.
 4. Tracks submitted transactions and waits for chain-specific finality before recording confirmation.
 
-Prepared transactions whose broadcast outcome cannot be established are not blindly retried. They require reconciliation first.
+Signing is serialized per operator and network to avoid nonce collisions. Prepared transactions whose broadcast outcome cannot be established are not blindly retried. They require reconciliation first.
 
 ## Production readiness
 
-A successful TypeScript build and Foundry test suite are required. The generated `deploy/worker.js` and `deploy/worker-build.json` must match the latest main-branch source before deployment. Production D1 migrations `0012_execution_lifecycle.sql` and `0013_transfer_postconditions.sql` are additive and have been applied. The receipt tracker also checks the executor event and recipient token-balance increase before marking a transfer confirmed. Database migrations alone do not deploy the new Worker code.
+A successful TypeScript build and Foundry test suite are required. The generated `deploy/worker.js` and `deploy/worker-build.json` must match the latest main-branch source before deployment. Production D1 migrations `0012_execution_lifecycle.sql`, `0013_transfer_postconditions.sql`, and `0014_execution_nonce_locks.sql` are additive and have been applied. The receipt tracker also checks the executor event and recipient token-balance increase before marking a transfer confirmed. Database migrations alone do not deploy the new Worker code.
 
 No independent third-party security audit has been completed. Keep live execution disabled until that review and controlled end-to-end tests are complete.
