@@ -6,6 +6,10 @@ import { keccak256Hex } from "./keccak";
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const HASH = /^0x[0-9a-fA-F]{64}$/;
 const UINT256_MAX = (1n << 256n) - 1n;
+const NETWORK_CHAIN_IDS: Partial<Record<NetworkId, number>> = {
+  ethereum: 1, polygon: 137, bsc: 56, avalanche: 43114,
+  arbitrum: 42161, optimism: 10, base: 8453
+};
 
 export interface EvmGrantVerifierConfig {
   /** Explicitly configured trusted RPC endpoint; never supplied by the browser. */
@@ -86,7 +90,11 @@ export class EvmGrantVerifier {
     const chainHex=await this.rpc("eth_chainId",[]);
     if (typeof chainHex!=="string" || !/^0x[0-9a-fA-F]+$/.test(chainHex)) throw new Error("Malformed chain ID response.");
     const chainId=Number(BigInt(chainHex));
-    if (!Number.isSafeInteger(chainId) || chainId!==this.config.expectedChainId || chainId!==grant.chainId) throw new Error("Connected RPC chain ID does not match the configured chain and grant.");
+    const expectedNetworkChainId=NETWORK_CHAIN_IDS[grant.network];
+    if (!Number.isSafeInteger(chainId) || expectedNetworkChainId===undefined ||
+        chainId!==expectedNetworkChainId || chainId!==this.config.expectedChainId || chainId!==grant.chainId) {
+      throw new Error("Connected RPC chain ID does not match the configured chain, network, and grant.");
+    }
 
     const code=await this.rpc("eth_getCode",[grant.executorAddress,"latest"]);
     if (typeof code!=="string" || !/^0x[0-9a-fA-F]+$/.test(code) || code==="0x") throw new Error("Executor contract is not deployed.");
