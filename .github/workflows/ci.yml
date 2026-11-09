@@ -20,3 +20,10 @@ jobs:
         with:
           version: stable
       - run: forge test -vvv
+      - run: forge build --build-info --extra-output abi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mainwell-scoped-recovery-executor-${{ github.sha }}
+          path: out/ScopedRecoveryExecutor.sol/ScopedRecoveryExecutor.json
+          if-no-files-found: error
+          retention-days: 14
