@@ -46,9 +46,16 @@ contract ScopedRecoveryExecutorTest {
         uint256[] memory caps = new uint256[](1);
         assets[0] = address(token);
         caps[0] = 500;
-        executor = new ScopedRecoveryExecutor(DESTINATION, uint64(block.timestamp + 1 days), assets, caps);
+        executor = new ScopedRecoveryExecutor(DESTINATION, uint64(block.timestamp + 1 days), assets, caps, true, true);
         token.mint(address(this), 1_000);
         token.approve(address(executor), 1_000);
+    }
+
+    function testExecutionModesAndExactAssetScopeAreImmutable() public {
+        require(executor.automaticPriorityEnabled(), "automatic mode missing");
+        require(executor.adminInitiatedEnabled(), "admin mode missing");
+        require(executor.authorizedAssetCount() == 1, "asset count");
+        require(executor.authorizedAssetAt(0) == address(token), "asset mismatch");
     }
 
     function testRecoveryCanOnlySendToImmutableDestination() public {
