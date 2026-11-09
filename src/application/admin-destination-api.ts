@@ -195,5 +195,69 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.asset_destination.clear','recovery_grant_asset',?,?,?)").bind(admin.adminId,overrideMatch[1]+":"+assetId,"{}",now).run();
   return response({cleared:true});
  }
+
+ // Queue an administrator-initiated recovery for an already verified, owner-authorized ERC-20 grant.
+ // Queueing never signs or submits a blockchain transaction.
+ if(path==="/api/admin/recovery-jobs"&&request.method==="POST"){
+  if(!originOk(request,url))return response({error:"Origin check failed."},403);
+  const b=await body(request);
+  const grantId=typeof b?.grantId==="string"?b.grantId:"";
+  const assetId=typeof b?.assetId==="string"?b.assetId:"";
+  const amountRaw=typeof b?.amountRaw==="string"?b.amountRaw:"";
+  const idempotencyKey=typeof b?.idempotencyKey==="string"?b.idempotencyKey:"";
+  if(!/^[A-Za-z0-9_-]{1,128}$/.test(grantId)||!assetId||assetId.length>160||
+     !/^[1-9][0-9]{0,77}$/.test(amountRaw)||BigInt(amountRaw)>((1n<<256n)-1n)||
+     !/^[A-Za-z0-9:_-]{16,128}$/.test(idempotencyKey)){
+   return response({error:"Provide a verified grant, asset, positive token amount in base units, and unique idempotency key."},400);
+  }
+  const prior=await env.DB.prepare("SELECT id,grant_id,asset_id,requested_amount_raw,status FROM recovery_jobs WHERE idempotency_key=? LIMIT 1").bind(idempotencyKey).first<Record<string,unknown>>();
+  if(prior){
+   if(prior.grant_id!==grantId||prior.asset_id!==assetId||prior.requested_amount_raw!==amountRaw)return response({error:"This idempotency key was already used for a different recovery request."},409);
+   return response({queued:true,duplicate:true,job:prior,executionEnabled:false},200);
+  }
+  const scope=await env.DB.prepare(`
+   SELECT g.network,g.owner_wallet,g.execution_modes_json,g.expires_at,g.revoked_at,g.verification_status,
+          a.token_address,a.amount_kind,a.max_amount_raw,a.revoked_at AS asset_revoked_at,a.destination_address,
+          w.id AS wallet_id,w.status AS wallet_status,w.admin_locked,
+          d.locked AS destination_locked,d.is_active AS destination_active
+   FROM recovery_grants g
+   INNER JOIN recovery_grant_assets a ON a.grant_id=g.grant_id AND a.asset_id=?
+   INNER JOIN recovery_wallets w ON lower(w.owner_address)=lower(g.owner_wallet) AND w.network=g.network
+   LEFT JOIN recovery_destinations d ON d.network=g.network AND lower(d.address)=lower(a.destination_address)
+   WHERE g.grant_id=? LIMIT 1
+  `).bind(assetId,grantId).first<Record<string,unknown>>();
+  if(!scope||scope.verification_status!=="verified"||scope.revoked_at||String(scope.expires_at)<=now)
+   return response({error:"An active, verified owner authorization for this asset was not found."},409);
+  if(Number(scope.admin_locked)!==1||scope.wallet_status!=="monitoring")
+   return response({error:"The exact source wallet must remain administrator-locked and actively monitored."},409);
+  if(scope.asset_revoked_at)return response({error:"The owner has revoked this asset authorization."},409);
+  if(!scope.token_address||!ADDRESS.test(String(scope.token_address)))
+   return response({error:"This Phase Two queue currently supports verified ERC-20 assets only."},409);
+  if(scope.amount_kind!=="capped"||typeof scope.max_amount_raw!=="string"||!/^[1-9][0-9]{0,77}$/.test(scope.max_amount_raw))
+   return response({error:"This asset does not have a supported explicit on-chain amount cap."},409);
+  if(BigInt(amountRaw)>BigInt(scope.max_amount_raw))
+   return response({error:"Requested amount exceeds the owner-approved asset cap."},409);
+  if(Number(scope.destination_locked)!==1||Number(scope.destination_active)!==1)
+   return response({error:"The owner-approved destination is no longer active and locked."},409);
+  let modes:unknown;
+  try{modes=JSON.parse(String(scope.execution_modes_json));}catch{return response({error:"Stored owner authorization modes are invalid."},503);}
+  if(!Array.isArray(modes)||!modes.includes("admin-initiated"))
+   return response({error:"The owner did not authorize administrator-initiated recovery for this grant."},403);
+  const id=crypto.randomUUID(),eventId=crypto.randomUUID();
+  const inserted=await env.DB.prepare("INSERT INTO recovery_jobs(id,grant_id,asset_id,execution_mode,status,priority_score,idempotency_key,requested_by,created_at,updated_at,requested_amount_raw,destination_address,next_attempt_at) VALUES(?,?,?,'admin-initiated','queued',0,?,?,?,?,?,?,?) ON CONFLICT(idempotency_key) DO NOTHING")
+   .bind(id,grantId,assetId,idempotencyKey,"admin:"+admin.adminId,now,now,amountRaw,String(scope.destination_address),now).run();
+  if(!inserted.success)return response({error:"Unable to queue the recovery request."},503);
+  if((inserted.meta?.changes??0)!==1){
+   const raced=await env.DB.prepare("SELECT id,grant_id,asset_id,requested_amount_raw,status FROM recovery_jobs WHERE idempotency_key=? LIMIT 1").bind(idempotencyKey).first<Record<string,unknown>>();
+   if(!raced||raced.grant_id!==grantId||raced.asset_id!==assetId||raced.requested_amount_raw!==amountRaw)
+    return response({error:"The idempotency key conflicts with another recovery request."},409);
+   return response({queued:true,duplicate:true,job:raced,executionEnabled:false},200);
+  }
+  await env.DB.batch([
+   env.DB.prepare("INSERT INTO recovery_job_events(id,job_id,event_type,actor_type,actor_id,details_json,created_at) VALUES(?,?,'admin_recovery.queued','admin',?,?,?)").bind(eventId,id,admin.adminId,JSON.stringify({grantId,assetId,amountRaw,network:scope.network}),now),
+   env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.job.queued','recovery_job',?,?,?)").bind(admin.adminId,id,JSON.stringify({grantId,assetId,amountRaw,network:scope.network,executionEnabled:false}),now)
+  ]);
+  return response({queued:true,executionEnabled:false,job:{id,grantId,assetId,network:scope.network,executionMode:"admin-initiated",status:"queued",amountRaw,destinationAddress:scope.destination_address,createdAt:now}});
+ }
  return null;
 }
