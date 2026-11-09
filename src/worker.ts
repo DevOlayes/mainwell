@@ -1,6 +1,7 @@
 import { recoverPersonalSignAddress } from "./adapters/evm-signature";
+import { handleOwnerApi } from "./application/owner-api";
 interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]; meta?: { changes?: number } }
-interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
+interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
 interface D1Database { prepare(query: string): D1Statement }
 interface Env { DB: D1Database }
 const SESSION_SECONDS = 604800, CHALLENGE_SECONDS = 300;
@@ -57,7 +58,7 @@ export default { async fetch(request: Request,env: Env): Promise<Response> {
     return json({authenticated:true,wallet:c.wallet_address,chainId,expiresAt:expires},200,{"set-cookie":"mw_owner_session="+token+"; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age="+SESSION_SECONDS});
   }
   if(url.pathname==="/api/auth/me"&&request.method==="GET"){const s=await session(request,env);return s?json({authenticated:true,...s}):json({authenticated:false},401);}
-  if(url.pathname==="/api/auth/logout"&&request.method==="POST"){
+  if(url.pathname.startsWith("/api/owner/")){\n    const authenticated = await session(request,env);\n    if(!authenticated)return json({error:"Authentication required."},401);\n    const response = await handleOwnerApi(request,env,authenticated);\n    if(response)return response;\n  }\n  if(url.pathname==="/api/auth/logout"&&request.method==="POST"){
     if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
     const token=cookie(request);if(token&&/^[0-9a-f]{64}$/.test(token))await env.DB.prepare("UPDATE wallet_sessions SET revoked_at=? WHERE token_hash=? AND revoked_at IS NULL").bind(new Date().toISOString(),await hash(token)).run();
     return json({authenticated:false},200,{"set-cookie":"mw_owner_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0"});
