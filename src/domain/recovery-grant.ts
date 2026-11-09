@@ -31,6 +31,8 @@ export interface RecoveryAuthorizationGrant {
   destinationAddress: string;
   assets: RecoveryGrantAsset[];
   executionModes: RecoveryExecutionMode[];
+  /** Immutable service identities enforced by the executor's separate execution entry points. */
+  executionOperators: { automation: string; administrator: string };
   approvedAt: string;
   expiresAt: string;
   /** Transaction hash or digest of the owner-approved authorization. */
