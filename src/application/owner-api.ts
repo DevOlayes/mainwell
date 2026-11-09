@@ -65,8 +65,8 @@ async function readGrantBody(request: Request): Promise<Record<string, unknown> 
 function grantVerifierConfig(env: OwnerApiEnv, network: NetworkId, chainId: number) {
   const rpcName = GRANT_RPC[network], hashName = GRANT_HASH[network];
   const rpcUrl = rpcName ? env[rpcName] as string | undefined : undefined;
-  const configuredExecutorCodeHash = hashName ? env[hashName] : undefined;
-  if (configuredExecutorCodeHash && configuredExecutorCodeHash.toLowerCase() !== EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase()) return null;
+  const configuredExecutorCodeHash = hashName ? env[hashName] as string | undefined : undefined;
+  if (configuredExecutorCodeHash && configuredExecutorCodeHash.toLowerCase() !== EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase()) throw new Error("EXECUTOR_CODE_HASH_MISMATCH");
   const trustedExecutorCodeHash = EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH;
   const expectedAutomationOperator = env.MAINWELL_AUTOMATION_OPERATOR;
   const expectedAdminOperator = env.MAINWELL_ADMIN_OPERATOR;
@@ -143,7 +143,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     const readiness = {
       sourceWalletLocked: Number(wallet.admin_locked) === 1 && wallet.status !== "revoked",
       rpcConfigured: Boolean(rpcName && env[rpcName]),
-      executorCodeHashConfigured: true,
+      executorCodeHashConfigured: !((hashName ? env[hashName] as string | undefined : undefined)) || (hashName ? (env[hashName] as string | undefined)?.toLowerCase() : undefined) === EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase(),
       automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
       adminOperatorConfigured: Boolean(env.MAINWELL_ADMIN_OPERATOR),
       executorArtifactAvailable: true,
