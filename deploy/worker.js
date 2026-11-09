@@ -158,7 +158,7 @@ function recoverPersonalSignAddress(message, signature) {
   const payload = new Uint8Array(prefix.length + messageBytes.length);
   payload.set(prefix);
   payload.set(messageBytes, prefix.length);
-  const digest = BigInt(keccak256Hex("0x" + bytesToHex(payload)));
+  const digest2 = BigInt(keccak256Hex("0x" + bytesToHex(payload)));
   const x = r;
   if (x >= P) throw new Error("Wallet signature recovery point is invalid.");
   const alpha = mod(x * x * x + 7n, P);
@@ -166,7 +166,7 @@ function recoverPersonalSignAddress(message, signature) {
   if (mod(y * y, P) !== alpha) throw new Error("Wallet signature recovery point is invalid.");
   if (Number(y & 1n) !== recovery) y = P - y;
   const R = { x, y };
-  const q = multiply(add(multiply(R, s), multiply(G, -digest)), inv(r, N));
+  const q = multiply(add(multiply(R, s), multiply(G, -digest2)), inv(r, N));
   if (!q) throw new Error("Wallet signature could not be recovered.");
   const publicKey = "0x" + q.x.toString(16).padStart(64, "0") + q.y.toString(16).padStart(64, "0");
   const addressHash = keccak256Hex(publicKey);
@@ -551,7 +551,7 @@ __name(validateRecoveryGrant, "validateRecoveryGrant");
 var EXECUTOR_CREATION_BYTECODE = "0x60c0604052600160035534801562000015575f80fd5b506040516200100e3803806200100e8339810160408190526200003891620004fe565b42886001600160401b031611620000615760405162d36c8560e81b815260040160405180910390fd5b831580156200006e575082155b156200008d5760405163c522a9e160e01b815260040160405180910390fd5b838015620000a257506001600160a01b038216155b80620000be5750828015620000be57506001600160a01b038116155b15620000dd5760405163c522a9e160e01b815260040160405180910390fd5b86511580620000ee57508451875114155b80620000fc57508551875114155b156200011b5760405163c522a9e160e01b815260040160405180910390fd5b5f8054336001600160a01b03199091161781556001600160a01b03838116608052821660a05260018054600160a01b61ff0160e01b031916600160a01b6001600160401b038c160260ff60e81b191617600160e81b871515021760ff60f01b1916600160f01b861515021790555b87518110156200031e575f888281518110620001a957620001a9620005e6565b602002602001015190505f888381518110620001c957620001c9620005e6565b602002602001015190505f888481518110620001e957620001e9620005e6565b602002602001015190505f6001600160a01b0316836001600160a01b031614806200021c57506001600160a01b0383163b155b806200022f57506001600160a01b038216155b8062000239575080155b15620002585760405163c522a9e160e01b815260040160405180910390fd5b6001600160a01b0383165f90815260046020526040902054156200029e5760405163437a40b160e01b81526001600160a01b038416600482015260240160405180910390fd5b6001600160a01b039283165f81815260046020908152604080832094909455600690529182208054939094166001600160a01b0319938416179093556002805460018181018355919092527f405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace909101805490921690921790550162000189565b50855f81518110620003345762000334620005e6565b602002602001015160015f6101000a8154816001600160a01b0302191690836001600160a01b031602179055505050505050505050620005fa565b80516001600160401b038116811462000386575f80fd5b919050565b634e487b7160e01b5f52604160045260245ffd5b604051601f8201601f191681016001600160401b0381118282101715620003ca57620003ca6200038b565b604052919050565b5f6001600160401b03821115620003ed57620003ed6200038b565b5060051b60200190565b80516001600160a01b038116811462000386575f80fd5b5f82601f8301126200041e575f80fd5b81516020620004376200043183620003d2565b6200039f565b8083825260208201915060208460051b87010193508684111562000459575f80fd5b602086015b8481101562000480576200047281620003f7565b83529183019183016200045e565b509695505050505050565b5f82601f8301126200049b575f80fd5b81516020620004ae6200043183620003d2565b8083825260208201915060208460051b870101935086841115620004d0575f80fd5b602086015b84811015620004805780518352918301918301620004d5565b8051801515811462000386575f80fd5b5f805f805f805f80610100898b03121562000517575f80fd5b62000522896200036f565b60208a01519098506001600160401b03808211156200053f575f80fd5b6200054d8c838d016200040e565b985060408b015191508082111562000563575f80fd5b620005718c838d016200040e565b975060608b015191508082111562000587575f80fd5b50620005968b828c016200048b565b955050620005a760808a01620004ee565b9350620005b760a08a01620004ee565b9250620005c760c08a01620003f7565b9150620005d760e08a01620003f7565b90509295985092959890939650565b634e487b7160e01b5f52603260045260245ffd5b60805160a0516109e46200062a5f395f81816102e801526104f701525f81816101ac015261044901526109e45ff3fe608060405234801561000f575f80fd5b5060043610610111575f3560e01c8063b6549f751161009e578063d0e043de1161006e578063d0e043de14610295578063e5b07f0b146102b4578063e728c0ef146102c8578063e7f36c63146102db578063e900a491146102e3575f80fd5b8063b6549f7514610254578063bd3def631461025c578063c23ab1b91461026f578063c6d51a8414610282575f80fd5b8063655fb24a116100e4578063655fb24a146101a757806385a708a8146101ce5780638622a689146101fb5780638da5cb5b1461022f578063b269681d14610241575f80fd5b80630b81c9a7146101155780630f3bdd5f1461013e57806313bb4f961461015357806363d256ce14610193575b5f80fd5b60015461012990600160f01b900460ff1681565b60405190151581526020015b60405180910390f35b61015161014c3660046108b0565b61030a565b005b61017b6101613660046108b0565b60066020525f90815260409020546001600160a01b031681565b6040516001600160a01b039091168152602001610135565b60015461012990600160e01b900460ff1681565b61017b7f000000000000000000000000000000000000000000000000000000000000000081565b6101ed6101dc3660046108b0565b60056020525f908152604090205481565b604051908152602001610135565b60015461021690600160a01b900467ffffffffffffffff1681565b60405167ffffffffffffffff9091168152602001610135565b5f5461017b906001600160a01b031681565b60015461017b906001600160a01b031681565b6101516103ca565b61015161026a3660046108d0565b61043e565b61015161027d3660046108d0565b6104ec565b61017b6102903660046108f8565b610587565b6101ed6102a33660046108b0565b60046020525f908152604090205481565b60015461012990600160e81b900460ff1681565b61017b6102d63660046108f8565b6105ce565b6002546101ed565b61017b7f000000000000000000000000000000000000000000000000000000000000000081565b5f546001600160a01b0316331461033457604051630b2db9b760e31b815260040160405180910390fd5b6001600160a01b0381165f90815260046020526040812054900361037b57604051630a23366560e41b81526001600160a01b03821660048201526024015b60405180910390fd5b6001600160a01b0381165f81815260056020908152604080832054600490925280832091909155517fba5ecd908aab4d79cf7e9fc9d22735958a8f4befc4ac4c9f1fb7f2297797dbbd9190a250565b5f546001600160a01b031633146103f457604051630b2db9b760e31b815260040160405180910390fd5b6001805460ff60e01b1916600160e01b1790555f80546040516001600160a01b03909116917fbadc5b2ca6241beb42d4f1c0481f982a91e7aceaca195b8825f6187ad50018e591a2565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146104875760405163031142d360e11b815260040160405180910390fd5b6003546001146104aa576040516306fda65d60e31b815260040160405180910390fd5b6002600355600154600160e81b900460ff166104d95760405163031142d360e11b815260040160405180910390fd5b6104e382826105fc565b50506001600355565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146105355760405163143ee67560e21b815260040160405180910390fd5b600354600114610558576040516306fda65d60e31b815260040160405180910390fd5b6002600355600154600160f01b900460ff166104d95760405163143ee67560e21b815260040160405180910390fd5b5f60065f6002848154811061059e5761059e61090f565b5f9182526020808320909101546001600160a01b0390811684529083019390935260409091019020541692915050565b5f600282815481106105e2576105e261090f565b5f918252602090912001546001600160a01b031692915050565b600154600160e01b900460ff16156106275760405163a0c81e5f60e01b815260040160405180910390fd5b600154600160a01b900467ffffffffffffffff16421061065a5760405163075ff6cf60e11b815260040160405180910390fd5b6001600160a01b0382165f908152600460205260408120549081900361069e57604051630a23366560e41b81526001600160a01b0384166004820152602401610372565b6001600160a01b0383165f90815260056020526040812054906106c18284610937565b90508315806106cf57508084115b156106f757604051631beda7db60e31b81526004810185905260248101829052604401610372565b6001600160a01b038086165f90815260066020526040902054168061072f5760405163c522a9e160e01b815260040160405180910390fd5b6107398584610950565b6001600160a01b038781165f81815260056020908152604080832095909555815485519085166024820152938616604485015260648085018b90528551808603909101815260849094018552830180516001600160e01b03166323b872dd60e01b179052925183926107aa91610963565b5f604051808303815f865af19150503d805f81146107e3576040519150601f19603f3d011682016040523d82523d5f602084013e6107e8565b606091505b50915091508115806108165750805115801590610816575080806020019051810190610814919061098f565b155b15610834576040516312171d8360e31b815260040160405180910390fd5b336001600160a01b0316836001600160a01b0316896001600160a01b03167ffe28fceecb7dd637d5601fefa0516fc4c3b757be702d47e296d4921d89d56c1c8a60405161088391815260200190565b60405180910390a45050505050505050565b80356001600160a01b03811681146108ab575f80fd5b919050565b5f602082840312156108c0575f80fd5b6108c982610895565b9392505050565b5f80604083850312156108e1575f80fd5b6108ea83610895565b946020939093013593505050565b5f60208284031215610908575f80fd5b5035919050565b634e487b7160e01b5f52603260045260245ffd5b634e487b7160e01b5f52601160045260245ffd5b8181038181111561094a5761094a610923565b92915050565b8082018082111561094a5761094a610923565b5f82515f5b818110156109825760208186018101518583015201610968565b505f920191825250919050565b5f6020828403121561099f575f80fd5b815180151581146108c9575f80fdfea2646970667358221220102a26af16b60f4b576ab29b4e036d6e6ed52b2f75fecb9e06bd43e657d45e4d64736f6c63430008180033";
 var EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH = "0xa7f073a21c09677f888baa49343d517f52d13383d84010a86ffff9a0d1a8117f";
 var EXECUTOR_IMMUTABLE_RANGES = [{ "start": 428, "length": 32 }, { "start": 744, "length": 32 }, { "start": 1097, "length": 32 }, { "start": 1271, "length": 32 }];
-var EXECUTOR_BUILD_SOURCE_COMMIT = "57ab9d757ffff77c4e2d89f5dd4dbd827cdc6a17";
+var EXECUTOR_BUILD_SOURCE_COMMIT = "713c64111c7b1fbe6264e68177e9b06fddccf706";
 
 // src/adapters/evm-grant-verifier.ts
 var ADDRESS2 = /^0x[0-9a-fA-F]{40}$/;
@@ -1923,8 +1923,8 @@ async function handleAdminAuthApi(request, env) {
       const parts = row?.password_hash?.split("$") ?? [];
       let storedHashStructureValid = false;
       if (parts.length === 4 && parts[0] === "pbkdf2-sha256-chain" && parts[1] === "310000") {
-        const salt = b64(parts[2]), digest = b64(parts[3]);
-        storedHashStructureValid = salt.length === 16 && digest.length === 32;
+        const salt = b64(parts[2]), digest2 = b64(parts[3]);
+        storedHashStructureValid = salt.length === 16 && digest2.length === 32;
       }
       const testPassword = "Mainwell synthetic diagnostic password 2026";
       const syntheticHash = await hashAdminPassword(testPassword);
@@ -2035,6 +2035,86 @@ async function handleAdminAuthApi(request, env) {
   return null;
 }
 __name(handleAdminAuthApi, "handleAdminAuthApi");
+
+// src/application/admin-recovery.ts
+function json2(data, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" } });
+}
+__name(json2, "json");
+function page(html2, status = 200) {
+  return new Response(html2, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store, max-age=0", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" } });
+}
+__name(page, "page");
+function equal2(a, b) {
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i];
+  return d === 0;
+}
+__name(equal2, "equal");
+async function digest(s) {
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
+}
+__name(digest, "digest");
+async function read2(req) {
+  try {
+    if (Number(req.headers.get("content-length") ?? "0") > 4096) return null;
+    const raw = await req.text();
+    if (raw.length > 4096) return null;
+    const v = JSON.parse(raw);
+    return v && typeof v === "object" && !Array.isArray(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+__name(read2, "read");
+function sameOrigin2(req, url) {
+  return req.headers.get("origin") === url.origin;
+}
+__name(sameOrigin2, "sameOrigin");
+var html = /* @__PURE__ */ __name((message = "") => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mainwell one-time admin recovery</title><style>body{font:16px system-ui;background:#101827;color:#eef2f7;margin:0;padding:24px}main{max-width:460px;margin:8vh auto;background:#1b2638;padding:26px;border-radius:16px}label{display:block;margin:16px 0 6px}input{box-sizing:border-box;width:100%;padding:13px;border-radius:8px;border:1px solid #506078;background:#101827;color:white}button{width:100%;padding:14px;margin-top:22px;background:#d6e5ff;color:#101827;border:0;border-radius:8px;font-weight:700}small{color:#b7c3d4}#status{white-space:pre-wrap;margin-top:16px}</style><main><h1>One-time administrator recovery</h1><p>This recovery can be completed once. Your existing authenticator enrollment will remain enabled. After a successful change, this page is permanently locked until a separately authorized reactivation.</p><form id="recovery"><label>Bootstrap recovery token</label><input id="token" type="password" autocomplete="off" required><label>Current six-digit authenticator code</label><input id="otp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required><label>New administrator password</label><input id="password" type="password" minlength="14" maxlength="1024" autocomplete="new-password" required><label>Confirm new password</label><input id="confirm" type="password" minlength="14" maxlength="1024" autocomplete="new-password" required><button id="submit" type="submit">Use one-time recovery</button></form><div id="status" role="status">${message}</div></main><script>const f=document.getElementById('recovery'),s=document.getElementById('status'),b=document.getElementById('submit');f.addEventListener('submit',async e=>{e.preventDefault();const p=document.getElementById('password').value,c=document.getElementById('confirm').value;if(p!==c){s.textContent='The passwords do not match.';return;}b.disabled=true;s.textContent='Verifying recovery authorization\u2026';try{const r=await fetch('/api/admin/auth/recover-once',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({bootstrapToken:document.getElementById('token').value,otp:document.getElementById('otp').value,newPassword:p})});const d=await r.json();if(r.ok){f.remove();s.textContent='Recovery completed. The one-time route is now permanently locked. Sign in using your new password and the same authenticator.';}else{s.textContent=d.error||'Recovery could not be completed.';b.disabled=false;}}catch{s.textContent='Network error. Check your connection and try again.';b.disabled=false;}document.getElementById('token').value='';document.getElementById('password').value='';document.getElementById('confirm').value='';});<\/script></html>`, "html");
+async function adminRecoveryPageResponse(env) {
+  try {
+    const state = await env.DB.prepare("SELECT consumed_at FROM admin_recovery_state WHERE id=1").first();
+    if (!state) return page("<h1>Recovery unavailable</h1><p>Recovery state is not initialized. Contact the system operator.</p>", 503);
+    if (state.consumed_at) return page("<h1>Recovery permanently locked</h1><p>The one-time recovery has already been consumed. This route is unavailable.</p>", 410);
+    return page(html());
+  } catch {
+    return page("<h1>Recovery unavailable</h1><p>Recovery state could not be checked. Try again later.</p>", 503);
+  }
+}
+__name(adminRecoveryPageResponse, "adminRecoveryPageResponse");
+async function handleAdminRecoveryApi(request, env) {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/admin/auth/recover-once" || request.method !== "POST") return null;
+  if (!sameOrigin2(request, url)) return json2({ error: "Origin check failed." }, 403);
+  const state = await env.DB.prepare("SELECT consumed_at FROM admin_recovery_state WHERE id=1").first();
+  if (!state) return json2({ error: "Recovery is not initialized." }, 503);
+  if (state.consumed_at) return json2({ error: "One-time recovery has already been used and is locked." }, 410);
+  if (!env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN || !env.ADMIN_MFA_ENCRYPTION_KEY) return json2({ error: "Recovery authorization is not configured." }, 503);
+  const b = await read2(request), token = typeof b?.bootstrapToken === "string" ? b.bootstrapToken : "", otp = typeof b?.otp === "string" ? b.otp : "", password = typeof b?.newPassword === "string" ? b.newPassword : "";
+  if (password.length < 14 || password.length > 1024 || !/^\d{6}$/.test(otp)) return json2({ error: "Enter a new password of at least 14 characters and a valid six-digit authenticator code." }, 400);
+  if (!equal2(await digest(token), await digest(env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN))) return json2({ error: "Recovery authorization failed." }, 401);
+  const account = await env.DB.prepare("SELECT id,mfa_enabled,mfa_secret_ciphertext,status FROM admin_accounts LIMIT 1").first();
+  if (!account || account.status !== "active" || account.mfa_enabled !== 1 || !account.mfa_secret_ciphertext) return json2({ error: "The existing administrator MFA enrollment is unavailable; no changes were made." }, 409);
+  let valid = false;
+  try {
+    valid = await verifyTotp(await decryptTotpSecret(account.mfa_secret_ciphertext, env.ADMIN_MFA_ENCRYPTION_KEY), otp);
+  } catch {
+    return json2({ error: "The existing MFA configuration could not be verified; no changes were made." }, 503);
+  }
+  if (!valid) return json2({ error: "The authenticator code is invalid. No changes were made." }, 401);
+  const now = (/* @__PURE__ */ new Date()).toISOString(), newHash = await hashAdminPassword(password), db = env.DB;
+  const results = await db.batch([
+    db.prepare("UPDATE admin_accounts SET password_hash=?,updated_at=? WHERE id=? AND status='active' AND mfa_enabled=1 AND EXISTS (SELECT 1 FROM admin_recovery_state WHERE id=1 AND consumed_at IS NULL)").bind(newHash, now, account.id),
+    db.prepare("UPDATE admin_recovery_state SET consumed_at=?,consumed_by=? WHERE id=1 AND consumed_at IS NULL").bind(now, account.id),
+    db.prepare("DELETE FROM admin_sessions WHERE EXISTS (SELECT 1 FROM admin_recovery_state WHERE id=1 AND consumed_at=? AND consumed_by=?)").bind(now, account.id),
+    db.prepare(`INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) SELECT 'admin',?,'admin.password.recovered.once','admin_account',?,'{"mfa_preserved":true}',? WHERE EXISTS (SELECT 1 FROM admin_recovery_state WHERE id=1 AND consumed_at=? AND consumed_by=?)`).bind(account.id, account.id, now, now, account.id)
+  ]);
+  if (results.length < 2 || (results[0].meta?.changes ?? 0) !== 1 || (results[1].meta?.changes ?? 0) !== 1) return json2({ error: "Recovery was already consumed or the account changed. No recovery was completed." }, 409);
+  return json2({ recovered: true, mfaPreserved: true, recoveryPermanentlyLocked: true, loginRequired: true });
+}
+__name(handleAdminRecoveryApi, "handleAdminRecoveryApi");
 
 // src/application/admin-dashboard.ts
 var HTML = `<!doctype html>
@@ -2258,10 +2338,10 @@ var SESSION_SECONDS2 = 604800;
 var CHALLENGE_SECONDS = 300;
 var CHAINS = /* @__PURE__ */ new Set([1, 137, 56, 43114, 42161, 10, 8453]);
 var ADDRESS5 = /^0x[0-9a-fA-F]{40}$/;
-function json2(data, status = 200, extra = {}) {
+function json3(data, status = 200, extra = {}) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", ...extra } });
 }
-__name(json2, "json");
+__name(json3, "json");
 function hex2(bytes) {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -2284,10 +2364,10 @@ function cookie2(req, name = "mw_owner_session") {
   return null;
 }
 __name(cookie2, "cookie");
-function sameOrigin2(req, url) {
+function sameOrigin3(req, url) {
   return req.headers.get("origin") === url.origin;
 }
-__name(sameOrigin2, "sameOrigin");
+__name(sameOrigin3, "sameOrigin");
 async function body2(req) {
   if (Number(req.headers.get("content-length") ?? "0") > 4096) return null;
   try {
@@ -2313,52 +2393,57 @@ var worker_default = { async fetch(request, env) {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/admin") return adminDashboardResponse();
   if (request.method === "GET" && url.pathname === "/admin/diagnostics") return adminDiagnosticsResponse();
+  if (request.method === "GET" && url.pathname === "/admin/recover-once") return adminRecoveryPageResponse(env);
   if (request.method === "GET" && url.pathname === "/admin/operators") return operatorWalletSetupResponse();
   if (request.method === "GET" && url.pathname === "/") return ownerDashboardResponse();
   if (request.method === "GET" && url.pathname === "/authorize") return ownerAuthorizationResponse();
-  if (request.method === "GET" && url.pathname === "/health") return json2({ service: "mainwell", status: "ok", database: "configured", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+  if (request.method === "GET" && url.pathname === "/health") return json3({ service: "mainwell", status: "ok", database: "configured", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   if (request.method === "GET" && url.pathname === "/api/health/db") try {
     const db = await env.DB.prepare("SELECT 1 AS ok").first();
     const schema = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='recovery_grants'").first();
     const auth = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='wallet_sessions'").first();
-    return json2({ service: "mainwell", database: db?.ok === 1 ? "connected" : "unavailable", schema: schema ? "initialized" : "pending", walletAuthSchema: auth ? "initialized" : "pending", timestamp: (/* @__PURE__ */ new Date()).toISOString() }, db?.ok === 1 ? 200 : 503);
+    return json3({ service: "mainwell", database: db?.ok === 1 ? "connected" : "unavailable", schema: schema ? "initialized" : "pending", walletAuthSchema: auth ? "initialized" : "pending", timestamp: (/* @__PURE__ */ new Date()).toISOString() }, db?.ok === 1 ? 200 : 503);
   } catch {
-    return json2({ service: "mainwell", database: "unavailable", error: "Database health check failed" }, 503);
+    return json3({ service: "mainwell", database: "unavailable", error: "Database health check failed" }, 503);
   }
   if (url.pathname === "/api/auth/challenge" && request.method === "POST") {
-    if (!sameOrigin2(request, url)) return json2({ error: "Origin check failed." }, 403);
+    if (!sameOrigin3(request, url)) return json3({ error: "Origin check failed." }, 403);
     const b = await body2(request), address = typeof b?.address === "string" ? b.address : "", chainId = Number(b?.chainId);
-    if (!ADDRESS5.test(address) || !Number.isSafeInteger(chainId) || !CHAINS.has(chainId)) return json2({ error: "Valid EVM address and supported chain ID required." }, 400);
+    if (!ADDRESS5.test(address) || !Number.isSafeInteger(chainId) || !CHAINS.has(chainId)) return json3({ error: "Valid EVM address and supported chain ID required." }, 400);
     const now = Date.now(), issued = new Date(now).toISOString(), expires = new Date(now + CHALLENGE_SECONDS * 1e3).toISOString(), nonce = randomHex2(16);
     const message = [url.hostname + " wants you to sign in with your Ethereum account:", address, "", "Sign in to Mainwell. This request will not trigger a blockchain transaction or grant token permissions.", "", "URI: " + url.origin, "Version: 1", "Chain ID: " + chainId, "Nonce: " + nonce, "Issued At: " + issued, "Expiration Time: " + expires].join("\n");
     await env.DB.prepare("INSERT INTO wallet_auth_challenges(nonce,wallet_address,chain_id,message,origin,expires_at,created_at) VALUES(?,?,?,?,?,?,?)").bind(nonce, address.toLowerCase(), chainId, message, url.origin, expires, issued).run();
     await env.DB.prepare("DELETE FROM wallet_auth_challenges WHERE expires_at<=? OR consumed_at IS NOT NULL").bind(issued).run();
-    return json2({ nonce, message, expiresAt: expires });
+    return json3({ nonce, message, expiresAt: expires });
   }
   if (url.pathname === "/api/auth/verify" && request.method === "POST") {
-    if (!sameOrigin2(request, url)) return json2({ error: "Origin check failed." }, 403);
+    if (!sameOrigin3(request, url)) return json3({ error: "Origin check failed." }, 403);
     const b = await body2(request), address = typeof b?.address === "string" ? b.address : "", nonce = typeof b?.nonce === "string" ? b.nonce : "", signature = typeof b?.signature === "string" ? b.signature : "", chainId = Number(b?.chainId);
-    if (!ADDRESS5.test(address) || !/^[0-9a-f]{32}$/.test(nonce) || !Number.isSafeInteger(chainId) || !CHAINS.has(chainId) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return json2({ error: "Malformed wallet authentication request." }, 400);
+    if (!ADDRESS5.test(address) || !/^[0-9a-f]{32}$/.test(nonce) || !Number.isSafeInteger(chainId) || !CHAINS.has(chainId) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return json3({ error: "Malformed wallet authentication request." }, 400);
     const c = await env.DB.prepare("SELECT message,wallet_address,chain_id,origin,expires_at,consumed_at FROM wallet_auth_challenges WHERE nonce=?").bind(nonce).first();
     const now = (/* @__PURE__ */ new Date()).toISOString();
-    if (!c || c.consumed_at || c.expires_at <= now || c.origin !== url.origin || c.wallet_address !== address.toLowerCase() || c.chain_id !== chainId) return json2({ error: "Challenge invalid, expired, or already used. Request a new one." }, 401);
+    if (!c || c.consumed_at || c.expires_at <= now || c.origin !== url.origin || c.wallet_address !== address.toLowerCase() || c.chain_id !== chainId) return json3({ error: "Challenge invalid, expired, or already used. Request a new one." }, 401);
     let recovered;
     try {
       recovered = recoverPersonalSignAddress(c.message, signature);
     } catch {
-      return json2({ error: "Wallet signature verification failed." }, 401);
+      return json3({ error: "Wallet signature verification failed." }, 401);
     }
-    if (recovered !== c.wallet_address) return json2({ error: "Wallet signature does not match the challenged address." }, 401);
+    if (recovered !== c.wallet_address) return json3({ error: "Wallet signature does not match the challenged address." }, 401);
     const used = await env.DB.prepare("UPDATE wallet_auth_challenges SET consumed_at=? WHERE nonce=? AND consumed_at IS NULL AND expires_at>?").bind(now, nonce, now).run();
-    if (!used.success || (used.meta?.changes ?? 0) !== 1) return json2({ error: "Challenge already consumed. Request a new one." }, 409);
+    if (!used.success || (used.meta?.changes ?? 0) !== 1) return json3({ error: "Challenge already consumed. Request a new one." }, 409);
     const token = randomHex2(32), id = crypto.randomUUID(), expires = new Date(Date.now() + SESSION_SECONDS2 * 1e3).toISOString();
     await env.DB.prepare("INSERT INTO wallet_sessions(id,wallet_address,chain_id,token_hash,expires_at,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?)").bind(id, c.wallet_address, chainId, await hash(token), expires, now, now).run();
     await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('owner',?,'wallet.login','wallet_session',?,?,?)").bind(c.wallet_address, id, JSON.stringify({ chainId }), now).run();
-    return json2({ authenticated: true, wallet: c.wallet_address, chainId, expiresAt: expires }, 200, { "set-cookie": "mw_owner_session=" + token + "; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=" + SESSION_SECONDS2 });
+    return json3({ authenticated: true, wallet: c.wallet_address, chainId, expiresAt: expires }, 200, { "set-cookie": "mw_owner_session=" + token + "; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=" + SESSION_SECONDS2 });
   }
   if (url.pathname === "/api/auth/me" && request.method === "GET") {
     const s = await session(request, env);
-    return s ? json2({ authenticated: true, ...s }) : json2({ authenticated: false }, 401);
+    return s ? json3({ authenticated: true, ...s }) : json3({ authenticated: false }, 401);
+  }
+  if (url.pathname === "/api/admin/auth/recover-once") {
+    const recoveryResponse = await handleAdminRecoveryApi(request, env);
+    if (recoveryResponse) return recoveryResponse;
   }
   if (url.pathname.startsWith("/api/admin/auth/")) {
     const authResponse = await handleAdminAuthApi(request, env);
@@ -2366,28 +2451,28 @@ var worker_default = { async fetch(request, env) {
   }
   if (url.pathname.startsWith("/api/admin/")) {
     const token = cookie2(request, "mw_admin_session");
-    if (!token || !/^[0-9a-f]{64}$/.test(token)) return json2({ error: "MFA-verified administrator session required." }, 401);
+    if (!token || !/^[0-9a-f]{64}$/.test(token)) return json3({ error: "MFA-verified administrator session required." }, 401);
     const now = (/* @__PURE__ */ new Date()).toISOString(), mfaCutoff = new Date(Date.now() - 12 * 60 * 60 * 1e3).toISOString();
     const admin = await env.DB.prepare("SELECT s.id,s.admin_id FROM admin_sessions s INNER JOIN admin_accounts a ON a.id=s.admin_id WHERE s.token_hash=? AND s.expires_at>? AND s.mfa_verified_at>? AND a.status='active' AND a.mfa_enabled=1 LIMIT 1").bind(await hash(token), now, mfaCutoff).first();
-    if (!admin) return json2({ error: "MFA-verified administrator session required." }, 401);
+    if (!admin) return json3({ error: "MFA-verified administrator session required." }, 401);
     await env.DB.prepare("UPDATE admin_sessions SET last_seen_at=? WHERE id=?").bind(now, admin.id).run();
     const response2 = await handleAdminDestinationApi(request, env, { id: admin.id, adminId: admin.admin_id });
     if (response2) return response2;
-    return json2({ error: "Not found" }, 404);
+    return json3({ error: "Not found" }, 404);
   }
   if (url.pathname.startsWith("/api/owner/")) {
     const authenticated = await session(request, env);
-    if (!authenticated) return json2({ error: "Authentication required." }, 401);
+    if (!authenticated) return json3({ error: "Authentication required." }, 401);
     const response2 = await handleOwnerApi(request, env, authenticated);
     if (response2) return response2;
   }
   if (url.pathname === "/api/auth/logout" && request.method === "POST") {
-    if (!sameOrigin2(request, url)) return json2({ error: "Origin check failed." }, 403);
+    if (!sameOrigin3(request, url)) return json3({ error: "Origin check failed." }, 403);
     const token = cookie2(request);
     if (token && /^[0-9a-f]{64}$/.test(token)) await env.DB.prepare("UPDATE wallet_sessions SET revoked_at=? WHERE token_hash=? AND revoked_at IS NULL").bind((/* @__PURE__ */ new Date()).toISOString(), await hash(token)).run();
-    return json2({ authenticated: false }, 200, { "set-cookie": "mw_owner_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" });
+    return json3({ authenticated: false }, 200, { "set-cookie": "mw_owner_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" });
   }
-  return json2({ error: "Not found" }, 404);
+  return json3({ error: "Not found" }, 404);
 } };
 export {
   worker_default as default
