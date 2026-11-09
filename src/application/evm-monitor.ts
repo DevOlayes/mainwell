@@ -60,8 +60,8 @@ export async function refreshEvmWallet(env: MonitorEnv, wallet: { id: string; ad
   const rpcName = RPC_ENV[networkName];
   const rpcUrl = rpcName ? env[rpcName] as string | undefined : undefined;
   if (!rpcUrl) throw new Error("RPC_NOT_CONFIGURED");
-  const config = toAssetConfig(env, networkName);
   const now = new Date().toISOString();
+  const config = await toAssetConfig(env, networkName, now);
   const adapter = new EvmReadOnlyAdapter({
     network: networkName,
     chainId: network.chainId, rpcUrl, nativeSymbol: network.nativeSymbol, nativeName: network.nativeName,
