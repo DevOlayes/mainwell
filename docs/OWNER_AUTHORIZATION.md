@@ -42,3 +42,21 @@ Missing configuration fails closed. Do not configure a code hash until the exact
 This backend provides a consolidated authorization record and on-chain scope verification, but it does not yet provide a complete wallet UI or a universal one-signature path. With an ordinary EOA and standard ERC-20 tokens, executor deployment and token approvals are separate transactions. Some tokens support permit signatures, and some smart accounts can batch supported operations, but neither is universal. The frontend must explain the exact transactions required and never present multiple EOA approvals as a single signature.
 
 The executor is not deployed or independently audited by this change. Recovery execution remains disabled until deployment review, owner-facing transaction UX, simulation, and end-to-end security acceptance are complete.
+
+## Locked recovery destinations (Implementation 5)
+
+The network-level destination registry uses the existing `recovery_destinations` table. Migration `0004_locked_destinations.sql` enforces at most one active locked destination per supported network and adds `recovery_asset_destinations` for audited per-asset selections.
+
+Admin API:
+- `GET /api/admin/recovery-destinations`: list configured destinations.
+- `PUT /api/admin/recovery-destinations/:network` with `{"address":"0x..."}`: deactivate the previous active destination and lock the new one.
+- `PUT /api/admin/grants/:grantId/assets/:assetId/destination` with `{"destinationId":"..."}`: assign a destination to an authorized asset.
+- `DELETE /api/admin/grants/:grantId/assets/:assetId/destination`: clear the per-asset selection.
+
+Admin routes require the `mw_admin_session` HttpOnly cookie, a valid hashed admin session, an active account with MFA enabled, and MFA verification within the previous 12 hours. State changes require same-origin requests and are written to `audit_events`. The application must establish that session through its administrator authentication/MFA flow; this destination API does not create admin sessions.
+
+Owner API:
+- `GET /api/owner/recovery-destinations` (optional `?network=`) returns active locked destinations.
+- `GET /api/owner/grants` includes the configured per-asset destination selection where one exists.
+
+**Immutable executor boundary:** the deployed executor fixes its destination at construction. Therefore an admin cannot use a database override to redirect an existing authorization. A per-asset destination assignment is accepted only when it equals that grant's already deployed destination. To use a different address, the owner must explicitly approve a new executor/grant with that destination. The API rejects mismatches rather than silently changing the on-chain policy. Recovery execution remains disabled pending the later execution and end-to-end acceptance work.
