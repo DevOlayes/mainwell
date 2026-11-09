@@ -115,9 +115,9 @@ export class D1GrantRepository {
     for (const asset of grant.assets) {
       statements.push(this.db.prepare(`
         INSERT INTO recovery_grant_assets (
-          grant_id, asset_id, token_address, amount_kind, max_amount_raw, owner_acknowledged
+          grant_id, asset_id, token_address, amount_kind, max_amount_raw, owner_acknowledged, destination_address
         )
-        SELECT ?, ?, ?, ?, ?, ?
+        SELECT ?, ?, ?, ?, ?, ?, ?
         WHERE changes() = 1 AND EXISTS (
           SELECT 1 FROM recovery_grants
           WHERE grant_id = ? AND verification_status = 'verified'
