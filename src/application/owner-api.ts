@@ -347,9 +347,12 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     let maximumExpirySeconds = Number.MAX_SAFE_INTEGER;
     for (const asset of grant.assets) {
       const policy = configuredPolicies.results.find(row => String(row.assetId) === asset.assetId);
-      if (!policy || typeof policy.tokenAddress !== "string" || !ADDRESS.test(policy.tokenAddress) ||
+      const policyCapValid = typeof policy?.maxAmountRaw === "string" &&
+        /^[1-9][0-9]{0,77}$/.test(policy.maxAmountRaw) &&
+        BigInt(policy.maxAmountRaw) <= ((1n << 256n) - 1n);
+      if (!policy || !policyCapValid || typeof policy.tokenAddress !== "string" || !ADDRESS.test(policy.tokenAddress) ||
           !asset.tokenAddress || asset.tokenAddress.toLowerCase() !== policy.tokenAddress.toLowerCase() ||
-          !asset.amount || asset.amount.kind !== "capped" || asset.amount.maxAmountRaw !== String(policy.maxAmountRaw) || BigInt(String(policy.maxAmountRaw)) > ((1n << 256n) - 1n) ||
+          !asset.amount || asset.amount.kind !== "capped" || asset.amount.maxAmountRaw !== policy.maxAmountRaw ||
           typeof asset.destinationAddress !== "string" || asset.destinationAddress.toLowerCase() !== String(policy.destinationAddress).toLowerCase()) {
         return reply({ error: "The token, cap or destination in the grant does not exactly match the administrator's current asset policy." }, 409);
       }
