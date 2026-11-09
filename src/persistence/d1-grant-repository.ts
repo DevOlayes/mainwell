@@ -66,7 +66,7 @@ function mapAsset(row: GrantAssetRow): RecoveryGrantAsset {
     ...(row.token_address ? { tokenAddress: row.token_address } : {}),
     amount: row.amount_kind === "capped"
       ? { kind: "capped", maxAmountRaw: row.max_amount_raw ?? "" }
-      : { kind: "unlimited-allowance", ownerAcknowledged: row.owner_acknowledged === 1 }
+      : { kind: "unlimited-allowance", ownerAcknowledged: true }
   };
 }
 
