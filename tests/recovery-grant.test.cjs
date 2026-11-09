@@ -13,6 +13,7 @@ const base = {
   destinationAddress: "0x3333333333333333333333333333333333333333",
   assets: [{ assetId: "usdc", destinationAddress: "0x3333333333333333333333333333333333333333", tokenAddress: "0x4444444444444444444444444444444444444444", amount: { kind: "capped", maxAmountRaw: "1000000" } }],
   executionModes: ["automatic-priority", "admin-initiated"],
+  executionOperators: { automation: "0x6666666666666666666666666666666666666666", administrator: "0x7777777777777777777777777777777777777777" },
   approvedAt: "2026-11-09T11:00:00.000Z",
   expiresAt: "2026-11-09T13:00:00.000Z",
   evidence: { kind: "onchain-approval", reference: "0x" + "b".repeat(64) }
@@ -56,4 +57,9 @@ test("allows only the execution paths explicitly included in the grant", () => {
   const automaticOnly = { ...base, executionModes: ["automatic-priority"] };
   assert.doesNotThrow(() => assertGrantAllowsExecutionMode(automaticOnly, "automatic-priority", base.ownerWallet, "ethereum", now));
   assert.throws(() => assertGrantAllowsExecutionMode(automaticOnly, "admin-initiated", base.ownerWallet, "ethereum", now), /does not permit admin-initiated/);
+});
+
+test("requires nonzero operators for each enabled execution mode", () => {
+  assert.throws(() => validateRecoveryGrant({ ...base, executionOperators: { ...base.executionOperators, automation: "0x0000000000000000000000000000000000000000" } }, base.ownerWallet, "ethereum", now), /automation operator/);
+  assert.throws(() => validateRecoveryGrant({ ...base, executionOperators: { ...base.executionOperators, administrator: "0x0000000000000000000000000000000000000000" } }, base.ownerWallet, "ethereum", now), /administrator operator/);
 });
