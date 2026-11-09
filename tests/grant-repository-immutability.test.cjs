@@ -10,7 +10,7 @@ const grant = {
   executorAddress: "0x2222222222222222222222222222222222222222",
   executorCodeHash: "0x" + "a".repeat(64),
   destinationAddress: "0x3333333333333333333333333333333333333333",
-  assets: [{ assetId: "token-1", tokenAddress: "0x4444444444444444444444444444444444444444",
+  assets: [{ assetId: "token-1", tokenAddress: "0x4444444444444444444444444444444444444444", destinationAddress: "0x3333333333333333333333333333333333333333",
     amount: { kind: "capped", maxAmountRaw: "1000" } }],
   executionModes: ["automatic-priority"],
   approvedAt: "2026-11-09T06:00:00.000Z",
