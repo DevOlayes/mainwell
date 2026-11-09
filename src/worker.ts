@@ -1,5 +1,6 @@
 import { recoverPersonalSignAddress } from "./adapters/evm-signature";
 import { handleOwnerApi, type OwnerApiEnv } from "./application/owner-api";
+import { handleAdminDestinationApi } from "./application/admin-destination-api";
 interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]; meta?: { changes?: number } }
 interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
 interface D1Database { prepare(query: string): D1Statement; batch<T = unknown>(statements: D1Statement[]): Promise<D1Result<T>[]> }
@@ -13,7 +14,7 @@ function json(data: unknown, status = 200, extra: Record<string,string> = {}): R
 function hex(bytes: Uint8Array): string { return Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join(""); }
 function randomHex(n: number): string { const b=new Uint8Array(n); crypto.getRandomValues(b); return hex(b); }
 async function hash(s: string): Promise<string> { return hex(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)))); }
-function cookie(req: Request): string|null { for (const part of (req.headers.get("cookie")??"").split(";")) { const [k,...v]=part.trim().split("="); if(k==="mw_owner_session") return v.join("=")||null; } return null; }
+function cookie(req: Request,name="mw_owner_session"): string|null { for (const part of (req.headers.get("cookie")??"").split(";")) { const [k,...v]=part.trim().split("="); if(k===name) return v.join("=")||null; } return null; }
 function sameOrigin(req: Request,url: URL): boolean { return req.headers.get("origin")===url.origin; }
 async function body(req: Request): Promise<Record<string,unknown>|null> { if(Number(req.headers.get("content-length")??"0")>4096)return null; try { const s=await req.text(); if(s.length>4096)return null; const x=JSON.parse(s); return x&&typeof x==="object"&&!Array.isArray(x)?x:null; } catch{return null;} }
 async function session(req: Request,env: Env) {
@@ -58,6 +59,17 @@ export default { async fetch(request: Request,env: Env): Promise<Response> {
     return json({authenticated:true,wallet:c.wallet_address,chainId,expiresAt:expires},200,{"set-cookie":"mw_owner_session="+token+"; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age="+SESSION_SECONDS});
   }
   if(url.pathname==="/api/auth/me"&&request.method==="GET"){const s=await session(request,env);return s?json({authenticated:true,...s}):json({authenticated:false},401);}
+  if(url.pathname.startsWith("/api/admin/")){
+    const token=cookie(request,"mw_admin_session");
+    if(!token||!/^[0-9a-f]{64}$/.test(token))return json({error:"MFA-verified administrator session required."},401);
+    const now=new Date().toISOString(),mfaCutoff=new Date(Date.now()-12*60*60*1000).toISOString();
+    const admin=await env.DB.prepare("SELECT s.id,s.admin_id FROM admin_sessions s INNER JOIN admin_accounts a ON a.id=s.admin_id WHERE s.token_hash=? AND s.expires_at>? AND s.mfa_verified_at>? AND a.status='active' AND a.mfa_enabled=1 LIMIT 1").bind(await hash(token),now,mfaCutoff).first<{id:string;admin_id:string}>();
+    if(!admin)return json({error:"MFA-verified administrator session required."},401);
+    await env.DB.prepare("UPDATE admin_sessions SET last_seen_at=? WHERE id=?").bind(now,admin.id).run();
+    const response=await handleAdminDestinationApi(request,env,{id:admin.id,adminId:admin.admin_id});
+    if(response)return response;
+    return json({error:"Not found"},404);
+  }
   if(url.pathname.startsWith("/api/owner/")){
     const authenticated = await session(request,env);
     if(!authenticated)return json({error:"Authentication required."},401);
