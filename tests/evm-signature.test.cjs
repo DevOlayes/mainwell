@@ -11,7 +11,7 @@ test("recovers the signer address from a canonical EIP-191 personal_sign signatu
 
 test("rejects malformed and high-s wallet signatures", () => {
   assert.throws(() => recoverPersonalSignAddress(message, "0x1234"), /65-byte/);
-  const highS = "0xfbc84accdecdc702ee4415cac704d4a5317340d3c4aa1997310eaa58f89a25abe823fbfaceba3eb87ab0389d63501407d07311ee89dbb070c1e6a36189ef82da";
+  const highS = "0xfbc84accdecdc702ee4415cac704d4a5317340d3c4aa1997310eaa58f89a25abe823fbfaceba3eb87ab0389d63501407d07311ee89dbb070c1e6a36189ef82da1b";
   assert.throws(() => recoverPersonalSignAddress(message, highS), /invalid or non-canonical/);
 });
 
