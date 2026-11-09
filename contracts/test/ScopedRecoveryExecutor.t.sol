@@ -104,9 +104,10 @@ contract ScopedRecoveryExecutorTest {
         assets[0] = address(token); assets[1] = address(second);
         destinations[0] = DESTINATION; destinations[1] = secondDestination;
         caps[0] = 500; caps[1] = 700;
-        ScopedRecoveryExecutor multi = new ScopedRecoveryExecutor(uint64(block.timestamp + 1 days), assets, destinations, caps, true, true);
+        ScopedRecoveryExecutor multi = new ScopedRecoveryExecutor(uint64(block.timestamp + 1 days), assets, destinations, caps, true, true, AUTOMATION_OPERATOR, ADMIN_OPERATOR);
         second.mint(address(this), 700);
         second.approve(address(multi), 700);
+        vm.prank(ADMIN_OPERATOR);
         multi.executeAdminToken(address(second), 300);
         require(second.balanceOf(secondDestination) == 300, "asset-specific destination not used");
         require(second.balanceOf(DESTINATION) == 0, "asset sent to another asset destination");
@@ -114,7 +115,8 @@ contract ScopedRecoveryExecutorTest {
     }
 
     function testCumulativeRecoveryCannotExceedOwnerConfiguredCap() public {
-        executor.executeToken(address(token), 300);
+        vm.prank(ADMIN_OPERATOR);
+        executor.executeAdminToken(address(token), 300);
         (bool ok,) = address(executor).call(
             abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 201)
         );
@@ -125,7 +127,7 @@ contract ScopedRecoveryExecutorTest {
     function testUnlistedTokenCannotBeRecovered() public {
         MockRecoveryToken other = new MockRecoveryToken();
         (bool ok,) = address(executor).call(
-            abi.encodeWithSelector(executor.executeToken.selector, address(other), 1)
+            abi.encodeWithSelector(executor.executeAdminToken.selector, address(other), 1)
         );
         require(!ok, "unlisted token accepted");
     }
@@ -133,7 +135,7 @@ contract ScopedRecoveryExecutorTest {
     function testExpiredGrantCannotExecute() public {
         vm.warp(block.timestamp + 1 days);
         (bool ok,) = address(executor).call(
-            abi.encodeWithSelector(executor.executeToken.selector, address(token), 1)
+            abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 1)
         );
         require(!ok, "expired grant executed");
     }
@@ -141,7 +143,7 @@ contract ScopedRecoveryExecutorTest {
     function testOwnerCanRevokeWholeGrant() public {
         executor.revoke();
         (bool ok,) = address(executor).call(
-            abi.encodeWithSelector(executor.executeToken.selector, address(token), 1)
+            abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 1)
         );
         require(!ok, "revoked grant executed");
     }
@@ -149,7 +151,7 @@ contract ScopedRecoveryExecutorTest {
     function testOwnerCanRevokeOneAssetWithoutChangingDestination() public {
         executor.revokeAsset(address(token));
         (bool ok,) = address(executor).call(
-            abi.encodeWithSelector(executor.executeToken.selector, address(token), 1)
+            abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 1)
         );
         require(!ok, "revoked asset executed");
         require(executor.destination() == DESTINATION, "destination changed");
@@ -164,7 +166,7 @@ contract ScopedRecoveryExecutorTest {
     function testInsufficientTokenAllowanceBlocksTransfer() public {
         token.approve(address(executor), 0);
         (bool ok,) = address(executor).call(
-            abi.encodeWithSelector(executor.executeToken.selector, address(token), 1)
+            abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 1)
         );
         require(!ok, "transfer without allowance");
         require(executor.amountRecovered(address(token)) == 0, "failed transfer consumed cap");
