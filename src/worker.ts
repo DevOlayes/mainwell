@@ -6,6 +6,7 @@ import { adminDashboardResponse } from "./application/admin-dashboard";
 import { ownerDashboardResponse } from "./application/owner-dashboard";
 import { ownerAuthorizationResponse } from "./application/owner-authorization";
 import { operatorWalletSetupResponse } from "./application/operator-wallet-setup";
+import { adminDiagnosticsResponse } from "./application/admin-diagnostics";
 interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]; meta?: { changes?: number } }
 interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
 interface D1Database { prepare(query: string): D1Statement; batch<T = unknown>(statements: D1Statement[]): Promise<D1Result<T>[]> }
@@ -31,6 +32,7 @@ async function session(req: Request,env: Env) {
 export default { async fetch(request: Request,env: Env): Promise<Response> {
   const url=new URL(request.url);
   if(request.method==="GET"&&url.pathname==="/admin")return adminDashboardResponse();
+  if(request.method==="GET"&&url.pathname==="/admin/diagnostics")return adminDiagnosticsResponse();
   if(request.method==="GET"&&url.pathname==="/admin/operators")return operatorWalletSetupResponse();
   if(request.method==="GET"&&url.pathname==="/")return ownerDashboardResponse();
   if(request.method==="GET"&&url.pathname==="/authorize")return ownerAuthorizationResponse();
