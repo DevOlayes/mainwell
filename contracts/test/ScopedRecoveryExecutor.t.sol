@@ -168,6 +168,23 @@ contract ScopedRecoveryExecutorTest {
         require(!ok, "non-owner revoked grant");
     }
 
+    function testConstructorRejectsNonContractAssetAddress() public {
+        address[] memory assets = new address[](1);
+        address[] memory destinations = new address[](1);
+        uint256[] memory caps = new uint256[](1);
+        assets[0] = address(0x1234);
+        destinations[0] = DESTINATION;
+        caps[0] = 100;
+        (bool ok,) = address(this).call(abi.encodeWithSelector(
+            this.deployExecutor.selector, assets, destinations, caps
+        ));
+        require(!ok, "EOA asset address accepted");
+    }
+
+    function deployExecutor(address[] memory assets, address[] memory destinations, uint256[] memory caps) external {
+        new ScopedRecoveryExecutor(uint64(block.timestamp + 1 days), assets, destinations, caps, true, true, AUTOMATION_OPERATOR, ADMIN_OPERATOR);
+    }
+
     function testInsufficientTokenAllowanceBlocksTransfer() public {
         token.approve(address(executor), 0);
         vm.prank(ADMIN_OPERATOR);
