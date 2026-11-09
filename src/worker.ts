@@ -1,9 +1,9 @@
 import { recoverPersonalSignAddress } from "./adapters/evm-signature";
-import { handleOwnerApi } from "./application/owner-api";
+import { handleOwnerApi, type OwnerApiEnv } from "./application/owner-api";
 interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]; meta?: { changes?: number } }
 interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
 interface D1Database { prepare(query: string): D1Statement }
-interface Env { DB: D1Database }
+interface Env extends OwnerApiEnv {}
 const SESSION_SECONDS = 604800, CHALLENGE_SECONDS = 300;
 const CHAINS = new Set([1, 137, 56, 43114, 42161, 10, 8453]);
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
