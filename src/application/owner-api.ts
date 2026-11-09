@@ -141,7 +141,8 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       executorCodeHashConfigured: true,
       automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
       adminOperatorConfigured: Boolean(env.MAINWELL_ADMIN_OPERATOR),
-      executorArtifactAvailable: true
+      executorArtifactAvailable: true,
+      executionOperators: { automation: env.MAINWELL_AUTOMATION_OPERATOR ?? "0x0000000000000000000000000000000000000000", administrator: env.MAINWELL_ADMIN_OPERATOR ?? "0x0000000000000000000000000000000000000000" }
     };
     const assetPolicyMap = new Map(policyRows.results.map(row => [String(row.assetId), row]));
     const scopedAssets = assetRows.results.map(asset => {
