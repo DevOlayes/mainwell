@@ -35,7 +35,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.supported_asset.add','recovery_supported_asset',?,?,?)").bind(admin.adminId,id,JSON.stringify({network,address:normalized,symbol,name,decimals}),now).run();
   return response({created:true,asset:{id,network,tokenAddress:normalized,symbol,name,decimals,isActive:true,createdAt:now,updatedAt:now}});
  }
- const supportedAssetMatch=path.match(/^\\/api\\/admin\\/supported-assets\\/([a-z-]+)\\/(0x[0-9a-fA-F]{40})$/);
+ const supportedAssetMatch=path.match(/^\/api\/admin\/supported-assets\/([a-z-]+)\/(0x[0-9a-fA-F]{40})$/);
  if(supportedAssetMatch&&request.method==="DELETE"){
   if(!originOk(request,url))return response({error:"Origin check failed."},403);
   const network=supportedAssetMatch[1],address=supportedAssetMatch[2].toLowerCase();
