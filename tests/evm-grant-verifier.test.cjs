@@ -1,7 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { keccak256, keccak256Hex } = require("../dist/adapters/keccak.js");
-const { EvmGrantVerifier } = require("../dist/adapters/evm-grant-verifier.js");
+const { EvmGrantVerifier, normalizedExecutorRuntimeHash } = require("../dist/adapters/evm-grant-verifier.js");
+const { EXECUTOR_IMMUTABLE_RANGES } = require("../dist/application/executor-artifact.js");
 
 const owner = "0x1111111111111111111111111111111111111111";
 const executor = "0x2222222222222222222222222222222222222222";
@@ -77,6 +78,14 @@ function makeVerifier(overrides = {}) {
 
 test("Keccak-256 uses Ethereum Keccak padding, not NIST SHA3 padding", () => {
   assert.equal(keccak256(new Uint8Array()), "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
+});
+
+test("normalizes constructor-patched immutable slots before trusting executor runtime code", () => {
+  const deployed = Buffer.alloc(2532, 0x11);
+  for (const range of EXECUTOR_IMMUTABLE_RANGES) deployed.fill(0xaa, range.start, range.start + range.length);
+  const normalized = Buffer.from(deployed);
+  for (const range of EXECUTOR_IMMUTABLE_RANGES) normalized.fill(0, range.start, range.start + range.length);
+  assert.equal(normalizedExecutorRuntimeHash("0x" + deployed.toString("hex")), keccak256Hex("0x" + normalized.toString("hex")));
 });
 
 test("verifies deployed executor, owner, destination, expiry, cap and live allowance", async () => {
