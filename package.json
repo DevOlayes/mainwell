@@ -1,18 +1,24 @@
 {
-  "name": "defensive-wallet-recovery",
-  "version": "0.1.0",
+  "name": "mainwell-wallet-recovery",
+  "version": "0.2.0",
   "private": true,
-  "description": "Read-only wallet monitoring and owner-authorized recovery planning foundation",
+  "description": "Defensive wallet monitoring and scoped recovery application",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test tests/*.test.cjs"
+    "test": "npm run build && node --test tests/*.test.cjs",
+    "dev:worker": "wrangler dev",
+    "deploy": "wrangler d1 migrations apply mainwell --remote && wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply mainwell --local",
+    "db:migrate:remote": "wrangler d1 migrations apply mainwell --remote",
+    "db:status:remote": "wrangler d1 migrations list mainwell --remote"
   },
   "engines": { "node": ">=20" },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "wrangler": "^4.158.0"
   }
 }
