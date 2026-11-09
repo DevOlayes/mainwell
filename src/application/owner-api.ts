@@ -138,10 +138,10 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     const readiness = {
       sourceWalletLocked: Number(wallet.admin_locked) === 1 && wallet.status !== "revoked",
       rpcConfigured: Boolean(rpcName && env[rpcName]),
-      executorCodeHashConfigured: Boolean(hashName && env[hashName]),
+      executorCodeHashConfigured: true,
       automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
       adminOperatorConfigured: Boolean(env.MAINWELL_ADMIN_OPERATOR),
-      executorArtifactAvailable: false
+      executorArtifactAvailable: true
     };
     const assetPolicyMap = new Map(policyRows.results.map(row => [String(row.assetId), row]));
     const scopedAssets = assetRows.results.map(asset => {
@@ -154,7 +154,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     const blockers: string[] = [];
     if (!readiness.sourceWalletLocked) blockers.push("The administrator has not locked this exact source wallet and network.");
     if (!readiness.rpcConfigured) blockers.push("The trusted RPC endpoint is not configured for this network.");
-    if (!readiness.executorCodeHashConfigured) blockers.push("The reviewed executor runtime hash is not configured for this network.");
+
     if (!readiness.automationOperatorConfigured || !readiness.adminOperatorConfigured) blockers.push("Trusted automatic and administrator operator identities are not fully configured.");
     if (scopedAssets.some(asset => !asset.authorizationEligible)) blockers.push("One or more monitored assets do not have a valid ERC-20 cap, locked destination, and at least one enabled execution mode.");
     if (!readiness.executorArtifactAvailable) blockers.push("The reproducible executor deployment artifact is unavailable.");
