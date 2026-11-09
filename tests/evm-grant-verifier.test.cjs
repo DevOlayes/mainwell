@@ -64,7 +64,7 @@ test("Keccak-256 uses Ethereum Keccak padding, not NIST SHA3 padding", () => {
 });
 
 test("verifies deployed executor, owner, destination, expiry, cap and live allowance", async () => {
-  const result = await makeVerifier().verify(grant, now);
+  const result = await makeVerifier().verify(grant, owner, now);
   assert.equal(result.chainId, 1);
   assert.equal(result.observedExecutorCodeHash, codeHash);
   assert.equal(result.destination, destination);
@@ -72,21 +72,21 @@ test("verifies deployed executor, owner, destination, expiry, cap and live allow
 });
 
 test("fails closed when deployed runtime bytecode hash is not trusted", async () => {
-  await assert.rejects(makeVerifier({ code: "0x60016000" }).verify(grant, now), /bytecode hash is not trusted/);
+  await assert.rejects(makeVerifier({ code: "0x60016000" }).verify(grant, owner, now), /bytecode hash is not trusted/);
 });
 
 test("fails closed when RPC chain ID differs from grant", async () => {
-  await assert.rejects(makeVerifier({ chainId: "0x89" }).verify(grant, now), /chain ID does not match/);
+  await assert.rejects(makeVerifier({ chainId: "0x89" }).verify(grant, owner, now), /chain ID does not match/);
 });
 
 test("fails closed when deployment receipt does not prove owner deployment", async () => {
-  await assert.rejects(makeVerifier({ receipt: { status: "0x1", from: destination, contractAddress: executor } }).verify(grant, now), /does not prove/);
+  await assert.rejects(makeVerifier({ receipt: { status: "0x1", from: destination, contractAddress: executor } }).verify(grant, owner, now), /does not prove/);
 });
 
 test("fails closed when on-chain allowance is below remaining authorized cap", async () => {
-  await assert.rejects(makeVerifier({ allowance: 1999999 }).verify(grant, now), /allowance is below/);
+  await assert.rejects(makeVerifier({ allowance: 1999999 }).verify(grant, owner, now), /allowance is below/);
 });
 
 test("fails closed when on-chain token cap differs from owner grant", async () => {
-  await assert.rejects(makeVerifier({ limit: 2500001 }).verify(grant, now), /does not exactly match/);
+  await assert.rejects(makeVerifier({ limit: 2500001 }).verify(grant, owner, now), /does not exactly match/);
 });
