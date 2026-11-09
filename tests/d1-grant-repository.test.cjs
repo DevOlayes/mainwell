@@ -56,7 +56,7 @@ function fakeDb() {
     },
     async batch(statements) {
       calls.push({ batchSize: statements.length });
-      return statements.map(() => ({ success: true, results: [] }));
+      return statements.map(() => ({ success: true, results: [], meta: { changes: 1 } }));
     }
   };
 }
@@ -93,4 +93,38 @@ test("verified grant retrieval reconstructs capped and acknowledged unlimited as
 test("revocation is a conditional one-way update", async () => {
   const repo = new D1GrantRepository(fakeDb());
   assert.equal(await repo.markRevoked(grant.grantId, "2026-11-09T06:10:00.000Z"), true);
+});
+
+test("revoked grant cannot be re-saved or have its asset scope rewritten", async () => {
+  const db = fakeDb();
+  db.batch = async (statements) => statements.map(() => ({ success: true, results: [], meta: { changes: 0 } }));
+  const repo = new D1GrantRepository(db);
+  await assert.rejects(
+    repo.saveVerified({ grant, verifiedAt: "2026-11-09T06:05:00.000Z", observedExecutorCodeHash: grant.executorCodeHash }),
+    /already revoked/
+  );
+  assert.match(db.calls[1].sql, /EXISTS/);
+  assert.match(db.calls[2].sql, /EXISTS/);
+});
+
+test("revoked grant objects are rejected before any database write", async () => {
+  const db = fakeDb();
+  const repo = new D1GrantRepository(db);
+  const revoked = { ...grant, revokedAt: "2026-11-09T06:01:00.000Z" };
+  await assert.rejects(
+    repo.saveVerified({ grant: revoked, verifiedAt: "2026-11-09T06:05:00.000Z", observedExecutorCodeHash: grant.executorCodeHash }),
+    /revoked/
+  );
+  assert.equal(db.calls.length, 0);
+});
+
+test("expired grant objects are rejected before any database write", async () => {
+  const db = fakeDb();
+  const repo = new D1GrantRepository(db);
+  const expired = { ...grant, expiresAt: "2026-11-09T00:00:00.000Z" };
+  await assert.rejects(
+    repo.saveVerified({ grant: expired, verifiedAt: "2026-11-09T06:05:00.000Z", observedExecutorCodeHash: grant.executorCodeHash }),
+    /timestamps are invalid/
+  );
+  assert.equal(db.calls.length, 0);
 });
