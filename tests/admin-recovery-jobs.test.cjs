@@ -19,7 +19,8 @@ const baseScope = {
   wallet_status: "monitoring",
   admin_locked: 1,
   destination_locked: 1,
-  destination_active: 1
+  destination_active: 1,
+  token_active: 1
 };
 const payload = {
   grantId: "grant-1",
