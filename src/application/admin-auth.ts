@@ -119,7 +119,7 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
   await env.DB.prepare("INSERT INTO admin_auth_rate_limits(identifier_hash,attempts,window_started_at,locked_until) VALUES(?,1,?,0) ON CONFLICT(identifier_hash) DO UPDATE SET attempts=CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END,window_started_at=CASE WHEN ?-window_started_at>900 THEN ? ELSE window_started_at END,locked_until=CASE WHEN (CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END)>=5 THEN ?+900 ELSE locked_until END").bind(rateKey,epoch,epoch,epoch,epoch,epoch,epoch).run();
   return json({error:"Invalid administrator credentials or MFA configuration."},401);
 }
-  let valid=false;try{const secret=await decryptTotpSecret(account.mfa_secret_ciphertext,env.ADMIN_MFA_ENCRYPTION_KEY);valid=await verifyTotp(secret,otp);}catch{return json({error:"Administrator MFA is not configured correctly."},503);}
+  let valid=false;try{const secret=await decryptTotpSecret(account!.mfa_secret_ciphertext!,env.ADMIN_MFA_ENCRYPTION_KEY!);valid=await verifyTotp(secret,otp);}catch{return json({error:"Administrator MFA is not configured correctly."},503);}
   if(!valid){
   await env.DB.prepare("INSERT INTO admin_auth_rate_limits(identifier_hash,attempts,window_started_at,locked_until) VALUES(?,1,?,0) ON CONFLICT(identifier_hash) DO UPDATE SET attempts=CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END,window_started_at=CASE WHEN ?-window_started_at>900 THEN ? ELSE window_started_at END,locked_until=CASE WHEN (CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END)>=5 THEN ?+900 ELSE locked_until END").bind(rateKey,epoch,epoch,epoch,epoch,epoch,epoch).run();
   return json({error:"Invalid administrator credentials or MFA code."},401);
@@ -128,7 +128,7 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
   const token=randomHex(32),id=crypto.randomUUID(),expires=new Date(Date.now()+SESSION_SECONDS*1000).toISOString();
   const saved=await env.DB.prepare("INSERT INTO admin_sessions(id,admin_id,token_hash,mfa_verified_at,expires_at,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?)").bind(id,account.id,await sha(token),now,expires,now,now).run();
   if(!saved.success)return json({error:"Unable to create administrator session."},503);
-  await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'admin.login','admin_session',?,'{}',?)").bind(account.id,id,now).run();
+  await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'admin.login','admin_session',?,'{}',?)").bind(account!.id,id,now).run();
   return json({authenticated:true,mfaVerified:true,expiresAt:expires},200,{"set-cookie":"mw_admin_session="+token+"; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age="+SESSION_SECONDS});
  }
  if(url.pathname==="/api/admin/auth/logout"&&request.method==="POST"){
