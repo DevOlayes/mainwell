@@ -41,9 +41,18 @@ test("grant verification requires an admin-locked source wallet before checking 
   assert.equal((await response.json()).code, "source_wallet_not_locked");
 });
 
-test("grant verification fails closed when trusted RPC, executor hash, or service operators are not configured", async () => {
+test("grant verification fails closed when trusted RPC or service operators are not configured", async () => {
   const env = { DB: { prepare(sql) {
-    return { bind() { return this; }, async first() { return { id: "locked-wallet" }; } };
+    return {
+      bind() { return this; },
+      async first() { return { id: "locked-wallet" }; },
+      async all() { return { success: true, results: [{
+        assetId: "token-1", maxAmountRaw: "1000", automaticPriorityEnabled: 1,
+        adminInitiatedEnabled: 0, expiresInSeconds: 2592000,
+        destinationAddress: "0x3333333333333333333333333333333333333333",
+        tokenAddress: "0x4444444444444444444444444444444444444444"
+      }] }; }
+    };
   } } };
   const response = await handleOwnerApi(request("/api/owner/grants/verify", { grant }), env, session);
   assert.equal(response.status, 503);
