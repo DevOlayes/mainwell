@@ -5,6 +5,32 @@ interface Database { prepare(sql:string):Statement }
 interface AdminSession { id:string; adminId:string }
 const NETWORK_CHAIN: Record<string,number> = { ethereum:1, polygon:137, bsc:56, avalanche:43114, arbitrum:42161, optimism:10, base:8453 };
 const ADDRESS=/^0x[0-9a-fA-F]{40}$/;
+const RPC_BY_NETWORK = {
+ ethereum:"EVM_RPC_ETHEREUM", polygon:"EVM_RPC_POLYGON", bsc:"EVM_RPC_BSC",
+ avalanche:"EVM_RPC_AVALANCHE", arbitrum:"EVM_RPC_ARBITRUM", optimism:"EVM_RPC_OPTIMISM", base:"EVM_RPC_BASE"
+} as const;
+async function verifyRegisteredToken(env:OwnerApiEnv,network:keyof typeof NETWORK_CHAIN,address:string,decimals:number):Promise<void>{
+ const rpcName=RPC_BY_NETWORK[network],rpcUrl=env[rpcName];
+ if(!rpcUrl)throw new Error("RPC_NOT_CONFIGURED");
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);
+ try{
+  let id=0;
+  const rpc=async(method:string,params:unknown[])=>{
+   const res=await fetch(rpcUrl,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:++id,method,params}),signal:controller.signal});
+   if(!res.ok)throw new Error("RPC_UNAVAILABLE");
+   const payload=await res.json() as {id:number;result?:string;error?:{message:string}};
+   if(payload.id!==id||payload.error||typeof payload.result!=="string")throw new Error("RPC_UNAVAILABLE");
+   return payload.result;
+  };
+  const chain=await rpc("eth_chainId",[]);
+  if(BigInt(chain)!==BigInt(NETWORK_CHAIN[network]))throw new Error("RPC_CHAIN_MISMATCH");
+  const code=await rpc("eth_getCode",[address,"latest"]);
+  if(!/^0x[0-9a-fA-F]+$/.test(code)||/^0x0*$/i.test(code))throw new Error("TOKEN_CONTRACT_NOT_FOUND");
+  const decimalsResult=await rpc("eth_call",[{to:address,data:"0x313ce567"},"latest"]);
+  if(!/^0x[0-9a-fA-F]+$/.test(decimalsResult)||Number(BigInt(decimalsResult))!==decimals)throw new Error("TOKEN_DECIMALS_MISMATCH");
+ }finally{clearTimeout(timeout);}
+}
+
 function response(data:unknown,status=200):Response{return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer"}});}
 function originOk(req:Request,url:URL):boolean{return req.headers.get("origin")===url.origin;}
 async function body(req:Request):Promise<Record<string,unknown>|null>{try{if(Number(req.headers.get("content-length")??"0")>2048)return null;const raw=await req.text();if(raw.length>2048)return null;const v:unknown=JSON.parse(raw);return v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:null;}catch{return null;}}
@@ -30,6 +56,13 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
     return response({error:"Provide a supported network, token contract address, symbol, name and decimals from 0 to 36."},400);
   }
   const normalized=address.toLowerCase(),id=network+":erc20:"+normalized;
+  try{await verifyRegisteredToken(env,network,normalized,decimals);}
+  catch(error){
+   const reason=error instanceof Error?error.message:"";
+   if(reason==="RPC_NOT_CONFIGURED")return response({error:"A trusted RPC endpoint must be configured for this network before registering tokens."},503);
+   if(reason==="TOKEN_CONTRACT_NOT_FOUND"||reason==="TOKEN_DECIMALS_MISMATCH"||reason==="RPC_CHAIN_MISMATCH")return response({error:"The token contract, network or decimals could not be verified on-chain."},400);
+   return response({error:"Unable to verify token contract with the configured RPC. Try again later."},502);
+  }
   const saved=await env.DB.prepare("INSERT INTO recovery_supported_assets(id,network,token_address,symbol,name,decimals,is_active,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,1,?,?,?) ON CONFLICT(network,token_address) DO UPDATE SET symbol=excluded.symbol,name=excluded.name,decimals=excluded.decimals,is_active=1,updated_at=excluded.updated_at").bind(id,network,normalized,symbol,name,decimals,admin.adminId,now,now).run();
   if(!saved.success)return response({error:"Unable to register supported token."},503);
   await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.supported_asset.add','recovery_supported_asset',?,?,?)").bind(admin.adminId,id,JSON.stringify({network,address:normalized,symbol,name,decimals}),now).run();
