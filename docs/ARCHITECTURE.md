@@ -40,4 +40,6 @@ A sponsor funds fees only; it never receives transfer authority. Future network-
 
 ## Current implementation status
 
-The codebase currently implements an initial read-only EVM RPC adapter, a review planner, and structural recovery-grant validation. The persistent registry, reviewed on-chain executor, automated worker, admin UI/authentication/MFA, transaction simulation/submission, and receipt tracking remain outstanding. No real transfer should be attempted with this version.
+The Phase One foundation is implemented: read-only EVM monitoring and planning; persistent D1 grant and policy records; administrator authentication with MFA; locked source-wallet and destination management; supported ERC-20 registry; per-asset caps, execution modes, and expiry; the non-upgradeable scoped executor; owner deployment and exact token-allowance authorization; independent server-side verification of grant evidence; and the authenticated administration console. CI generates and pins the Worker and executor artifacts, while production deployment is a separate verified step.
+
+Phase Two is still outstanding: automatic-priority execution worker, administrator-initiated execution flow, hybrid gas sponsorship, exact transaction simulation, submission, receipt and replacement tracking, and execution reconciliation. `RECOVERY_EXECUTION_ENABLED` remains false. Do not attempt real asset transfers. The executor has not received an independent third-party security audit.
