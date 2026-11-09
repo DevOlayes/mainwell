@@ -81,6 +81,8 @@ async function queueAutomaticJobs(env:EngineEnv):Promise<number>{
     WHERE g.verification_status='verified' AND g.revoked_at IS NULL AND g.expires_at>?
       AND a.revoked_at IS NULL AND w.status='monitoring' AND w.admin_locked=1
       AND d.locked=1 AND d.is_active=1 AND a.amount_kind='capped'
+      AND NOT EXISTS (SELECT 1 FROM recovery_jobs j WHERE j.grant_id=g.grant_id AND j.asset_id=a.asset_id
+        AND j.status IN ('queued','simulating','ready','submitted','blocked','failed'))
     ORDER BY g.expires_at ASC LIMIT 50
   `).bind(now).all<Record<string,unknown>>();
   if(!rows.success)return 0;
