@@ -56,6 +56,18 @@ export function validateRecoveryGrant(
   if (grant.executionModes.length === 0 || grant.executionModes.some(
     (mode) => mode !== "automatic-priority" && mode !== "admin-initiated"
   )) throw new Error("At least one valid execution mode must be explicitly authorized.");
+  if (!grant.executionOperators || !EVM_ADDRESS.test(grant.executionOperators.automation) ||
+      !EVM_ADDRESS.test(grant.executionOperators.administrator)) {
+    throw new Error("Both immutable execution operator addresses must be valid EVM addresses.");
+  }
+  if (grant.executionModes.includes("automatic-priority") &&
+      grant.executionOperators.automation.toLowerCase() === "0x0000000000000000000000000000000000000000") {
+    throw new Error("Automatic recovery requires a configured automation operator.");
+  }
+  if (grant.executionModes.includes("admin-initiated") &&
+      grant.executionOperators.administrator.toLowerCase() === "0x0000000000000000000000000000000000000000") {
+    throw new Error("Administrator recovery requires a configured administrator operator.");
+  }
   if (grant.assets.length === 0) throw new Error("Grant must authorize at least one asset.");
 
   const seen = new Set<string>();
