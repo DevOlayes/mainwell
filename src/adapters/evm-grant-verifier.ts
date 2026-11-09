@@ -12,6 +12,8 @@ export interface EvmGrantVerifierConfig {
   rpcUrl: string;
   /** Reviewed runtime bytecode hash pinned by the server for this chain. */
   trustedExecutorCodeHash: string;
+  /** Chain ID pinned to this RPC endpoint and executor hash configuration. */
+  expectedChainId: number;
   /** Optional fetch injection for deterministic tests. */
   fetcher?: typeof fetch;
 }
@@ -40,6 +42,7 @@ export class EvmGrantVerifier {
     this.fetcher = config.fetcher ?? fetch;
     if (!/^https:\/\//i.test(config.rpcUrl)) throw new Error("A server-configured HTTPS RPC URL is required.");
     if (!HASH.test(config.trustedExecutorCodeHash)) throw new Error("Trusted executor code hash is invalid.");
+    if (!Number.isSafeInteger(config.expectedChainId) || config.expectedChainId <= 0) throw new Error("Expected EVM chain ID must be configured.");
   }
 
   private async rpc(method: string, params: unknown[]): Promise<unknown> {
@@ -83,7 +86,7 @@ export class EvmGrantVerifier {
     const chainHex=await this.rpc("eth_chainId",[]);
     if (typeof chainHex!=="string" || !/^0x[0-9a-fA-F]+$/.test(chainHex)) throw new Error("Malformed chain ID response.");
     const chainId=Number(BigInt(chainHex));
-    if (!Number.isSafeInteger(chainId) || chainId!==grant.chainId) throw new Error("Connected RPC chain ID does not match the grant.");
+    if (!Number.isSafeInteger(chainId) || chainId!==this.config.expectedChainId || chainId!==grant.chainId) throw new Error("Connected RPC chain ID does not match the configured chain and grant.");
 
     const code=await this.rpc("eth_getCode",[grant.executorAddress,"latest"]);
     if (typeof code!=="string" || !/^0x[0-9a-fA-F]+$/.test(code) || code==="0x") throw new Error("Executor contract is not deployed.");
