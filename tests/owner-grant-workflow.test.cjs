@@ -78,3 +78,33 @@ test("per-asset revocation cannot access a grant owned by another wallet", async
   }), env, session);
   assert.equal(response.status, 404);
 });
+
+
+function policyBoundEnv(policyOverrides = {}) {
+  const policy = {
+    assetId: "token-1", maxAmountRaw: "1000", automaticPriorityEnabled: 1,
+    adminInitiatedEnabled: 0, expiresInSeconds: 2592000,
+    destinationAddress: "0x3333333333333333333333333333333333333333",
+    tokenAddress: "0x4444444444444444444444444444444444444444",
+    ...policyOverrides
+  };
+  return { DB: { prepare() {
+    return {
+      bind() { return this; },
+      async first() { return { id: "locked-wallet" }; },
+      async all() { return { success: true, results: [policy] }; }
+    };
+  } } };
+}
+
+test("grant verification rejects a token cap that differs from the current admin policy", async () => {
+  const response = await handleOwnerApi(request("/api/owner/grants/verify", { grant }), policyBoundEnv({ maxAmountRaw: "1001" }), session);
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /does not exactly match/);
+});
+
+test("grant verification rejects an execution mode not enabled for every selected asset", async () => {
+  const response = await handleOwnerApi(request("/api/owner/grants/verify", { grant }), policyBoundEnv({ automaticPriorityEnabled: 0 }), session);
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /Automatic-priority execution is not enabled/);
+});
