@@ -43,7 +43,7 @@ function safeCode(error:unknown):string {
   const known=["grant_inactive","source_wallet_not_locked","asset_not_authorized","destination_not_locked","token_not_active",
     "execution_mode_not_owner_authorized","operator_address_not_configured","operator_private_key_not_configured",
     "operator_private_key_address_mismatch","onchain_asset_scope_mismatch","requested_amount_exceeds_live_authorization_or_balance",
-    "eip1559_fee_quote_unavailable","estimated_gas_limit_exceeded","recovery_fee_cap_missing_or_exceeded","sponsor_gas_insufficient","sponsor_reserve_invalid","executor_code_hash_mismatch",
+    "eip1559_fee_quote_unavailable","gas_fee_quote_unavailable","estimated_gas_limit_exceeded","recovery_fee_cap_missing_or_exceeded","sponsor_gas_insufficient","sponsor_reserve_invalid","executor_code_hash_mismatch",
     "rpc_not_configured","unsupported_network"];
   if(known.includes(message))return message;
   if(message.includes("GRANT_VERIFIER_NOT_CONFIGURED"))return "grant_verifier_not_configured";
@@ -170,11 +170,15 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     const estimatedGas=await publicClient.estimateContractGas({account:operatorAddress as Address,address:executor,abi:EXECUTOR_ABI,functionName,args:[token,amount]});
     if(estimatedGas>1_000_000n)throw new Error("estimated_gas_limit_exceeded");
     const gas=estimatedGas*120n/100n;
-    const fees=await publicClient.estimateFeesPerGas();
-    const maxFeePerGas=fees.maxFeePerGas;
-    const maxPriorityFeePerGas=fees.maxPriorityFeePerGas;
-    if(!maxFeePerGas||!maxPriorityFeePerGas||maxPriorityFeePerGas>maxFeePerGas)throw new Error("eip1559_fee_quote_unavailable");
-    const estimatedFee=gas*maxFeePerGas;
+    const feeQuote:{maxFeePerGas?:bigint;maxPriorityFeePerGas?:bigint;gasPrice?:bigint}=await publicClient.estimateFeesPerGas().catch(async()=>({gasPrice:await publicClient.getGasPrice()}));
+    const useEip1559=feeQuote.maxFeePerGas!==undefined&&feeQuote.maxPriorityFeePerGas!==undefined&&
+      feeQuote.maxFeePerGas>0n&&feeQuote.maxPriorityFeePerGas>0n&&feeQuote.maxPriorityFeePerGas<=feeQuote.maxFeePerGas;
+    const maxFeePerGas=useEip1559?feeQuote.maxFeePerGas:undefined;
+    const maxPriorityFeePerGas=useEip1559?feeQuote.maxPriorityFeePerGas:undefined;
+    const gasPrice=useEip1559?undefined:feeQuote.gasPrice??await publicClient.getGasPrice();
+    if(!useEip1559&&(!gasPrice||gasPrice<=0n))throw new Error("gas_fee_quote_unavailable");
+    const feePerGasCap=useEip1559?maxFeePerGas!:gasPrice!;
+    const estimatedFee=gas*feePerGasCap;
     const maxAllowed=env.MAINWELL_MAX_RECOVERY_FEE_WEI&&UINT.test(env.MAINWELL_MAX_RECOVERY_FEE_WEI)?BigInt(env.MAINWELL_MAX_RECOVERY_FEE_WEI):null;
     if(env.MAINWELL_SPONSOR_RESERVE_WEI&&!UINT.test(env.MAINWELL_SPONSOR_RESERVE_WEI))throw new Error("sponsor_reserve_invalid");
     const reserve=env.MAINWELL_SPONSOR_RESERVE_WEI?BigInt(env.MAINWELL_SPONSOR_RESERVE_WEI):0n;
@@ -198,12 +202,14 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     if(!sponsorGasSufficient)throw new Error("sponsor_gas_insufficient");
     const nonce=await publicClient.getTransactionCount({address:account.address,blockTag:"pending"});
     const data=encodeFunctionData({abi:EXECUTOR_ABI,functionName,args:[token,amount]});
-    const serialized=await account.signTransaction({chain,nonce,to:executor,data,value:0n,gas,maxFeePerGas,maxPriorityFeePerGas,type:"eip1559"});
+    const serialized=useEip1559
+      ? await account.signTransaction({chain,nonce,to:executor,data,value:0n,gas,maxFeePerGas:maxFeePerGas!,maxPriorityFeePerGas:maxPriorityFeePerGas!,type:"eip1559"})
+      : await account.signTransaction({chain,nonce,to:executor,data,value:0n,gas,gasPrice:gasPrice!,type:"legacy"});
     const hash=keccak256(serialized);
     const txId=crypto.randomUUID(),sentAt=new Date().toISOString();
     const prepared=await env.DB.batch([
-      env.DB.prepare("INSERT INTO recovery_transactions(id,job_id,network,transaction_hash,status,asset_id,amount_raw,destination_address,destination_balance_before_raw,destination_balance_after_raw,estimated_fee_raw,actual_fee_raw,submitted_at,confirmed_at,created_at,sender_address,nonce,gas_limit_raw,max_fee_per_gas_raw,max_priority_fee_per_gas_raw) VALUES(?,?,?,?,'prepared',?,?,?,?,NULL,?,NULL,NULL,NULL,?,?,?,?,?,?)")
-        .bind(txId,job.id,network,hash,job.asset_id,amount.toString(),verifiedAsset.destinationAddress,destinationBalanceBefore.toString(),estimatedFee.toString(),sentAt,account.address,nonce,gas.toString(),maxFeePerGas.toString(),maxPriorityFeePerGas.toString()),
+      env.DB.prepare("INSERT INTO recovery_transactions(id,job_id,network,transaction_hash,status,asset_id,amount_raw,destination_address,destination_balance_before_raw,destination_balance_after_raw,estimated_fee_raw,actual_fee_raw,submitted_at,confirmed_at,created_at,sender_address,nonce,gas_limit_raw,max_fee_per_gas_raw,max_priority_fee_per_gas_raw,gas_price_raw) VALUES(?,?,?,?,'prepared',?,?,?,?,NULL,?,NULL,NULL,NULL,?,?,?,?,?,?,?)")
+        .bind(txId,job.id,network,hash,job.asset_id,amount.toString(),verifiedAsset.destinationAddress,destinationBalanceBefore.toString(),estimatedFee.toString(),sentAt,account.address,nonce,gas.toString(),maxFeePerGas?.toString()??null,maxPriorityFeePerGas?.toString()??null,gasPrice?.toString()??null),
       env.DB.prepare("INSERT INTO recovery_execution_attempts(id,job_id,attempt_number,phase,simulation_block_number,gas_funding_source,estimated_fee_raw,fee_cap_raw,transaction_hash,error_code,created_at,updated_at) VALUES(?,?,?,?,?,'recovery-sponsor',?,?,?,NULL,?,?)")
         .bind(attemptId,job.id,job.attempt_count,"signed",Number(await publicClient.getBlockNumber()),estimatedFee.toString(),maxAllowed.toString(),hash,sentAt,sentAt)
     ]);
