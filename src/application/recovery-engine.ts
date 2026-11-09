@@ -334,7 +334,8 @@ async function trackTransactions(env:EngineEnv):Promise<number>{
   return checked;
 }
 function parseAbiEvent(log:{topics:readonly Hex[];data:Hex;address:Address}):Array<{args:Record<string,unknown>}>{
-  const decoded=decodeEventLog({abi:EXECUTOR_ABI,data:log.data,topics:log.topics});
+  if(log.topics.length===0)return [];
+  const decoded=decodeEventLog({abi:EXECUTOR_ABI,data:log.data,topics:log.topics as readonly [Hex,...Hex[]]});
   return decoded.eventName==="TokenRecovered"?[{args:decoded.args as unknown as Record<string,unknown>}]:[];
 }
 
