@@ -80,13 +80,13 @@ export class D1GrantRepository {
 
   async saveVerified(record: VerifiedGrantRecord): Promise<void> {
     const { grant } = record;
-    validateRecoveryGrant(grant, grant.ownerWallet, grant.network);
+    if (!record.verifiedAt || !Number.isFinite(Date.parse(record.verifiedAt))) {
+      throw new Error("A valid server verification timestamp is required.");
+    }
+    validateRecoveryGrant(grant, grant.ownerWallet, grant.network, Date.parse(record.verifiedAt));
     if (grant.revokedAt) throw new Error("A revoked grant cannot be persisted as verified.");
     if (record.observedExecutorCodeHash.toLowerCase() !== grant.executorCodeHash.toLowerCase()) {
       throw new Error("Observed executor code hash does not match the approved grant.");
-    }
-    if (!record.verifiedAt || !Number.isFinite(Date.parse(record.verifiedAt))) {
-      throw new Error("A valid server verification timestamp is required.");
     }
 
     const grantStatement = this.db.prepare(`
