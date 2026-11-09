@@ -21,8 +21,13 @@ contract ScopedRecoveryExecutor {
     error TransferFailed();
     error ReentrantCall();
     error OwnerOnly();
+    error AutomationOperatorOnly();
+    error AdminOperatorOnly();
 
     address public owner;
+    // Distinct immutable callers enforce the owner's selected execution modes on-chain.
+    address public immutable automationOperator;
+    address public immutable adminOperator;
     // Legacy/default destination: the first authorized asset's destination. Not used for routing.
     address public destination;
     uint64 public expiresAt;
@@ -41,6 +46,8 @@ contract ScopedRecoveryExecutor {
     event GrantRevoked(address indexed owner);
 
     modifier onlyOwner() { if (msg.sender != owner) revert OwnerOnly(); _; }
+    modifier onlyAutomationOperator() { if (msg.sender != automationOperator) revert AutomationOperatorOnly(); _; }
+    modifier onlyAdminOperator() { if (msg.sender != adminOperator) revert AdminOperatorOnly(); _; }
     modifier nonReentrant() {
         if (_entered != 1) revert ReentrantCall();
         _entered = 2; _; _entered = 1;
@@ -52,14 +59,20 @@ contract ScopedRecoveryExecutor {
         address[] memory destinations_,
         uint256[] memory maxAmounts_,
         bool automaticPriorityEnabled_,
-        bool adminInitiatedEnabled_
+        bool adminInitiatedEnabled_,
+        address automationOperator_,
+        address adminOperator_
     ) {
         if (expiresAt_ <= block.timestamp) revert InvalidExpiry();
         if (!automaticPriorityEnabled_ && !adminInitiatedEnabled_) revert InvalidAssetConfiguration();
+        if ((automaticPriorityEnabled_ && automationOperator_ == address(0)) ||
+            (adminInitiatedEnabled_ && adminOperator_ == address(0))) revert InvalidAssetConfiguration();
         if (assets_.length == 0 || assets_.length != maxAmounts_.length || assets_.length != destinations_.length) {
             revert InvalidAssetConfiguration();
         }
         owner = msg.sender;
+        automationOperator = automationOperator_;
+        adminOperator = adminOperator_;
         expiresAt = expiresAt_;
         automaticPriorityEnabled = automaticPriorityEnabled_;
         adminInitiatedEnabled = adminInitiatedEnabled_;
@@ -82,7 +95,24 @@ contract ScopedRecoveryExecutor {
         return assetDestination[_authorizedAssets[index]];
     }
 
-    function executeToken(address token, uint256 amount) external nonReentrant {
+    /// @notice Execute only through the dedicated automatic-priority service identity.
+    function executeAutomaticToken(address token, uint256 amount)
+        external onlyAutomationOperator nonReentrant
+    {
+        if (!automaticPriorityEnabled) revert AutomationOperatorOnly();
+        _executeToken(token, amount);
+    }
+
+    /// @notice Execute only through the dedicated MFA-protected administrator service identity.
+    function executeAdminToken(address token, uint256 amount)
+        external onlyAdminOperator nonReentrant
+    {
+        if (!adminInitiatedEnabled) revert AdminOperatorOnly();
+        _executeToken(token, amount);
+    }
+
+    /// @dev Shared transfer logic. The public entry points above enforce the selected mode.
+    function _executeToken(address token, uint256 amount) internal {
         if (revoked) revert GrantAlreadyRevoked();
         if (block.timestamp >= expiresAt) revert GrantExpired();
         uint256 cap = assetLimit[token];
