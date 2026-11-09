@@ -18,6 +18,8 @@ export interface OwnerApiEnv extends Omit<MonitorEnv, "DB"> {
   MAINWELL_EXECUTOR_CODE_HASH_BASE?: string;
   MAINWELL_AUTOMATION_OPERATOR?: string;
   MAINWELL_ADMIN_OPERATOR?: string;
+  MAINWELL_EXECUTION_ENABLED?: string; MAINWELL_AUTOMATION_ENABLED?: string;
+  MAINWELL_MAX_RECOVERY_FEE_WEI?: string; MAINWELL_SPONSOR_RESERVE_WEI?: string;
 }
 export interface OwnerSession { wallet: string; chainId: number }
 const NETWORK_CHAIN: Partial<Record<NetworkId, number>> = {
