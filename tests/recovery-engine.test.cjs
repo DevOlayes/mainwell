@@ -42,7 +42,7 @@ test("emergency administrator recovery has no USD/native fee ceiling and retains
     enforceUsdFeeCeiling: false,
     enforceNativeFeeCap: false,
     retainGasReserve: false,
-    enforceAutomaticEconomicRatio: false
+    enforceAutomaticEconomicRatio: false,\n    enforceGasLimitCeiling: false
   });
 });
 
@@ -52,6 +52,6 @@ test("automatic recovery retains its fee ceilings, reserve and economic ratio", 
     enforceUsdFeeCeiling: true,
     enforceNativeFeeCap: true,
     retainGasReserve: true,
-    enforceAutomaticEconomicRatio: true
+    enforceAutomaticEconomicRatio: true,\n    enforceGasLimitCeiling: true
   });
 });
