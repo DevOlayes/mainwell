@@ -39,13 +39,28 @@ function makeChain(network:Network,rpcUrl:string):Chain {
   return {id:config.chainId,name:network,nativeCurrency:{name:config.symbol,symbol:config.symbol,decimals:18},rpcUrls:{default:{http:[rpcUrl]}}};
 }
 function minBigInt(...values:bigint[]):bigint{return values.reduce((a,b)=>a<b?a:b);}
+
+const NATIVE_PRICE_IDS:Record<Network,string>={ethereum:"ethereum",polygon:"polygon-ecosystem-token",bsc:"binancecoin",avalanche:"avalanche-2",arbitrum:"ethereum",optimism:"ethereum",base:"ethereum"};
+async function freshNativeUsdPrice(network:Network):Promise<number>{
+  const id=NATIVE_PRICE_IDS[network];
+  const response=await fetch("https://api.coingecko.com/api/v3/simple/price?ids="+encodeURIComponent(id)+"&vs_currencies=usd&include_last_updated_at=true",{headers:{"accept":"application/json"},signal:AbortSignal.timeout(7000)});
+  if(!response.ok)throw new Error("native_usd_price_unavailable");
+  const data=await response.json() as Record<string,{usd?:number;last_updated_at?:number}>;
+  const quote=data[id],price=quote?.usd,updated=quote?.last_updated_at;
+  if(typeof price!=="number"||!Number.isFinite(price)||price<=0||typeof updated!=="number"||Date.now()/1000-updated>300||Date.now()/1000<updated-60)throw new Error("native_usd_price_stale");
+  return price;
+}
+function usdValue(raw:bigint,decimals:number,price:number):number{
+  const whole=raw/10n**BigInt(decimals),fraction=raw%10n**BigInt(decimals);
+  return (Number(whole)+Number(fraction)/10**decimals)*price;
+}
 function safeCode(error:unknown):string {
   const message=error instanceof Error?error.message:"";
   const known=["grant_inactive","source_wallet_not_locked","asset_not_authorized","destination_not_locked","token_not_active","token_decimals_changed",
     "execution_mode_not_owner_authorized","invalid_recovery_destination","operator_address_not_configured","operator_private_key_not_configured",
     "operator_private_key_address_mismatch","operator_execution_busy","onchain_asset_scope_mismatch","requested_amount_exceeds_live_authorization_or_balance",
     "eip1559_fee_quote_unavailable","gas_fee_quote_unavailable","estimated_gas_limit_exceeded","recovery_fee_cap_missing_or_exceeded","sponsor_gas_insufficient","sponsor_reserve_invalid","executor_code_hash_mismatch",
-    "rpc_not_configured","unsupported_network"];
+    "rpc_not_configured","unsupported_network","native_usd_price_unavailable","native_usd_price_stale","recovery_asset_valuation_unavailable","recovery_economic_value_invalid","recovery_usd_fee_cap_exceeded","recovery_fee_exceeds_five_percent_value"];
   if(known.includes(message))return message;
   if(message.includes("GRANT_VERIFIER_NOT_CONFIGURED"))return "grant_verifier_not_configured";
   if(message.includes("RPC")||message.includes("fetch"))return "rpc_unavailable";
@@ -129,7 +144,7 @@ async function processOne(env:EngineEnv):Promise<boolean>{
   let executionLock:{network:string;operatorAddress:string}|null=null;
   try{
     const scope=await env.DB.prepare(`
-      SELECT g.network,g.owner_wallet,g.executor_address,g.expires_at,g.revoked_at,g.verification_status,
+      SELECT g.network,g.owner_wallet,g.executor_address,g.expires_at,g.revoked_at,g.verification_status,w.id AS wallet_id,
              a.token_address,a.amount_kind,a.max_amount_raw,a.destination_address,a.revoked_at AS asset_revoked_at,
              w.status AS wallet_status,w.admin_locked,d.locked AS destination_locked,d.is_active AS destination_active,
              s.is_active AS token_active,s.decimals AS registered_decimals
@@ -187,6 +202,15 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     if(!useEip1559&&(!gasPrice||gasPrice<=0n))throw new Error("gas_fee_quote_unavailable");
     const feePerGasCap=useEip1559?maxFeePerGas!:gasPrice!;
     const estimatedFee=gas*feePerGasCap;
+    const assetValuation=await env.DB.prepare("SELECT estimated_value_usd,valuation_confidence,price_observed_at FROM wallet_assets WHERE wallet_id=? AND asset_ref=? LIMIT 1").bind(scope.wallet_id,job.asset_id).first<{estimated_value_usd:number|null;valuation_confidence:number|null;price_observed_at:string|null}>();
+    const valuationAge=assetValuation?.price_observed_at?Date.now()-Date.parse(assetValuation.price_observed_at):Number.POSITIVE_INFINITY;
+    if(!assetValuation||typeof assetValuation.estimated_value_usd!=="number"||!Number.isFinite(assetValuation.estimated_value_usd)||assetValuation.estimated_value_usd<=0||typeof assetValuation.valuation_confidence!=="number"||assetValuation.valuation_confidence<0.75||valuationAge<0||valuationAge>300_000)throw new Error("recovery_asset_valuation_unavailable");
+    const nativeUsd=await freshNativeUsdPrice(network);
+    const feeUsd=usdValue(estimatedFee,18,nativeUsd);
+    const recoveredValueUsd=assetValuation.estimated_value_usd*(Number(amount)/Number(balance));
+    if(!Number.isFinite(feeUsd)||!Number.isFinite(recoveredValueUsd)||recoveredValueUsd<=0)throw new Error("recovery_economic_value_invalid");
+    if(feeUsd>500)throw new Error("recovery_usd_fee_cap_exceeded");
+    if(feeUsd/recoveredValueUsd>0.05)throw new Error("recovery_fee_exceeds_five_percent_value");
     const feeCapSetting=await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("fee_cap_wei:"+network).first<{setting_value:string}>();
     const maxAllowed=feeCapSetting?.setting_value&&UINT.test(feeCapSetting.setting_value)?BigInt(feeCapSetting.setting_value):null;
     const reserveSetting=await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("reserve_wei:"+network).first<{setting_value:string}>();
