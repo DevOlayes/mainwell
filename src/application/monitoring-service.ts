@@ -214,6 +214,14 @@ async function runWallet(env:MonitoringEnv,wallet:{id:string;address:string;netw
   await env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES(?,'system','scheduled-monitor','wallet.monitoring.completed','recovery_wallet',?,?,?)")
     .bind(crypto.randomUUID(),wallet.id,JSON.stringify({network:wallet.network,assets:assets.length,priced:assets.filter(a=>a.price!==null).length,permissions:permissionCount,permissionPartial,priceError}),observedAt).run();
 }
+export async function refreshWalletWithAlchemy(env:MonitoringEnv,wallet:{id:string;address:string;network:string;chain_id:number|null}):Promise<{observedAt:string;assets:Array<Record<string,unknown>>;permissions:Array<Record<string,unknown>>}>{
+  await runWallet(env,wallet);
+  const [assets,permissions]=await Promise.all([
+    env.DB.prepare("SELECT asset_ref AS id,symbol,name,amount_raw,decimals,token_address AS contractAddress,estimated_value_usd AS estimatedValueUsd,price_observed_at AS priceObservedAt,valuation_confidence AS confidence,lifecycle_status AS lifecycleStatus FROM wallet_assets WHERE wallet_id=? AND network=? AND lifecycle_status='active' ORDER BY symbol").bind(wallet.id,wallet.network).all<Record<string,unknown>>(),
+    env.DB.prepare("SELECT id,token_address AS tokenAddress,spender_address AS spender,allowance_raw AS allowanceRaw,status,updated_at AS observedAt FROM wallet_permissions WHERE wallet_id=? AND network=? ORDER BY updated_at DESC").bind(wallet.id,wallet.network).all<Record<string,unknown>>()
+  ]);
+  return {observedAt:new Date().toISOString(),assets:assets.results.map(a=>({...a,amount:amountDisplay(String(a.amount_raw),Number(a.decimals)),estimatedValueUsd:a.estimatedValueUsd===null?null:Number(a.estimatedValueUsd)})),permissions:permissions.results};
+}
 export async function runScheduledWalletMonitoring(env:MonitoringEnv,limit=5):Promise<{processed:number;failed:number;skipped:boolean}>{
   if(!env.ALCHEMY_API_KEY)return {processed:0,failed:0,skipped:true};
   const due=await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id FROM recovery_wallets WHERE status='monitoring' AND (last_monitor_at IS NULL OR last_monitor_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now','-5 minutes')) ORDER BY CASE WHEN last_monitor_at IS NULL THEN 0 ELSE 1 END,last_monitor_at ASC,first_seen_at ASC LIMIT ?")
