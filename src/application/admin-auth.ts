@@ -162,9 +162,10 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
   if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
   const b=await read(request),email=typeof b?.email==="string"?b.email.trim().toLowerCase():"",password=typeof b?.password==="string"?b.password:"",otp=typeof b?.otp==="string"?b.otp:"";
   if(email.length>254||password.length>1024||!/^\S+@\S+\.\S+$/.test(email))return json({error:"Invalid administrator credentials."},401);
-  const ip=request.headers.get("cf-connecting-ip")??"unknown",rateKey=await sha(email+"|"+ip),epoch=Math.floor(Date.now()/1000);
-  const rate=await env.DB.prepare("SELECT attempts,window_started_at,locked_until FROM admin_auth_rate_limits WHERE identifier_hash=?").bind(rateKey).first<{attempts:number;window_started_at:number;locked_until:number}>();
-  if(rate&&rate.locked_until>epoch)return json({error:"Too many sign-in attempts. Try again after the temporary lockout."},429);
+  let loginLimit:{allowed:boolean;key:string};
+  try{loginLimit=await checkAdminEndpointRateLimit(env,request,"admin-login");}
+  catch{return json({error:"Security throttling is temporarily unavailable."},503);}
+  if(!loginLimit.allowed)return json({error:"Too many sign-in attempts. Try again after the temporary lockout."},429,{"retry-after":"900"});
   const account=await env.DB.prepare("SELECT id,password_hash,mfa_enabled,mfa_secret_ciphertext,status FROM admin_accounts WHERE email=? COLLATE NOCASE LIMIT 1").bind(email).first<{id:string;password_hash:string;mfa_enabled:number;mfa_secret_ciphertext:string|null;status:string}>();
   let loginFailureReason:string|null=null;
   if(!account)loginFailureReason="account_not_found";
@@ -174,21 +175,21 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
   else if(!(await verifyAdminPassword(account.password_hash,password)))loginFailureReason="password_verification_failed";
   if(loginFailureReason){
   console.warn("admin_login_rejected",{reason:loginFailureReason});
-  await env.DB.prepare("INSERT INTO admin_auth_rate_limits(identifier_hash,attempts,window_started_at,locked_until) VALUES(?,1,?,0) ON CONFLICT(identifier_hash) DO UPDATE SET attempts=CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END,window_started_at=CASE WHEN ?-window_started_at>900 THEN ? ELSE window_started_at END,locked_until=CASE WHEN (CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END)>=5 THEN ?+900 ELSE locked_until END").bind(rateKey,epoch,epoch,epoch,epoch,epoch,epoch).run();
+
   return json({error:"Invalid administrator credentials or MFA configuration."},401);
 }
   if(!account||!account.mfa_secret_ciphertext||!env.ADMIN_MFA_ENCRYPTION_KEY)return json({error:"Administrator MFA is not configured correctly."},503);
   let matchedStep:number|null=null;try{const secret=await decryptTotpSecret(account.mfa_secret_ciphertext,env.ADMIN_MFA_ENCRYPTION_KEY);matchedStep=await verifyTotpStep(secret,otp);}catch{return json({error:"Administrator MFA is not configured correctly."},503);}
   if(matchedStep===null){
-  await env.DB.prepare("INSERT INTO admin_auth_rate_limits(identifier_hash,attempts,window_started_at,locked_until) VALUES(?,1,?,0) ON CONFLICT(identifier_hash) DO UPDATE SET attempts=CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END,window_started_at=CASE WHEN ?-window_started_at>900 THEN ? ELSE window_started_at END,locked_until=CASE WHEN (CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END)>=5 THEN ?+900 ELSE locked_until END").bind(rateKey,epoch,epoch,epoch,epoch,epoch,epoch).run();
+
   return json({error:"Invalid administrator credentials or MFA code."},401);
 }
   const acceptedStep=await env.DB.prepare("UPDATE admin_accounts SET mfa_last_verified_step=?,updated_at=? WHERE id=? AND status='active' AND mfa_enabled=1 AND mfa_last_verified_step<?").bind(matchedStep,now,account.id,matchedStep).run();
   if(!acceptedStep.success||(acceptedStep.meta?.changes??0)!==1){
-   await env.DB.prepare("INSERT INTO admin_auth_rate_limits(identifier_hash,attempts,window_started_at,locked_until) VALUES(?,1,?,0) ON CONFLICT(identifier_hash) DO UPDATE SET attempts=CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END,window_started_at=CASE WHEN ?-window_started_at>900 THEN ? ELSE window_started_at END,locked_until=CASE WHEN (CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END)>=5 THEN ?+900 ELSE locked_until END").bind(rateKey,epoch,epoch,epoch,epoch,epoch,epoch).run();
+
    return json({error:"Invalid administrator credentials or MFA code."},401);
   }
-  await env.DB.prepare("DELETE FROM admin_auth_rate_limits WHERE identifier_hash=?").bind(rateKey).run();
+  await clearAdminEndpointRateLimit(env,loginLimit.key);
   const token=randomHex(32),id=crypto.randomUUID(),expires=new Date(Date.now()+SESSION_SECONDS*1000).toISOString();
   const saved=await env.DB.prepare("INSERT INTO admin_sessions(id,admin_id,token_hash,mfa_verified_at,expires_at,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?)").bind(id,account!.id,await sha(token),now,expires,now,now).run();
   if(!saved.success)return json({error:"Unable to create administrator session."},503);
