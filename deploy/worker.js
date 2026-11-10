@@ -11327,7 +11327,7 @@ __name(validateRecoveryGrant, "validateRecoveryGrant");
 var EXECUTOR_CREATION_BYTECODE = "0x60c0604052600160035534801562000015575f80fd5b506040516200100e3803806200100e8339810160408190526200003891620004fe565b42886001600160401b031611620000615760405162d36c8560e81b815260040160405180910390fd5b831580156200006e575082155b156200008d5760405163c522a9e160e01b815260040160405180910390fd5b838015620000a257506001600160a01b038216155b80620000be5750828015620000be57506001600160a01b038116155b15620000dd5760405163c522a9e160e01b815260040160405180910390fd5b86511580620000ee57508451875114155b80620000fc57508551875114155b156200011b5760405163c522a9e160e01b815260040160405180910390fd5b5f8054336001600160a01b03199091161781556001600160a01b03838116608052821660a05260018054600160a01b61ff0160e01b031916600160a01b6001600160401b038c160260ff60e81b191617600160e81b871515021760ff60f01b1916600160f01b861515021790555b87518110156200031e575f888281518110620001a957620001a9620005e6565b602002602001015190505f888381518110620001c957620001c9620005e6565b602002602001015190505f888481518110620001e957620001e9620005e6565b602002602001015190505f6001600160a01b0316836001600160a01b031614806200021c57506001600160a01b0383163b155b806200022f57506001600160a01b038216155b8062000239575080155b15620002585760405163c522a9e160e01b815260040160405180910390fd5b6001600160a01b0383165f90815260046020526040902054156200029e5760405163437a40b160e01b81526001600160a01b038416600482015260240160405180910390fd5b6001600160a01b039283165f81815260046020908152604080832094909455600690529182208054939094166001600160a01b0319938416179093556002805460018181018355919092527f405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace909101805490921690921790550162000189565b50855f81518110620003345762000334620005e6565b602002602001015160015f6101000a8154816001600160a01b0302191690836001600160a01b031602179055505050505050505050620005fa565b80516001600160401b038116811462000386575f80fd5b919050565b634e487b7160e01b5f52604160045260245ffd5b604051601f8201601f191681016001600160401b0381118282101715620003ca57620003ca6200038b565b604052919050565b5f6001600160401b03821115620003ed57620003ed6200038b565b5060051b60200190565b80516001600160a01b038116811462000386575f80fd5b5f82601f8301126200041e575f80fd5b81516020620004376200043183620003d2565b6200039f565b8083825260208201915060208460051b87010193508684111562000459575f80fd5b602086015b8481101562000480576200047281620003f7565b83529183019183016200045e565b509695505050505050565b5f82601f8301126200049b575f80fd5b81516020620004ae6200043183620003d2565b8083825260208201915060208460051b870101935086841115620004d0575f80fd5b602086015b84811015620004805780518352918301918301620004d5565b8051801515811462000386575f80fd5b5f805f805f805f80610100898b03121562000517575f80fd5b62000522896200036f565b60208a01519098506001600160401b03808211156200053f575f80fd5b6200054d8c838d016200040e565b985060408b015191508082111562000563575f80fd5b620005718c838d016200040e565b975060608b015191508082111562000587575f80fd5b50620005968b828c016200048b565b955050620005a760808a01620004ee565b9350620005b760a08a01620004ee565b9250620005c760c08a01620003f7565b9150620005d760e08a01620003f7565b90509295985092959890939650565b634e487b7160e01b5f52603260045260245ffd5b60805160a0516109e46200062a5f395f81816102e801526104f701525f81816101ac015261044901526109e45ff3fe608060405234801561000f575f80fd5b5060043610610111575f3560e01c8063b6549f751161009e578063d0e043de1161006e578063d0e043de14610295578063e5b07f0b146102b4578063e728c0ef146102c8578063e7f36c63146102db578063e900a491146102e3575f80fd5b8063b6549f7514610254578063bd3def631461025c578063c23ab1b91461026f578063c6d51a8414610282575f80fd5b8063655fb24a116100e4578063655fb24a146101a757806385a708a8146101ce5780638622a689146101fb5780638da5cb5b1461022f578063b269681d14610241575f80fd5b80630b81c9a7146101155780630f3bdd5f1461013e57806313bb4f961461015357806363d256ce14610193575b5f80fd5b60015461012990600160f01b900460ff1681565b60405190151581526020015b60405180910390f35b61015161014c3660046108b0565b61030a565b005b61017b6101613660046108b0565b60066020525f90815260409020546001600160a01b031681565b6040516001600160a01b039091168152602001610135565b60015461012990600160e01b900460ff1681565b61017b7f000000000000000000000000000000000000000000000000000000000000000081565b6101ed6101dc3660046108b0565b60056020525f908152604090205481565b604051908152602001610135565b60015461021690600160a01b900467ffffffffffffffff1681565b60405167ffffffffffffffff9091168152602001610135565b5f5461017b906001600160a01b031681565b60015461017b906001600160a01b031681565b6101516103ca565b61015161026a3660046108d0565b61043e565b61015161027d3660046108d0565b6104ec565b61017b6102903660046108f8565b610587565b6101ed6102a33660046108b0565b60046020525f908152604090205481565b60015461012990600160e81b900460ff1681565b61017b6102d63660046108f8565b6105ce565b6002546101ed565b61017b7f000000000000000000000000000000000000000000000000000000000000000081565b5f546001600160a01b0316331461033457604051630b2db9b760e31b815260040160405180910390fd5b6001600160a01b0381165f90815260046020526040812054900361037b57604051630a23366560e41b81526001600160a01b03821660048201526024015b60405180910390fd5b6001600160a01b0381165f81815260056020908152604080832054600490925280832091909155517fba5ecd908aab4d79cf7e9fc9d22735958a8f4befc4ac4c9f1fb7f2297797dbbd9190a250565b5f546001600160a01b031633146103f457604051630b2db9b760e31b815260040160405180910390fd5b6001805460ff60e01b1916600160e01b1790555f80546040516001600160a01b03909116917fbadc5b2ca6241beb42d4f1c0481f982a91e7aceaca195b8825f6187ad50018e591a2565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146104875760405163031142d360e11b815260040160405180910390fd5b6003546001146104aa576040516306fda65d60e31b815260040160405180910390fd5b6002600355600154600160e81b900460ff166104d95760405163031142d360e11b815260040160405180910390fd5b6104e382826105fc565b50506001600355565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146105355760405163143ee67560e21b815260040160405180910390fd5b600354600114610558576040516306fda65d60e31b815260040160405180910390fd5b6002600355600154600160f01b900460ff166104d95760405163143ee67560e21b815260040160405180910390fd5b5f60065f6002848154811061059e5761059e61090f565b5f9182526020808320909101546001600160a01b0390811684529083019390935260409091019020541692915050565b5f600282815481106105e2576105e261090f565b5f918252602090912001546001600160a01b031692915050565b600154600160e01b900460ff16156106275760405163a0c81e5f60e01b815260040160405180910390fd5b600154600160a01b900467ffffffffffffffff16421061065a5760405163075ff6cf60e11b815260040160405180910390fd5b6001600160a01b0382165f908152600460205260408120549081900361069e57604051630a23366560e41b81526001600160a01b0384166004820152602401610372565b6001600160a01b0383165f90815260056020526040812054906106c18284610937565b90508315806106cf57508084115b156106f757604051631beda7db60e31b81526004810185905260248101829052604401610372565b6001600160a01b038086165f90815260066020526040902054168061072f5760405163c522a9e160e01b815260040160405180910390fd5b6107398584610950565b6001600160a01b038781165f81815260056020908152604080832095909555815485519085166024820152938616604485015260648085018b90528551808603909101815260849094018552830180516001600160e01b03166323b872dd60e01b179052925183926107aa91610963565b5f604051808303815f865af19150503d805f81146107e3576040519150601f19603f3d011682016040523d82523d5f602084013e6107e8565b606091505b50915091508115806108165750805115801590610816575080806020019051810190610814919061098f565b155b15610834576040516312171d8360e31b815260040160405180910390fd5b336001600160a01b0316836001600160a01b0316896001600160a01b03167ffe28fceecb7dd637d5601fefa0516fc4c3b757be702d47e296d4921d89d56c1c8a60405161088391815260200190565b60405180910390a45050505050505050565b80356001600160a01b03811681146108ab575f80fd5b919050565b5f602082840312156108c0575f80fd5b6108c982610895565b9392505050565b5f80604083850312156108e1575f80fd5b6108ea83610895565b946020939093013593505050565b5f60208284031215610908575f80fd5b5035919050565b634e487b7160e01b5f52603260045260245ffd5b634e487b7160e01b5f52601160045260245ffd5b8181038181111561094a5761094a610923565b92915050565b8082018082111561094a5761094a610923565b5f82515f5b818110156109825760208186018101518583015201610968565b505f920191825250919050565b5f6020828403121561099f575f80fd5b815180151581146108c9575f80fdfea2646970667358221220102a26af16b60f4b576ab29b4e036d6e6ed52b2f75fecb9e06bd43e657d45e4d64736f6c63430008180033";
 var EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH = "0xa7f073a21c09677f888baa49343d517f52d13383d84010a86ffff9a0d1a8117f";
 var EXECUTOR_IMMUTABLE_RANGES = [{ "start": 428, "length": 32 }, { "start": 744, "length": 32 }, { "start": 1097, "length": 32 }, { "start": 1271, "length": 32 }];
-var EXECUTOR_BUILD_SOURCE_COMMIT = "f44ebf58658ee4d67b8f29cc89e568e2d3964304";
+var EXECUTOR_BUILD_SOURCE_COMMIT = "484c6e976c39cbceeaf1cf76afc857c0d8220e01";
 
 // src/adapters/evm-grant-verifier.ts
 var ADDRESS2 = /^0x[0-9a-fA-F]{40}$/;
@@ -12287,6 +12287,11 @@ __name(handleOwnerApi, "handleOwnerApi");
 // src/application/admin-destination-api.ts
 var NETWORK_CHAIN2 = { ethereum: 1, polygon: 137, bsc: 56, avalanche: 43114, arbitrum: 42161, optimism: 10, base: 8453 };
 var ADDRESS4 = /^0x[0-9a-fA-F]{40}$/;
+async function runtimeExecutionEnabled(env) {
+  const row = await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("execution_enabled").first();
+  return row?.setting_value === "true";
+}
+__name(runtimeExecutionEnabled, "runtimeExecutionEnabled");
 var RPC_BY_NETWORK = {
   ethereum: "EVM_RPC_ETHEREUM",
   polygon: "EVM_RPC_POLYGON",
@@ -12532,7 +12537,7 @@ async function handleAdminDestinationApi(request, env, admin) {
     ]);
     if (results.some((result) => !result.success)) return response({ error: "The recovery job state and audit records could not be committed." }, 503);
     if ((results[0]?.meta?.changes ?? 0) !== 1) return response({ error: "The job is not in a state that permits this action." }, 409);
-    return response({ updated: true, jobId, status: action === "retry" ? "queued" : "cancelled", executionEnabled: env.MAINWELL_EXECUTION_ENABLED === "true" });
+    return response({ updated: true, jobId, status: action === "retry" ? "queued" : "cancelled", executionEnabled: await runtimeExecutionEnabled(env) });
   }
   if (path === "/api/admin/recovery-grants" && request.method === "GET") {
     const rows = await env.DB.prepare(`
@@ -12559,7 +12564,7 @@ async function handleAdminDestinationApi(request, env, admin) {
         return false;
       }
     }).map((row) => ({ ...row, executionModes: JSON.parse(String(row.executionModesJson)) }));
-    return response({ grants, executionEnabled: env.MAINWELL_EXECUTION_ENABLED === "true" });
+    return response({ grants, executionEnabled: await runtimeExecutionEnabled(env) });
   }
   if (path === "/api/admin/recovery-jobs" && request.method === "POST") {
     if (!originOk(request, url)) return response({ error: "Origin check failed." }, 403);
@@ -12574,7 +12579,7 @@ async function handleAdminDestinationApi(request, env, admin) {
     const prior = await env.DB.prepare("SELECT id,grant_id,asset_id,requested_amount_raw,status FROM recovery_jobs WHERE idempotency_key=? LIMIT 1").bind(idempotencyKey).first();
     if (prior) {
       if (prior.grant_id !== grantId || prior.asset_id !== assetId || prior.requested_amount_raw !== amountRaw) return response({ error: "This idempotency key was already used for a different recovery request." }, 409);
-      return response({ queued: true, duplicate: true, job: prior, executionEnabled: env.MAINWELL_EXECUTION_ENABLED === "true" }, 200);
+      return response({ queued: true, duplicate: true, job: prior, executionEnabled: await runtimeExecutionEnabled(env) }, 200);
     }
     const scope = await env.DB.prepare(`
    SELECT g.network,g.owner_wallet,g.execution_modes_json,g.expires_at,g.revoked_at,g.verification_status,
@@ -12614,16 +12619,16 @@ async function handleAdminDestinationApi(request, env, admin) {
     const batch = await env.DB.batch([
       env.DB.prepare("INSERT INTO recovery_jobs(id,grant_id,asset_id,execution_mode,status,priority_score,idempotency_key,requested_by,created_at,updated_at,requested_amount_raw,destination_address,next_attempt_at) VALUES(?,?,?,'admin-initiated','queued',0,?,?,?,?,?,?,?) ON CONFLICT(idempotency_key) DO NOTHING").bind(id, grantId, assetId, idempotencyKey, "admin:" + admin.adminId, now, now, amountRaw, String(scope.destination_address), now),
       env.DB.prepare("INSERT INTO recovery_job_events(id,job_id,event_type,actor_type,actor_id,details_json,created_at) SELECT ?,?,'admin_recovery.queued','admin',?,?,? WHERE changes()=1").bind(eventId, id, admin.adminId, JSON.stringify({ grantId, assetId, amountRaw, network: scope.network }), now),
-      env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) SELECT 'admin',?,'recovery.job.queued','recovery_job',?,?,? WHERE changes()=1").bind(admin.adminId, id, JSON.stringify({ grantId, assetId, amountRaw, network: scope.network, executionEnabled: false }), now)
+      env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) SELECT 'admin',?,'recovery.job.queued','recovery_job',?,?,? WHERE changes()=1").bind(admin.adminId, id, JSON.stringify({ grantId, assetId, amountRaw, network: scope.network, executionEnabled: await runtimeExecutionEnabled(env) }), now)
     ]);
     if (batch.some((result) => !result.success)) return response({ error: "The recovery request and its audit records could not be committed." }, 503);
     if ((batch[0]?.meta?.changes ?? 0) !== 1) {
       const raced = await env.DB.prepare("SELECT id,grant_id,asset_id,requested_amount_raw,status FROM recovery_jobs WHERE idempotency_key=? LIMIT 1").bind(idempotencyKey).first();
       if (!raced || raced.grant_id !== grantId || raced.asset_id !== assetId || raced.requested_amount_raw !== amountRaw)
         return response({ error: "The idempotency key conflicts with another recovery request." }, 409);
-      return response({ queued: true, duplicate: true, job: raced, executionEnabled: false }, 200);
+      return response({ queued: true, duplicate: true, job: raced, executionEnabled: await runtimeExecutionEnabled(env) }, 200);
     }
-    return response({ queued: true, executionEnabled: env.MAINWELL_EXECUTION_ENABLED === "true", job: { id, grantId, assetId, network: scope.network, executionMode: "admin-initiated", status: "queued", amountRaw, destinationAddress: scope.destination_address, createdAt: now } });
+    return response({ queued: true, executionEnabled: await runtimeExecutionEnabled(env), job: { id, grantId, assetId, network: scope.network, executionMode: "admin-initiated", status: "queued", amountRaw, destinationAddress: scope.destination_address, createdAt: now } });
   }
   return null;
 }
@@ -13178,13 +13183,13 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{max-width:1180px;m
 <div class="metric"><small>SUPPORTED ERC-20 ASSETS</small><strong id="metricAssets">\u2014</strong><span>Registered token contracts</span></div>
 <div class="metric"><small>ASSET POLICIES</small><strong id="metricPolicies">\u2014</strong><span>Bounded authorization policies</span></div>
 </div>
-<div class="section-note"><b>Execution status:</b> Recovery execution is not enabled yet. This console currently manages configuration and owner-approved authorization policies; it does not submit asset transfers. Execution will be enabled only after the separate Phase Two worker, simulation, fee, transaction and confirmation controls are implemented and verified.</div>
+<div class="section-note"><b>Execution status:</b> Automation and transaction execution are controlled separately under Settings. Both switches default to OFF; enabling them does not bypass owner authorization, per-network fee ceilings, live simulation, gas-balance checks or transaction confirmation.</div>
 </section>
 <section id="destinationsView" class="placeholder-view view-hidden"><div class="view-head"><div><div class="eyebrow">NETWORK DESTINATIONS</div><h2>Destination wallets</h2><p class="muted">Set the receiving wallet for each supported network. Native coins and supported tokens on that network can share the same destination.</p></div></div><div class="section-note"><b>How this works:</b> choose one destination per network. Then register the ERC-20 tokens you want Mainwell to monitor and configure a separate bounded policy for each asset. The wallet owner must still approve the exact destination and amount on-chain. Changing this page does not rewrite an existing owner-approved grant.</div><div id="destinationNetworkGrid" class="destination-grid"></div></section>
 <section id="operationsView" class="placeholder-view view-hidden"><div class="view-head"><div><div class="eyebrow">PHASE TWO \xB7 RECOVERY QUEUE</div><h2>Recovery Operations</h2><p class="muted">Review eligible owner authorizations, queue recovery requests, and monitor transaction outcomes.</p></div></div><div class="section-note"><b>Queueing is not a transfer.</b> A request is accepted only when the owner has authorized administrator-initiated recovery for that asset. The scheduled worker revalidates and simulates it. Signing and submission are controlled separately by the global execution switch.</div><section class="panel" style="margin-bottom:12px"><h2>Initiate an authorized recovery</h2><p class="muted">Only active grants that explicitly permit administrator-initiated recovery are listed. Submitting this form queues a request for later preflight; it does not send a transaction.</p><form id="adminRecoveryForm"><div class="field"><label for="recoveryGrantSelect">Owner authorization</label><select id="recoveryGrantSelect" required><option value="">Loading eligible authorizations\u2026</option></select></div><div class="field"><label for="recoveryAssetSelect">Authorized token</label><select id="recoveryAssetSelect" required disabled><option value="">Select an authorization first</option></select></div><div class="field"><label for="recoveryAmount">Amount to queue</label><input id="recoveryAmount" inputmode="decimal" autocomplete="off" placeholder="Enter token amount" required disabled></div><button class="secondary" id="queueRecoveryButton" type="submit" disabled>Queue recovery request</button><p id="recoveryQueueStatus" class="status" role="status" aria-live="polite"></p></form></section><div id="recoveryJobs" class="list"></div></section>
 <section id="transactionsView" class="placeholder-view view-hidden"><div class="view-head"><div><div class="eyebrow">TRANSACTION LIFECYCLE</div><h2>Transactions &amp; Activity</h2></div></div><div class="section-note">Read-only transaction records. Submission, confirmation polling, replacement handling and reconciliation will be implemented in Phase Two.</div><div id="transactionRecords" class="list"></div></section>
 <section id="auditView" class="placeholder-view view-hidden"><div class="view-head"><div><div class="eyebrow">SECURITY RECORDS</div><h2>Audit Logs</h2></div></div><p class="muted">Most recent administrative and system events. This view is read-only.</p><div id="auditRecords" class="list"></div></section>
-<section id="settingsView" class="placeholder-view view-hidden"><div class="view-head"><div><div class="eyebrow">ADMINISTRATION</div><h2>Settings</h2></div></div><div class="section-note">Configuration status only. Secret values and private keys are never returned to the browser.</div><div id="settingsRecords" class="list"></div><p class="muted" style="margin-top:14px"><a href="/admin/operators" style="color:#9dd8c7">Open Operator Management \u2192</a></p></section><div class="console-grid">
+<section id="settingsView" class="placeholder-view view-hidden"><div class="view-head"><div><div class="eyebrow">ADMINISTRATION</div><h2>Settings</h2></div></div><div class="section-note">Configuration status only. Secret values and private keys are never returned to the browser. Automation queues eligible work; execution separately authorizes signing and transaction submission. Both controls default to OFF.</div><section class="panel" style="margin-bottom:12px"><h2>Runtime controls</h2><p class="muted">These switches are stored in the database and audited. Turning either on does not bypass owner grants, executor authorization, fee ceilings, simulations or balance checks.</p><div class="field"><label><input id="automationSwitch" type="checkbox"> Enable automatic-priority job discovery</label></div><div class="field"><label><input id="executionSwitch" type="checkbox"> Enable transaction signing and submission</label></div><button id="saveRuntimeSwitches" class="secondary" type="button">Save runtime switches</button><p id="runtimeSwitchStatus" class="status" role="status"></p></section><section class="panel" style="margin-bottom:12px"><h2>Network fee ceilings</h2><p class="muted">Set a maximum total transaction fee and a minimum retained gas reserve in the network native asset's smallest unit (wei). Leave the fee ceiling blank to block submissions on that network while keeping read-only checks available.</p><div id="feeCapFields" class="destination-grid"></div><button id="saveFeeCaps" class="secondary" type="button">Save fee ceilings</button><p id="feeCapStatus" class="status" role="status"></p></section><section class="panel" style="margin-bottom:12px"><h2>Live network readiness</h2><p class="muted">Checks RPC chain identity, recent block, fee quote, operator key/address match and native gas balances. No transaction is sent.</p><button id="refreshReadiness" class="secondary" type="button">Refresh readiness</button><div id="readinessRecords" class="list"></div></section><div id="settingsRecords" class="list"></div><p class="muted" style="margin-top:14px"><a href="/admin/operators" style="color:#9dd8c7">Open Operator Management \u2192</a></p></section><div class="console-grid">
 <section class="panel" data-admin-section="wallets"><h2>Lock a source wallet</h2><p class="muted">Register the exact compromised wallet address and network. Only administrator-locked source wallets can receive a recovery authorization.</p><form id="sourceWalletForm"><div class="field"><label>Blockchain network</label><select name="network"><option value="ethereum">Ethereum</option><option value="polygon">Polygon</option><option value="bsc">BNB Smart Chain</option><option value="avalanche">Avalanche</option><option value="arbitrum">Arbitrum</option><option value="optimism">Optimism</option><option value="base">Base</option></select></div><div class="field"><label>Compromised source wallet address</label><input name="address" placeholder="0x\u2026" required></div><button class="primary">Register and lock source wallet</button></form><p id="sourceWalletStatus" class="status" role="status"></p></section>
 <section class="panel wide" data-admin-section="wallets"><h2>Locked source wallets</h2><p class="muted">These exact owner addresses are eligible for the owner authorization flow on their configured networks.</p><div id="sourceWallets" class="list"></div></section>
 
@@ -13207,8 +13212,9 @@ $("recoveryGrantSelect").addEventListener("change",renderRecoveryAssetOptions);
 $("recoveryAssetSelect").addEventListener("change",()=>{$("recoveryAmount").value="";const grant=eligibleRecoveryGrants.find(g=>g.grantId===$("recoveryGrantSelect").value);const asset=eligibleRecoveryGrants.find(g=>g.grantId===grant?.grantId&&g.assetId===$("recoveryAssetSelect").value);$("recoveryAmount").placeholder=asset?"Max "+formatRawAmount(asset.maxAmountRaw,asset.decimals)+" "+asset.symbol:"Enter token amount"});
 $("adminRecoveryForm").addEventListener("submit",async e=>{e.preventDefault();const grant=eligibleRecoveryGrants.find(g=>g.grantId===$("recoveryGrantSelect").value),asset=eligibleRecoveryGrants.find(g=>g.grantId===grant?.grantId&&g.assetId===$("recoveryAssetSelect").value),status=$("recoveryQueueStatus"),button=$("queueRecoveryButton");if(!grant||!asset)return;button.disabled=true;status.className="status";status.textContent="Validating owner authorization and queuing request\u2026";try{const amountRaw=parseHumanAmount($("recoveryAmount").value,Number(asset.decimals));if(BigInt(amountRaw)>BigInt(asset.maxAmountRaw))throw new Error("Amount exceeds the owner-approved maximum.");const result=await api("/api/admin/recovery-jobs",{method:"POST",body:JSON.stringify({grantId:grant.grantId,assetId:asset.assetId,amountRaw,idempotencyKey:crypto.randomUUID().replace(/-/g,"")})});status.textContent=result.executionEnabled?"Request queued. The scheduled worker will revalidate it and may submit only if every execution check passes.":"Request queued for simulation only. The execution switch is off; no transaction will be signed or submitted."; $("recoveryAmount").value="";await loadReadOnlyView("operations")}catch(err){status.className="status error";status.textContent=err.message}finally{button.disabled=false}});
 
-function loadReadOnlyView(view){const tasks={operations:()=>Promise.all([api("/api/admin/recovery-jobs"),api("/api/admin/recovery-grants")]).then(([d,g])=>{renderList($("recoveryJobs"),d.jobs||[],x=>x.execution_mode+" \xB7 "+x.status+" \xB7 "+x.asset_id+" \xB7 "+(x.requested_amount_raw||"amount pending")+" \xB7 "+x.created_at);eligibleRecoveryGrants=g.grants||[];renderRecoveryGrantOptions()}),transactions:()=>api("/api/admin/transactions").then(d=>renderList($("transactionRecords"),d.transactions||[],x=>x.network+" \xB7 "+x.status+" \xB7 "+(x.transaction_hash||"not submitted")+" \xB7 "+x.asset_id+" \xB7 "+x.amount_raw+" \xB7 "+x.created_at)),audit:()=>api("/api/admin/audit-logs").then(d=>renderList($("auditRecords"),d.events||[],x=>x.created_at+" \xB7 "+x.action+" \xB7 "+x.actor_type+" \xB7 "+x.target_type+" \xB7 "+x.target_id+" \xB7 "+String(x.metadata_json||"{}").slice(0,180))),settings:()=>api("/api/admin/settings").then(d=>{const rows=[["D1 database",d.databaseConfigured],["Admin MFA encryption key",d.adminMfaEncryptionKeyConfigured],["Admin bootstrap token",d.bootstrapTokenConfigured],["Admin operator address",d.adminOperatorAddressConfigured],["Automation operator address",d.automationOperatorAddressConfigured],["Admin operator private-key secret",d.adminPrivateKeyConfigured],["Automation operator private-key secret",d.automationPrivateKeyConfigured],...Object.entries(d.rpcNetworks||{}).map(([k,v])=>["RPC \xB7 "+k,v]),["Recovery execution",d.executionEnabled?"ENABLED":"DISABLED"]];renderList($("settingsRecords"),rows,x=>x[0]+" \xB7 "+(typeof x[1]==="boolean"?(x[1]?"CONFIGURED":"NOT CONFIGURED"):x[1]))})};if(tasks[view])tasks[view]().catch(e=>{const target={operations:"recoveryJobs",transactions:"transactionRecords",audit:"auditRecords",settings:"settingsRecords"}[view];$(target).textContent=e.message})}
-function setView(view){currentView=view;document.querySelectorAll("[data-view]").forEach(b=>{if(b.dataset.view===view)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});$("overviewView").classList.toggle("view-hidden",view!=="overview");$("destinationsView").classList.toggle("view-hidden",view!=="destinations");$("operationsView").classList.toggle("view-hidden",view!=="operations");$("transactionsView").classList.toggle("view-hidden",view!=="transactions");$("auditView").classList.toggle("view-hidden",view!=="audit");$("settingsView").classList.toggle("view-hidden",view!=="settings");document.querySelectorAll("[data-admin-section]").forEach(p=>p.classList.toggle("view-hidden",p.dataset.adminSection!==view));const labels={overview:"System overview",wallets:"Source Wallets",destinations:"Destination Wallets",operations:"Recovery Operations",policies:"Recovery Policies",assets:"Assets & Networks",operators:"Operator Management",transactions:"Transactions & Activity",audit:"Audit Logs",settings:"Settings"};const h=document.querySelector(".console-head h1");if(h)h.textContent=labels[view]||"Mainwell Console";const sub=document.querySelector(".console-head .muted");if(sub)sub.textContent=({overview:"A live summary of your registered recovery configuration.",wallets:"Register and review administrator-locked source wallets.",destinations:"Set one clearly labelled recovery destination for each supported network.",operations:"Execution remains disabled until Phase Two is complete.",policies:"Configure bounded, owner-approved recovery policies.",assets:"Manage supported EVM networks and registered ERC-20 contracts.",operators:"Manage the separately owned operator wallets.",transactions:"Transaction lifecycle visibility will be added in Phase Two.",audit:"Review administrative and system audit records.",settings:"Security and administrator settings."})[view]||"";if(view==="operators")location.href="/admin/operators";if(["operations","transactions","audit","settings"].includes(view))loadReadOnlyView(view);}
+function loadReadOnlyView(view){const tasks={operations:()=>Promise.all([api("/api/admin/recovery-jobs"),api("/api/admin/recovery-grants")]).then(([d,g])=>{renderList($("recoveryJobs"),d.jobs||[],x=>x.execution_mode+" \xB7 "+x.status+" \xB7 "+x.asset_id+" \xB7 "+(x.requested_amount_raw||"amount pending")+" \xB7 "+x.created_at);eligibleRecoveryGrants=g.grants||[];renderRecoveryGrantOptions()}),transactions:()=>api("/api/admin/transactions").then(d=>renderList($("transactionRecords"),d.transactions||[],x=>x.network+" \xB7 "+x.status+" \xB7 "+(x.transaction_hash||"not submitted")+" \xB7 "+x.asset_id+" \xB7 "+x.amount_raw+" \xB7 "+x.created_at)),audit:()=>api("/api/admin/audit-logs").then(d=>renderList($("auditRecords"),d.events||[],x=>x.created_at+" \xB7 "+x.action+" \xB7 "+x.actor_type+" \xB7 "+x.target_type+" \xB7 "+x.target_id+" \xB7 "+String(x.metadata_json||"{}").slice(0,180))),settings:()=>Promise.all([api("/api/admin/settings"),api("/api/admin/runtime-settings"),api("/api/admin/runtime-readiness")]).then(([d,s,r])=>{const rows=[["D1 database",d.databaseConfigured],["Admin MFA encryption key",d.adminMfaEncryptionKeyConfigured],["Admin bootstrap token",d.bootstrapTokenConfigured],["Admin operator address",d.adminOperatorAddressConfigured],["Automation operator address",d.automationOperatorAddressConfigured],["Admin operator private-key secret",d.adminPrivateKeyConfigured],["Automation operator private-key secret",d.automationPrivateKeyConfigured],...Object.entries(d.rpcNetworks||{}).map(([k,v])=>["RPC \xB7 "+k,v])];renderList($("settingsRecords"),rows,x=>x[0]+" \xB7 "+(typeof x[1]==="boolean"?(x[1]?"CONFIGURED":"NOT CONFIGURED"):x[1]));const values=Object.fromEntries((s.settings||[]).map(x=>[x.setting_key,x.setting_value]));$("automationSwitch").checked=values.automation_enabled==="true";$("executionSwitch").checked=values.execution_enabled==="true";const caps=$("feeCapFields");caps.replaceChildren();for(const n of NETWORKS){const wrap=document.createElement("div");wrap.className="destination-card";const label=node("h3",n[1]+" \xB7 "+n[3]);const input=document.createElement("input");input.dataset.network=n[0];input.dataset.kind="cap";input.inputMode="numeric";input.placeholder="Maximum fee \xB7 wei";input.value=values["fee_cap_wei:"+n[0]]||"";const reserve=document.createElement("input");reserve.dataset.network=n[0];reserve.dataset.kind="reserve";reserve.inputMode="numeric";reserve.placeholder="Retained reserve \xB7 wei";reserve.value=values["reserve_wei:"+n[0]]||"";reserve.style.marginTop="7px";wrap.append(label,input,reserve);caps.append(wrap)}renderReadiness(r)})};if(tasks[view])tasks[view]().catch(e=>{const target={operations:"recoveryJobs",transactions:"transactionRecords",audit:"auditRecords",settings:"settingsRecords"}[view];$(target).textContent=e.message})}
+function setView(view){currentView=view;document.querySelectorAll("[data-view]").forEach(b=>{if(b.dataset.view===view)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current")});$("overviewView").classList.toggle("view-hidden",view!=="overview");$("destinationsView").classList.toggle("view-hidden",view!=="destinations");$("operationsView").classList.toggle("view-hidden",view!=="operations");$("transactionsView").classList.toggle("view-hidden",view!=="transactions");$("auditView").classList.toggle("view-hidden",view!=="audit");$("settingsView").classList.toggle("view-hidden",view!=="settings");document.querySelectorAll("[data-admin-section]").forEach(p=>p.classList.toggle("view-hidden",p.dataset.adminSection!==view));const labels={overview:"System overview",wallets:"Source Wallets",destinations:"Destination Wallets",operations:"Recovery Operations",policies:"Recovery Policies",assets:"Assets & Networks",operators:"Operator Management",transactions:"Transactions & Activity",audit:"Audit Logs",settings:"Settings"};const h=document.querySelector(".console-head h1");if(h)h.textContent=labels[view]||"Mainwell Console";const sub=document.querySelector(".console-head .muted");if(sub)sub.textContent=({overview:"A live summary of your registered recovery configuration.",wallets:"Register and review administrator-locked source wallets.",destinations:"Set one clearly labelled recovery destination for each supported network.",operations:"Queue requests; the separate runtime switch controls transaction signing and submission.",policies:"Configure bounded, owner-approved recovery policies.",assets:"Manage supported EVM networks and registered ERC-20 contracts.",operators:"Manage the separately owned operator wallets.",transactions:"Transaction lifecycle visibility will be added in Phase Two.",audit:"Review administrative and system audit records.",settings:"Security and administrator settings."})[view]||"";if(view==="operators")location.href="/admin/operators";if(["operations","transactions","audit","settings"].includes(view))loadReadOnlyView(view);}
+function renderReadiness(data){const rows=[];for(const n of data.networks||[]){rows.push({label:n.name+" \xB7 RPC "+n.rpcStatus+" \xB7 head "+(n.headFresh?"fresh":"STALE/unknown")+" ("+(n.headAgeSeconds??"\u2014")+"s) \xB7 fee quote "+(n.feeQuoteAvailable?"OK":"unavailable")+" \xB7 executor hash "+(n.executorHashConfigured?"configured":"MISSING")+" \xB7 cap "+(n.feeCapConfigured?"set":"MISSING")+" \xB7 reserve "+(n.reserveConfigured?"set":"not set")});for(const op of n.operators||[])rows.push({label:"  "+op.mode+" operator \xB7 address "+(op.addressConfigured?"set":"missing")+" \xB7 key "+(op.keyMatches?"matches":op.privateKeyConfigured?"MISMATCH":"missing")+" \xB7 gas "+(op.balanceWei===null?"unavailable":op.gasFunded?"positive balance (per-transaction check)":"zero balance")})}renderList($("readinessRecords"),rows,x=>x.label)}
 function renderList(root,rows,formatter){root.replaceChildren();if(!rows.length){const e=node("p","Nothing configured yet.");e.className="empty";root.append(e);return}for(const row of rows){const item=node("div",formatter(row));item.className="item";root.append(item)}}
 const NETWORKS=[["ethereum","Ethereum",1,"ETH"],["polygon","Polygon",137,"POL"],["bsc","BNB Smart Chain",56,"BNB"],["avalanche","Avalanche",43114,"AVAX"],["arbitrum","Arbitrum",42161,"ETH"],["optimism","Optimism",10,"ETH"],["base","Base",8453,"ETH"]];
 function renderDestinationCards(){const root=$("destinationNetworkGrid");root.replaceChildren();for(const [network,label,chain,native] of NETWORKS){const rows=destinations.filter(x=>x.network===network&&x.locked&&x.is_active);const current=rows[0];const card=document.createElement("section");card.className="destination-card";const title=node("h3",label);const meta=node("div","Chain ID "+chain+" \xB7 Native asset "+native);meta.className="network-meta";const input=document.createElement("input");input.type="text";input.autocomplete="off";input.spellcheck=false;input.placeholder="0x\u2026 receiving wallet address";input.setAttribute("aria-label",label+" destination address");input.value=current?.address||"";const currentLine=node("div",current?"Active destination: "+current.address:"No destination configured");currentLine.className="current-address";const button=node("button","Save "+label+" destination");button.type="button";button.className="secondary";const status=node("p","");status.className="status";button.addEventListener("click",async()=>{button.disabled=true;status.className="status";status.textContent="Saving locked destination\u2026";try{if(!/^0x[0-9a-fA-F]{40}$/.test(input.value.trim()))throw new Error("Enter a valid EVM wallet address.");await api("/api/admin/recovery-destinations/"+network,{method:"PUT",body:JSON.stringify({address:input.value.trim()})});status.textContent="Destination saved and locked.";await load()}catch(e){status.className="status error";status.textContent=e.message}finally{button.disabled=false}});card.append(title,meta,input,currentLine,button,status);root.append(card)}}
@@ -13220,6 +13226,7 @@ $("sourceWalletForm").addEventListener("submit",async e=>{e.preventDefault();con
 $("supportedAssetForm").addEventListener("submit",async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));try{await api("/api/admin/supported-assets",{method:"POST",body:JSON.stringify({...b,decimals:Number(b.decimals)})});$("supportedAssetStatus").textContent="ERC-20 token registered. Refresh the source wallet to populate its monitored asset balance.";e.currentTarget.reset();await load()}catch(err){$("supportedAssetStatus").className="status error";$("supportedAssetStatus").textContent=err.message}});
 
 $("policyForm").addEventListener("submit",async e=>{e.preventDefault();const b=Object.fromEntries(new FormData(e.currentTarget));try{await api("/api/admin/recovery-destination-policies/"+encodeURIComponent(b.network)+"/"+encodeURIComponent(b.assetId),{method:"PUT",body:JSON.stringify({destinationId:b.destinationId,maxAmountRaw:b.maxAmountRaw,expiresInSeconds:Number(b.expiresInSeconds),automaticPriorityEnabled:b.automaticPriorityEnabled==="on",adminInitiatedEnabled:b.adminInitiatedEnabled==="on"})});$("policyStatus").textContent="Asset policy saved. Owner approval is still required.";await load()}catch(err){$("policyStatus").className="status error";$("policyStatus").textContent=err.message}});
+$("saveRuntimeSwitches").addEventListener("click",async()=>{const b=$("saveRuntimeSwitches"),s=$("runtimeSwitchStatus");b.disabled=true;s.className="status";s.textContent="Saving switches\u2026";try{await api("/api/admin/runtime-settings",{method:"PUT",body:JSON.stringify({automationEnabled:$("automationSwitch").checked,executionEnabled:$("executionSwitch").checked})});s.textContent="Runtime switches saved and audited.";await loadReadOnlyView("settings")}catch(e){s.className="status error";s.textContent=e.message}finally{b.disabled=false}});$("saveFeeCaps").addEventListener("click",async()=>{const b=$("saveFeeCaps"),s=$("feeCapStatus"),feeCapsWei={},reserveWei={};for(const n of NETWORKS){feeCapsWei[n[0]]="";reserveWei[n[0]]=""}document.querySelectorAll("#feeCapFields input").forEach(i=>{(i.dataset.kind==="reserve"?reserveWei:feeCapsWei)[i.dataset.network]=i.value.trim()});b.disabled=true;s.className="status";s.textContent="Saving network fee ceilings\u2026";try{await api("/api/admin/runtime-settings",{method:"PUT",body:JSON.stringify({feeCapsWei,reserveWei})});s.textContent="Per-network fee ceilings saved.";await loadReadOnlyView("settings")}catch(e){s.className="status error";s.textContent=e.message}finally{b.disabled=false}});$("refreshReadiness").addEventListener("click",async()=>{const b=$("refreshReadiness");b.disabled=true;try{renderReadiness(await api("/api/admin/runtime-readiness"))}catch(e){$("readinessRecords").textContent=e.message}finally{b.disabled=false}});
 $("logout").addEventListener("click",async()=>{try{await api("/api/admin/auth/logout",{method:"POST",body:"{}"})}finally{location.reload()}});
 document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>setView(b.dataset.view)));
 document.querySelectorAll("[data-go-view]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();setView(a.dataset.goView)}));
@@ -23004,7 +23011,8 @@ async function audit(env, jobId, action, details, at) {
 }
 __name(audit, "audit");
 async function queueAutomaticJobs(env) {
-  if (env.MAINWELL_AUTOMATION_ENABLED !== "true") return 0;
+  const runtimeAutomation = await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("automation_enabled").first();
+  if (runtimeAutomation?.setting_value !== "true") return 0;
   const now = (/* @__PURE__ */ new Date()).toISOString(), minute = Math.floor(Date.now() / 6e4);
   const rows = await env.DB.prepare(`
     SELECT g.grant_id,g.owner_wallet,g.network,g.execution_modes_json,g.expires_at,
@@ -23050,7 +23058,8 @@ __name(queueAutomaticJobs, "queueAutomaticJobs");
 async function processOne(env) {
   const now = (/* @__PURE__ */ new Date()).toISOString(), leaseId = crypto.randomUUID(), leaseUntil = new Date(Date.now() + 84e4).toISOString();
   await env.DB.prepare("UPDATE recovery_jobs SET status='blocked',last_error_code='worker_lease_expired',last_error_at=?,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE status='simulating' AND lease_expires_at IS NOT NULL AND lease_expires_at<?").bind(now, now, now).run();
-  const candidate = await env.DB.prepare("SELECT id FROM recovery_jobs WHERE status='queued' AND (next_attempt_at IS NULL OR next_attempt_at<=?) AND (lease_expires_at IS NULL OR lease_expires_at<?) ORDER BY priority_score DESC,created_at ASC LIMIT 1").bind(now, now).first();
+  const automationSetting = await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("automation_enabled").first();
+  const candidate = await env.DB.prepare("SELECT id FROM recovery_jobs WHERE status='queued' AND (execution_mode!='automatic-priority' OR ?='true') AND (next_attempt_at IS NULL OR next_attempt_at<=?) AND (lease_expires_at IS NULL OR lease_expires_at<?) ORDER BY priority_score DESC,created_at ASC LIMIT 1").bind(automationSetting?.setting_value ?? "false", now, now).first();
   if (!candidate) return false;
   const claim = await env.DB.prepare("UPDATE recovery_jobs SET status='simulating',lease_owner=?,lease_expires_at=?,attempt_count=attempt_count+1,started_at=COALESCE(started_at,?),updated_at=? WHERE id=? AND status='queued' AND (lease_expires_at IS NULL OR lease_expires_at<?)").bind(leaseId, leaseUntil, now, now, candidate.id, now).run();
   if ((claim.meta?.changes ?? 0) !== 1) return false;
@@ -23117,13 +23126,16 @@ async function processOne(env) {
     if (!useEip1559 && (!gasPrice || gasPrice <= 0n)) throw new Error("gas_fee_quote_unavailable");
     const feePerGasCap = useEip1559 ? maxFeePerGas : gasPrice;
     const estimatedFee = gas * feePerGasCap;
-    const maxAllowed = env.MAINWELL_MAX_RECOVERY_FEE_WEI && UINT2.test(env.MAINWELL_MAX_RECOVERY_FEE_WEI) ? BigInt(env.MAINWELL_MAX_RECOVERY_FEE_WEI) : null;
-    if (env.MAINWELL_SPONSOR_RESERVE_WEI && !UINT2.test(env.MAINWELL_SPONSOR_RESERVE_WEI)) throw new Error("sponsor_reserve_invalid");
-    const reserve = env.MAINWELL_SPONSOR_RESERVE_WEI ? BigInt(env.MAINWELL_SPONSOR_RESERVE_WEI) : 0n;
+    const feeCapSetting = await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("fee_cap_wei:" + network).first();
+    const maxAllowed = feeCapSetting?.setting_value && UINT2.test(feeCapSetting.setting_value) ? BigInt(feeCapSetting.setting_value) : null;
+    const reserveSetting = await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("reserve_wei:" + network).first();
+    if (reserveSetting?.setting_value && !UINT2.test(reserveSetting.setting_value)) throw new Error("sponsor_reserve_invalid");
+    const reserve = reserveSetting?.setting_value ? BigInt(reserveSetting.setting_value) : 0n;
     const attemptBase = { id: attemptId, job_id: job.id, attempt_number: job.attempt_count, phase: "simulated", simulation_block_number: Number(await publicClient.getBlockNumber()), gas_funding_source: "recovery-sponsor", estimated_fee_raw: estimatedFee.toString(), fee_cap_raw: maxAllowed?.toString() ?? null, transaction_hash: null, error_code: null, created_at: now, updated_at: now };
     const sponsorBalance = await publicClient.getBalance({ address: operatorAddress });
     const sponsorGasSufficient = sponsorBalance >= estimatedFee + reserve;
-    if (env.MAINWELL_EXECUTION_ENABLED !== "true") {
+    const runtimeExecution = await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("execution_enabled").first();
+    if (runtimeExecution?.setting_value !== "true") {
       await env.DB.batch([
         env.DB.prepare("INSERT INTO recovery_execution_attempts(id,job_id,attempt_number,phase,simulation_block_number,gas_funding_source,estimated_fee_raw,fee_cap_raw,transaction_hash,error_code,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)").bind(attemptBase.id, attemptBase.job_id, attemptBase.attempt_number, attemptBase.phase, attemptBase.simulation_block_number, attemptBase.gas_funding_source, attemptBase.estimated_fee_raw, attemptBase.fee_cap_raw, attemptBase.transaction_hash, attemptBase.error_code, attemptBase.created_at, attemptBase.updated_at),
         env.DB.prepare("UPDATE recovery_jobs SET status='ready',requested_amount_raw=?,destination_address=?,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE id=? AND lease_owner=?").bind(amount.toString(), verifiedAsset.destinationAddress, now, job.id, leaseId)
@@ -23269,21 +23281,130 @@ function parseAbiEvent(log) {
 }
 __name(parseAbiEvent, "parseAbiEvent");
 async function runRecoveryAutomation(env) {
-  if (env.MAINWELL_AUTOMATION_ENABLED === "true") await queueAutomaticJobs(env);
+  await queueAutomaticJobs(env);
   await trackTransactions(env);
   await processOne(env);
 }
 __name(runRecoveryAutomation, "runRecoveryAutomation");
 
+// src/application/runtime-controls.ts
+var NETWORKS3 = [
+  { id: "ethereum", name: "Ethereum", chainId: 1, symbol: "ETH", rpc: "EVM_RPC_ETHEREUM", hash: "MAINWELL_EXECUTOR_CODE_HASH_ETHEREUM" },
+  { id: "polygon", name: "Polygon", chainId: 137, symbol: "POL", rpc: "EVM_RPC_POLYGON", hash: "MAINWELL_EXECUTOR_CODE_HASH_POLYGON" },
+  { id: "bsc", name: "BNB Smart Chain", chainId: 56, symbol: "BNB", rpc: "EVM_RPC_BSC", hash: "MAINWELL_EXECUTOR_CODE_HASH_BSC" },
+  { id: "avalanche", name: "Avalanche", chainId: 43114, symbol: "AVAX", rpc: "EVM_RPC_AVALANCHE", hash: "MAINWELL_EXECUTOR_CODE_HASH_AVALANCHE" },
+  { id: "arbitrum", name: "Arbitrum", chainId: 42161, symbol: "ETH", rpc: "EVM_RPC_ARBITRUM", hash: "MAINWELL_EXECUTOR_CODE_HASH_ARBITRUM" },
+  { id: "optimism", name: "Optimism", chainId: 10, symbol: "ETH", rpc: "EVM_RPC_OPTIMISM", hash: "MAINWELL_EXECUTOR_CODE_HASH_OPTIMISM" },
+  { id: "base", name: "Base", chainId: 8453, symbol: "ETH", rpc: "EVM_RPC_BASE", hash: "MAINWELL_EXECUTOR_CODE_HASH_BASE" }
+];
+var ADDRESS6 = /^0x[0-9a-fA-F]{40}$/;
+var UINT3 = /^(0|[1-9][0-9]{0,77})$/;
+function json3(data, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
+}
+__name(json3, "json");
+async function getSetting(db, key) {
+  const row = await db.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind(key).first();
+  return row?.setting_value ?? null;
+}
+__name(getSetting, "getSetting");
+async function runtimeSettingsResponse(env) {
+  const rows = await env.DB.prepare("SELECT setting_key,setting_value,updated_at FROM mainwell_runtime_settings ORDER BY setting_key").all();
+  return rows.success ? json3({ settings: rows.results }) : json3({ error: "Unable to load runtime settings." }, 503);
+}
+__name(runtimeSettingsResponse, "runtimeSettingsResponse");
+async function updateRuntimeSetting(request, env, admin) {
+  if (request.method !== "PUT") return json3({ error: "Method not allowed." }, 405);
+  const origin = request.headers.get("origin");
+  if (origin !== new URL(request.url).origin) return json3({ error: "Origin check failed." }, 403);
+  let body3;
+  try {
+    body3 = await request.json();
+  } catch {
+    return json3({ error: "Invalid JSON body." }, 400);
+  }
+  const now = (/* @__PURE__ */ new Date()).toISOString(), actor = admin.adminId;
+  const updates = [], deletes = [];
+  if (typeof body3.automationEnabled === "boolean") updates.push(["automation_enabled", String(body3.automationEnabled)]);
+  if (typeof body3.executionEnabled === "boolean") updates.push(["execution_enabled", String(body3.executionEnabled)]);
+  if (body3.feeCapsWei && typeof body3.feeCapsWei === "object" && !Array.isArray(body3.feeCapsWei)) {
+    for (const [network, value] of Object.entries(body3.feeCapsWei)) {
+      if (!NETWORKS3.some((n) => n.id === network) || typeof value !== "string" || value !== "" && !UINT3.test(value)) return json3({ error: "Each network fee ceiling must be a non-negative integer in that network's native base units." }, 400);
+      if (value === "") deletes.push("fee_cap_wei:" + network);
+      else updates.push(["fee_cap_wei:" + network, value]);
+    }
+  }
+  if (body3.reserveWei && typeof body3.reserveWei === "object" && !Array.isArray(body3.reserveWei)) {
+    for (const [network, value] of Object.entries(body3.reserveWei)) {
+      if (!NETWORKS3.some((n) => n.id === network) || typeof value !== "string" || value !== "" && !UINT3.test(value)) return json3({ error: "Each network gas reserve must be a non-negative integer in native base units." }, 400);
+      if (value === "") deletes.push("reserve_wei:" + network);
+      else updates.push(["reserve_wei:" + network, value]);
+    }
+  }
+  if (!updates.length && !deletes.length) return json3({ error: "No valid settings supplied." }, 400);
+  const statements = [];
+  for (const [key, value] of updates) statements.push(env.DB.prepare("INSERT INTO mainwell_runtime_settings(setting_key,setting_value,updated_by,updated_at) VALUES(?,?,?,?) ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_by=excluded.updated_by,updated_at=excluded.updated_at").bind(key, value, actor, now));
+  for (const key of deletes) statements.push(env.DB.prepare("DELETE FROM mainwell_runtime_settings WHERE setting_key=?").bind(key));
+  statements.push(env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES(?,'admin',?,'runtime.settings.updated','runtime_settings','mainwell',?,?)").bind(crypto.randomUUID(), actor, JSON.stringify({ keys: [...updates.map((x) => x[0]), ...deletes] }), now));
+  const results = await env.DB.batch(statements);
+  if (results.some((result) => !result.success)) return json3({ error: "Runtime settings and audit record could not be committed." }, 503);
+  return json3({ saved: true, updatedKeys: [...updates.map((x) => x[0]), ...deletes] });
+}
+__name(updateRuntimeSetting, "updateRuntimeSetting");
+async function runtimeReadiness(env) {
+  const automationEnabled = await getSetting(env.DB, "automation_enabled") === "true", executionEnabled = await getSetting(env.DB, "execution_enabled") === "true";
+  const networks = await Promise.all(NETWORKS3.map(async (n) => {
+    const rpc = env[n.rpc], feeCap = await getSetting(env.DB, "fee_cap_wei:" + n.id), reserve = await getSetting(env.DB, "reserve_wei:" + n.id), executorHash = env[n.hash];
+    const operatorConfigs = [{ mode: "admin", address: env.MAINWELL_ADMIN_OPERATOR, key: env.MAINWELL_ADMIN_PRIVATE_KEY }, { mode: "automation", address: env.MAINWELL_AUTOMATION_OPERATOR, key: env.MAINWELL_AUTOMATION_PRIVATE_KEY }];
+    const operators = operatorConfigs.map((op) => {
+      let keyMatches = false;
+      if (op.address && op.key && ADDRESS6.test(op.address)) {
+        try {
+          keyMatches = privateKeyToAccount(op.key.startsWith("0x") ? op.key : "0x" + op.key).address.toLowerCase() === op.address.toLowerCase();
+        } catch {
+        }
+      }
+      return { mode: op.mode, address: op.address, addressConfigured: Boolean(op.address && ADDRESS6.test(op.address)), privateKeyConfigured: Boolean(op.key), keyMatches, balanceWei: null, gasFunded: false };
+    });
+    let rpcStatus = "not_configured", headAgeSeconds = null, headFresh = false, feeQuoteAvailable = false;
+    if (rpc && /^https:\/\//i.test(rpc)) {
+      try {
+        const chain = { id: n.chainId, name: n.name, nativeCurrency: { name: n.symbol, symbol: n.symbol, decimals: 18 }, rpcUrls: { default: { http: [rpc] } } };
+        const client = createPublicClient({ chain, transport: http(rpc, { timeout: 8e3 }) });
+        const [chainId, block, fees] = await Promise.all([client.getChainId(), client.getBlock(), client.estimateFeesPerGas().catch(async () => ({ gasPrice: await client.getGasPrice() }))]);
+        rpcStatus = chainId === n.chainId ? "ready" : "chain_mismatch";
+        headAgeSeconds = Math.max(0, Math.floor(Date.now() / 1e3 - Number(block.timestamp)));
+        headFresh = headAgeSeconds <= 120;
+        feeQuoteAvailable = Boolean("maxFeePerGas" in fees && fees.maxFeePerGas !== void 0 && fees.maxFeePerGas > 0n || "gasPrice" in fees && fees.gasPrice !== void 0 && fees.gasPrice > 0n);
+        if (rpcStatus === "ready") await Promise.all(operators.map(async (op) => {
+          if (op.address && ADDRESS6.test(op.address)) {
+            try {
+              const balance = await client.getBalance({ address: op.address });
+              op.balanceWei = balance.toString();
+              op.gasFunded = balance > 0n;
+            } catch {
+            }
+          }
+        }));
+      } catch {
+        rpcStatus = "unreachable";
+      }
+    }
+    return { network: n.id, name: n.name, chainId: n.chainId, nativeSymbol: n.symbol, rpcStatus, headAgeSeconds, headFresh, feeQuoteAvailable, executorHashConfigured: Boolean(executorHash && /^0x[0-9a-fA-F]{64}$/.test(executorHash)), feeCapConfigured: feeCap !== null, feeCapWei: feeCap, reserveConfigured: reserve !== null, reserveWei: reserve, operators };
+  }));
+  return json3({ automationEnabled, executionEnabled, networks, checkedAt: (/* @__PURE__ */ new Date()).toISOString() });
+}
+__name(runtimeReadiness, "runtimeReadiness");
+
 // src/worker.ts
 var SESSION_SECONDS2 = 604800;
 var CHALLENGE_SECONDS = 300;
 var CHAINS = /* @__PURE__ */ new Set([1, 137, 56, 43114, 42161, 10, 8453]);
-var ADDRESS6 = /^0x[0-9a-fA-F]{40}$/;
-function json3(data, status = 200, extra = {}) {
+var ADDRESS7 = /^0x[0-9a-fA-F]{40}$/;
+function json4(data, status = 200, extra = {}) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", ...extra } });
 }
-__name(json3, "json");
+__name(json4, "json");
 function hex2(bytes) {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -23341,49 +23462,49 @@ var worker_default = { async scheduled(_event, env, ctx) {
   if (request.method === "GET" && url.pathname === "/admin/operators") return operatorWalletSetupResponse();
   if (request.method === "GET" && url.pathname === "/") return ownerDashboardResponse();
   if (request.method === "GET" && url.pathname === "/authorize") return ownerAuthorizationResponse();
-  if (request.method === "GET" && url.pathname === "/health") return json3({ service: "mainwell", status: "ok", database: "configured", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+  if (request.method === "GET" && url.pathname === "/health") return json4({ service: "mainwell", status: "ok", database: "configured", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   if (request.method === "GET" && url.pathname === "/api/health/db") try {
     const db = await env.DB.prepare("SELECT 1 AS ok").first();
     const schema = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='recovery_grants'").first();
     const auth = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='wallet_sessions'").first();
-    return json3({ service: "mainwell", database: db?.ok === 1 ? "connected" : "unavailable", schema: schema ? "initialized" : "pending", walletAuthSchema: auth ? "initialized" : "pending", timestamp: (/* @__PURE__ */ new Date()).toISOString() }, db?.ok === 1 ? 200 : 503);
+    return json4({ service: "mainwell", database: db?.ok === 1 ? "connected" : "unavailable", schema: schema ? "initialized" : "pending", walletAuthSchema: auth ? "initialized" : "pending", timestamp: (/* @__PURE__ */ new Date()).toISOString() }, db?.ok === 1 ? 200 : 503);
   } catch {
-    return json3({ service: "mainwell", database: "unavailable", error: "Database health check failed" }, 503);
+    return json4({ service: "mainwell", database: "unavailable", error: "Database health check failed" }, 503);
   }
   if (url.pathname === "/api/auth/challenge" && request.method === "POST") {
-    if (!sameOrigin3(request, url)) return json3({ error: "Origin check failed." }, 403);
+    if (!sameOrigin3(request, url)) return json4({ error: "Origin check failed." }, 403);
     const b = await body2(request), address = typeof b?.address === "string" ? b.address : "", chainId = Number(b?.chainId);
-    if (!ADDRESS6.test(address) || !Number.isSafeInteger(chainId) || !CHAINS.has(chainId)) return json3({ error: "Valid EVM address and supported chain ID required." }, 400);
+    if (!ADDRESS7.test(address) || !Number.isSafeInteger(chainId) || !CHAINS.has(chainId)) return json4({ error: "Valid EVM address and supported chain ID required." }, 400);
     const now = Date.now(), issued = new Date(now).toISOString(), expires = new Date(now + CHALLENGE_SECONDS * 1e3).toISOString(), nonce = randomHex2(16);
     const message = [url.hostname + " wants you to sign in with your Ethereum account:", address, "", "Sign in to Mainwell. This request will not trigger a blockchain transaction or grant token permissions.", "", "URI: " + url.origin, "Version: 1", "Chain ID: " + chainId, "Nonce: " + nonce, "Issued At: " + issued, "Expiration Time: " + expires].join("\n");
     await env.DB.prepare("INSERT INTO wallet_auth_challenges(nonce,wallet_address,chain_id,message,origin,expires_at,created_at) VALUES(?,?,?,?,?,?,?)").bind(nonce, address.toLowerCase(), chainId, message, url.origin, expires, issued).run();
     await env.DB.prepare("DELETE FROM wallet_auth_challenges WHERE expires_at<=? OR consumed_at IS NOT NULL").bind(issued).run();
-    return json3({ nonce, message, expiresAt: expires });
+    return json4({ nonce, message, expiresAt: expires });
   }
   if (url.pathname === "/api/auth/verify" && request.method === "POST") {
-    if (!sameOrigin3(request, url)) return json3({ error: "Origin check failed." }, 403);
+    if (!sameOrigin3(request, url)) return json4({ error: "Origin check failed." }, 403);
     const b = await body2(request), address = typeof b?.address === "string" ? b.address : "", nonce = typeof b?.nonce === "string" ? b.nonce : "", signature = typeof b?.signature === "string" ? b.signature : "", chainId = Number(b?.chainId);
-    if (!ADDRESS6.test(address) || !/^[0-9a-f]{32}$/.test(nonce) || !Number.isSafeInteger(chainId) || !CHAINS.has(chainId) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return json3({ error: "Malformed wallet authentication request." }, 400);
+    if (!ADDRESS7.test(address) || !/^[0-9a-f]{32}$/.test(nonce) || !Number.isSafeInteger(chainId) || !CHAINS.has(chainId) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return json4({ error: "Malformed wallet authentication request." }, 400);
     const c = await env.DB.prepare("SELECT message,wallet_address,chain_id,origin,expires_at,consumed_at FROM wallet_auth_challenges WHERE nonce=?").bind(nonce).first();
     const now = (/* @__PURE__ */ new Date()).toISOString();
-    if (!c || c.consumed_at || c.expires_at <= now || c.origin !== url.origin || c.wallet_address !== address.toLowerCase() || c.chain_id !== chainId) return json3({ error: "Challenge invalid, expired, or already used. Request a new one." }, 401);
+    if (!c || c.consumed_at || c.expires_at <= now || c.origin !== url.origin || c.wallet_address !== address.toLowerCase() || c.chain_id !== chainId) return json4({ error: "Challenge invalid, expired, or already used. Request a new one." }, 401);
     let recovered;
     try {
       recovered = recoverPersonalSignAddress(c.message, signature);
     } catch {
-      return json3({ error: "Wallet signature verification failed." }, 401);
+      return json4({ error: "Wallet signature verification failed." }, 401);
     }
-    if (recovered !== c.wallet_address) return json3({ error: "Wallet signature does not match the challenged address." }, 401);
+    if (recovered !== c.wallet_address) return json4({ error: "Wallet signature does not match the challenged address." }, 401);
     const used = await env.DB.prepare("UPDATE wallet_auth_challenges SET consumed_at=? WHERE nonce=? AND consumed_at IS NULL AND expires_at>?").bind(now, nonce, now).run();
-    if (!used.success || (used.meta?.changes ?? 0) !== 1) return json3({ error: "Challenge already consumed. Request a new one." }, 409);
+    if (!used.success || (used.meta?.changes ?? 0) !== 1) return json4({ error: "Challenge already consumed. Request a new one." }, 409);
     const token = randomHex2(32), id = crypto.randomUUID(), expires = new Date(Date.now() + SESSION_SECONDS2 * 1e3).toISOString();
     await env.DB.prepare("INSERT INTO wallet_sessions(id,wallet_address,chain_id,token_hash,expires_at,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?)").bind(id, c.wallet_address, chainId, await hash3(token), expires, now, now).run();
     await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('owner',?,'wallet.login','wallet_session',?,?,?)").bind(c.wallet_address, id, JSON.stringify({ chainId }), now).run();
-    return json3({ authenticated: true, wallet: c.wallet_address, chainId, expiresAt: expires }, 200, { "set-cookie": "mw_owner_session=" + token + "; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=" + SESSION_SECONDS2 });
+    return json4({ authenticated: true, wallet: c.wallet_address, chainId, expiresAt: expires }, 200, { "set-cookie": "mw_owner_session=" + token + "; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=" + SESSION_SECONDS2 });
   }
   if (url.pathname === "/api/auth/me" && request.method === "GET") {
     const s = await session(request, env);
-    return s ? json3({ authenticated: true, ...s }) : json3({ authenticated: false }, 401);
+    return s ? json4({ authenticated: true, ...s }) : json4({ authenticated: false }, 401);
   }
   if (url.pathname === "/api/admin/auth/recover-once") {
     const recoveryResponse = await handleAdminRecoveryApi(request, env);
@@ -23395,26 +23516,29 @@ var worker_default = { async scheduled(_event, env, ctx) {
   }
   if (url.pathname.startsWith("/api/admin/")) {
     const token = cookie2(request, "mw_admin_session");
-    if (!token || !/^[0-9a-f]{64}$/.test(token)) return json3({ error: "MFA-verified administrator session required." }, 401);
+    if (!token || !/^[0-9a-f]{64}$/.test(token)) return json4({ error: "MFA-verified administrator session required." }, 401);
     const now = (/* @__PURE__ */ new Date()).toISOString(), mfaCutoff = new Date(Date.now() - 12 * 60 * 60 * 1e3).toISOString();
     const admin = await env.DB.prepare("SELECT s.id,s.admin_id FROM admin_sessions s INNER JOIN admin_accounts a ON a.id=s.admin_id WHERE s.token_hash=? AND s.expires_at>? AND s.mfa_verified_at>? AND a.status='active' AND a.mfa_enabled=1 LIMIT 1").bind(await hash3(token), now, mfaCutoff).first();
-    if (!admin) return json3({ error: "MFA-verified administrator session required." }, 401);
+    if (!admin) return json4({ error: "MFA-verified administrator session required." }, 401);
     await env.DB.prepare("UPDATE admin_sessions SET last_seen_at=? WHERE id=?").bind(now, admin.id).run();
     const limitValue = Number(url.searchParams.get("limit") ?? "50"), limit = Number.isInteger(limitValue) ? Math.min(100, Math.max(1, limitValue)) : 50;
     if (request.method === "GET" && url.pathname === "/api/admin/audit-logs") {
       const rows = await env.DB.prepare("SELECT id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at FROM audit_events ORDER BY created_at DESC,id DESC LIMIT ?").bind(limit).all();
-      return rows.success ? json3({ events: rows.results }) : json3({ error: "Unable to load audit events." }, 503);
+      return rows.success ? json4({ events: rows.results }) : json4({ error: "Unable to load audit events." }, 503);
     }
     if (request.method === "GET" && url.pathname === "/api/admin/recovery-jobs") {
       const rows = await env.DB.prepare("SELECT id,grant_id,asset_id,execution_mode,status,priority_score,requested_by,created_at,updated_at,requested_amount_raw,destination_address,attempt_count,last_error_code FROM recovery_jobs ORDER BY created_at DESC,id DESC LIMIT ?").bind(limit).all();
-      return rows.success ? json3({ jobs: rows.results }) : json3({ error: "Unable to load recovery jobs." }, 503);
+      return rows.success ? json4({ jobs: rows.results }) : json4({ error: "Unable to load recovery jobs." }, 503);
     }
     if (request.method === "GET" && url.pathname === "/api/admin/transactions") {
       const rows = await env.DB.prepare("SELECT id,job_id,network,transaction_hash,status,asset_id,amount_raw,destination_address,estimated_fee_raw,actual_fee_raw,submitted_at,confirmed_at,created_at,sender_address,nonce,gas_limit_raw,max_fee_per_gas_raw,max_priority_fee_per_gas_raw,block_number,block_hash,gas_used_raw,effective_gas_price_raw,failure_code,destination_balance_before_raw,destination_balance_after_raw,last_checked_at FROM recovery_transactions ORDER BY created_at DESC,id DESC LIMIT ?").bind(limit).all();
-      return rows.success ? json3({ transactions: rows.results }) : json3({ error: "Unable to load transaction records." }, 503);
+      return rows.success ? json4({ transactions: rows.results }) : json4({ error: "Unable to load transaction records." }, 503);
     }
+    if (request.method === "GET" && url.pathname === "/api/admin/runtime-settings") return runtimeSettingsResponse(env);
+    if (url.pathname === "/api/admin/runtime-settings" && request.method === "PUT") return updateRuntimeSetting(request, env, { id: admin.id, adminId: admin.admin_id });
+    if (request.method === "GET" && url.pathname === "/api/admin/runtime-readiness") return runtimeReadiness(env);
     if (request.method === "GET" && url.pathname === "/api/admin/settings") {
-      return json3({
+      return json4({
         databaseConfigured: Boolean(env.DB),
         adminMfaEncryptionKeyConfigured: Boolean(env.ADMIN_MFA_ENCRYPTION_KEY),
         bootstrapTokenConfigured: Boolean(env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN),
@@ -23431,21 +23555,21 @@ var worker_default = { async scheduled(_event, env, ctx) {
     }
     const response2 = await handleAdminDestinationApi(request, env, { id: admin.id, adminId: admin.admin_id });
     if (response2) return response2;
-    return json3({ error: "Not found" }, 404);
+    return json4({ error: "Not found" }, 404);
   }
   if (url.pathname.startsWith("/api/owner/")) {
     const authenticated = await session(request, env);
-    if (!authenticated) return json3({ error: "Authentication required." }, 401);
+    if (!authenticated) return json4({ error: "Authentication required." }, 401);
     const response2 = await handleOwnerApi(request, env, authenticated);
     if (response2) return response2;
   }
   if (url.pathname === "/api/auth/logout" && request.method === "POST") {
-    if (!sameOrigin3(request, url)) return json3({ error: "Origin check failed." }, 403);
+    if (!sameOrigin3(request, url)) return json4({ error: "Origin check failed." }, 403);
     const token = cookie2(request);
     if (token && /^[0-9a-f]{64}$/.test(token)) await env.DB.prepare("UPDATE wallet_sessions SET revoked_at=? WHERE token_hash=? AND revoked_at IS NULL").bind((/* @__PURE__ */ new Date()).toISOString(), await hash3(token)).run();
-    return json3({ authenticated: false }, 200, { "set-cookie": "mw_owner_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" });
+    return json4({ authenticated: false }, 200, { "set-cookie": "mw_owner_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" });
   }
-  return json3({ error: "Not found" }, 404);
+  return json4({ error: "Not found" }, 404);
 } };
 export {
   worker_default as default
