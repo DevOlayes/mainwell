@@ -72,7 +72,7 @@ function makeVerifier(overrides = {}) {
     return { ok: true, status: 200, json: async () => ({ jsonrpc: "2.0", id: req.id, result }) };
   };
   return new EvmGrantVerifier({
-    rpcUrl: "https://trusted-rpc.example", trustedExecutorCodeHash: codeHash, expectedChainId: 1, expectedAutomationOperator: "0x6666666666666666666666666666666666666666", expectedAdminOperator: "0x7777777777777777777777777777777777777777", fetcher
+    rpcUrl: "https://trusted-rpc.example", trustedExecutorCodeHash: overrides.trustedExecutorCodeHash || codeHash, expectedChainId: 1, expectedAutomationOperator: "0x6666666666666666666666666666666666666666", expectedAdminOperator: "0x7777777777777777777777777777777777777777", fetcher
   });
 }
 
@@ -166,6 +166,21 @@ test("verifies owner-signed executor revocation only after the chain reports rev
     .verifyRevocation(grant, owner, "0x" + "d".repeat(64), now);
   assert.equal(result.transactionHash, "0x" + "d".repeat(64));
   assert.equal(result.revokedAt, new Date(now + 60_000).toISOString());
+});
+
+test("verifies whole-grant revocation using normalized constructor-patched runtime hash", async () => {
+  const deployed = Buffer.alloc(2532, 0x11);
+  for (const range of EXECUTOR_IMMUTABLE_RANGES) deployed.fill(0xaa, range.start, range.start + range.length);
+  const runtime = "0x" + deployed.toString("hex");
+  const trustedHash = normalizedExecutorRuntimeHash(runtime);
+  const revokedSelector = selector("revoked()");
+  const result = await makeVerifier({
+    code: runtime,
+    trustedExecutorCodeHash: trustedHash,
+    blockTimestamp: new Date(now + 60_000).toISOString(),
+    callResult: { selector: revokedSelector, value: "0x" + word(1) }
+  }).verifyRevocation(grant, owner, "0x" + "d".repeat(64), now);
+  assert.equal(result.transactionHash, "0x" + "d".repeat(64));
 });
 
 test("rejects revocation transactions sent by a different wallet", async () => {
