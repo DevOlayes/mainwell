@@ -1,53 +1,83 @@
-# Wallet Recovery — Defensive Foundation
+# Mainwell — Defensive Wallet Monitoring and Recovery
 
-A security-first wallet monitoring and recovery application. The product goal is to support one-time, clearly explained authorization followed by automated recovery and administrator-initiated recovery **only within the permissions the wallet owner granted**.
+Mainwell is a security-first EVM wallet monitoring and scoped recovery application. Recovery is permitted only within explicit, verifiable permissions granted by the wallet owner.
 
 ## Agreed recovery workflow
 
-1. A wallet owner connects a supported wallet and reviews the exact recovery authority being requested.
-2. The owner grants supported, persistent permissions through their wallet. The application records verifiable on-chain authorization evidence; merely connecting a wallet is never treated as permission.
-3. The monitor discovers supported assets and permissions across configured networks.
-4. The recovery planner ranks eligible assets by net recoverable value, urgency, fee efficiency, data confidence, and execution reliability.
-5. Eligible priority assets may be processed automatically when a valid grant explicitly permits automatic execution.
-6. Other eligible assets may be selected and initiated by an authenticated administrator when the grant explicitly permits administrator-initiated execution.
-7. The application tracks submitted transactions through on-chain confirmation and records an audit trail.
+1. The owner connects a supported wallet. Connection and login signatures are not spending permission.
+2. The owner reviews and authorizes a scoped recovery grant through their wallet.
+3. Mainwell verifies the grant against the owner, chain, immutable executor, locked destination, asset scope, cap, execution mode, expiry and revocation state.
+4. Monitoring discovers supported ERC-20 assets and retrieves balances, metadata and fresh price information.
+5. The planner ranks eligible work by recoverable value, urgency, fee efficiency, confidence and execution reliability.
+6. Admin-initiated or automatic-priority execution may proceed only when the persistent runtime switch and the owner's grant both permit it.
+7. Transactions are simulated, signed by the appropriate configured operator, submitted, reconciled and checked for canonical confirmation and destination-balance postconditions.
 
-A new wallet popup for every transfer is **not** the intended universal workflow. A fresh owner signature is needed only when the underlying chain or authorization standard requires it, when a grant must be renewed, or when the requested action falls outside the existing grant.
+## Security boundaries
 
-## Authorization and security boundaries
+- Never request, accept, store, log or transmit wallet seed phrases, private keys or wallet passwords.
+- A wallet connection or authentication signature never authorizes spending.
+- The immutable, non-upgradeable ScopedRecoveryExecutor enforces owner-granted scope.
+- Admin role does not expand owner-granted authority.
+- Source wallets and recovery destinations are explicitly registered and locked.
+- ERC-20 allowances and per-asset caps are scoped; the executable amount cannot exceed balance, remaining cap or allowance.
+- Admin and automation operators are separate.
+- Gas sponsorship pays fees only and does not grant asset authority.
+- Native assets, NFTs and non-EVM chains require separate authorization and executor designs; they are not supported by the current ERC-20 executor.
+- No third-party security audit or guaranteed recovery claim is made.
 
-- Never request, accept, store, log, or transmit seed phrases, private keys, or wallet passwords.
-- A wallet connection alone grants no transfer authority.
-- Every grant must be verifiable and bound to the owner wallet, chain, approved recovery executor, locked destination, permitted assets, execution mode, amount/allowance scope, and expiry/revocation state.
-- Automatic and administrator-initiated execution must both remain inside that same grant. Admin role does not create additional wallet authority.
-- Admin-configured destinations are network-specific, locked, and audited. Asset-specific overrides require explicit policy and owner authorization.
-- Any unlimited token allowance, if a chain/token requires it and the owner explicitly chooses it, must be to a reviewed recovery executor whose on-chain rules enforce the approved destination and asset scope. Never request blanket approvals to an arbitrary admin wallet or generic spender.
-- Native assets and non-EVM chains require their own authorization mechanisms; ERC-20 allowance is not universal permission.
-- Gas sponsorship pays fees only and never grants control over assets.
-- No hidden transactions: authorization, transaction purpose, destination, asset, amount/scope, and status must be visible in the product and recorded on-chain where applicable.
+## Implemented capabilities
 
-## Current implementation status
+### Phase One — authorization and policy foundation
+- EVM owner wallet authentication and persistent sessions.
+- Locked source-wallet and destination registration.
+- Supported ERC-20 registry and token metadata verification.
+- Per-asset caps, execution modes and expiry.
+- Owner deployment and authorization of the immutable ScopedRecoveryExecutor.
+- Exact per-token allowance setup and independent server-side verification.
+- Separate administrator and automation operator identities.
+- MFA-protected admin authentication, rate limiting and one-time recovery.
+- Admin console for wallet, destination, asset and policy configuration.
 
-**Phase One authorization and policy foundation is implemented** in the repository and deployed to Cloudflare. It includes:
+### Phase Two — recovery execution
+- Automatic-priority and administrator-initiated recovery orchestration.
+- Grant, owner, chain, executor code hash, operator, destination, expiry, cap and allowance revalidation.
+- Transaction simulation, gas estimation, EIP-1559 and legacy fee handling.
+- Operator signing, transaction hash persistence and broadcast reconciliation.
+- Receipt, canonical block hash, finality, executor-event and destination-balance verification.
+- Execution locks, queue prioritization, retry/cancel safeguards and audit events.
+- Automatic-path fee/value/gas safeguards and emergency admin fee-policy bypass subject to available gas and live fee estimates.
 
-- EVM read-only monitoring and the recovery planning foundation across the seven configured EVM networks.
-- Cloudflare D1 persistence for recovery grants, owner sessions, admin accounts/sessions, locked source wallets and destinations, supported ERC-20 assets, per-asset caps, execution modes, and expiry.
-- Administrator authentication with MFA, rate limiting, and a one-time recovery path.
-- Owner authorization flow that deploys the pinned, non-upgradeable `ScopedRecoveryExecutor`, requests exact per-token allowances, and submits evidence for independent server-side verification.
-- Server-side checks for owner, chain, executor runtime code hash, asset scope, destination, amount cap, execution modes, expiry, operator identities, and allowance evidence.
-- Separate automation and administrator operator identities, with client-side wallet generation and encrypted local backup.
-- CI checks and reproducibly generated/pinned Worker and executor artifacts. Production deployment is performed separately and verified.
-- An authenticated admin console for wallet, destination, asset, and policy configuration.
+### Phase Three — monitoring
+- Alchemy-based ERC-20 discovery, balance and metadata retrieval across seven EVM networks.
+- Fresh token price retrieval and asset-history recording.
+- Scheduled monitoring every minute, processing one due wallet per invocation.
+- Manual owner refresh using the same monitoring path.
+- Discovered assets are not automatically whitelisted or authorized.
+- Spender-permission monitoring is limited to known spenders configured through MAINWELL_EVM_ASSETS; that configuration is currently deferred.
 
-**Phase Two execution is not implemented or enabled.** The automatic-priority worker, administrator-initiated recovery execution, sponsor/gas handling, exact-call simulation, transaction submission, confirmation/replacement tracking, and execution reconciliation remain outstanding. The app must not be treated as ready to move real funds. The executor has not received an independent third-party security audit.
+### Phase Four — security hardening
+- Atomic wallet-authentication and admin endpoint rate limiting.
+- Admin idle and absolute session expiry.
+- Executor whole-grant and per-asset revocation checks.
+- Blocking of retry/cancel while transaction outcome is unresolved.
+- Query-string redaction in Worker observability.
+- D1 backup and restore runbook and production recovery-point tracking.
 
-## Hybrid gas policy
+## Production configuration and readiness
 
-1. Use the source wallet's native gas when its reserve is adequate.
-2. Otherwise use a dedicated recovery gas sponsor only on a supported network.
-3. Otherwise block execution.
+The recovery engine and monitoring service are deployed. Persistent production switches currently remain:
+- automation_enabled = false
+- execution_enabled = false
 
-The sponsor is fee payer only.
+These switches are separate from owner grants. A transfer requires both the appropriate global switch and a valid owner grant. Do not enable them until the operator is ready to submit transactions and has funded the corresponding operator wallet with network gas.
+
+The supported EVM networks are Ethereum, Polygon, BNB Smart Chain, Avalanche, Arbitrum, Optimism and Base. Native-coin recovery, NFT recovery, Bitcoin, TRON and other non-EVM networks are not implemented.
+
+The automatic path currently applies a $500 USD absolute fee ceiling, a 5% fee-to-recovery-value ceiling, a $20 USD per-network operator reserve, fee buffers and fresh-price requirements. Emergency administrator-initiated recovery bypasses those automatic economic ceilings but still requires sufficient operator funds and a valid live fee estimate. It does not bypass on-chain owner permissions or executor caps.
+
+## Backup and restore
+
+D1 backups do not include Worker code, bindings, secrets or operator private keys. Keep those recovery materials separately protected. The production SQL export was generated and the operator has confirmed downloading it. A disposable-database restore rehearsal has not yet been completed. Never test restore against the live production database.
 
 ## Development
 
@@ -61,9 +91,8 @@ npm test
 npm run build
 ```
 
-See [the agreed recovery specification](docs/AGREED_RECOVERY_SPEC.md), [architecture](docs/ARCHITECTURE.md), and [security model](docs/SECURITY.md).
-
+See [the agreed recovery specification](docs/AGREED_RECOVERY_SPEC.md), [architecture](docs/ARCHITECTURE.md), [security model](docs/SECURITY.md), [Phase Four hardening](docs/PHASE_FOUR_SECURITY_HARDENING.md), and [D1 backup/restore runbook](docs/D1_BACKUP_RESTORE_RUNBOOK.md).
 
 ## Cloudflare deployment
 
-Mainwell runs on Cloudflare Workers with Cloudflare D1 as its primary relational database. The production D1 database is bound as `DB`; schema changes live in `migrations/`. See [Cloudflare D1 deployment notes](docs/CLOUDFLARE_D1.md).
+Mainwell runs on Cloudflare Workers with Cloudflare D1 as its primary relational database. The production D1 database is bound as DB; schema changes live in migrations/. Deployment must be verified separately from CI.
