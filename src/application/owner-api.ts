@@ -294,7 +294,8 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     } catch (error) {
       const message = error instanceof Error ? error.message : "Monitoring failed.";
       if (message === "RPC_NOT_CONFIGURED") return reply({ error: "This network's RPC endpoint is not configured on the server.", code: "rpc_not_configured" }, 503);
-      return reply({ error: "Wallet monitoring failed. Check the network RPC and configured asset list.", code: "monitoring_failed" }, 502);
+      if (message === "ALCHEMY_API_KEY_NOT_CONFIGURED") return reply({ error: "Alchemy is not configured on the server.", code: "alchemy_not_configured" }, 503);
+      return reply({ error: "Wallet monitoring failed. Check the Alchemy API key and network RPC configuration.", code: "monitoring_failed" }, 502);
     }
   }
 
