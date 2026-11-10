@@ -33,3 +33,25 @@ test("automatic job discovery runs only after its explicit switch is enabled", a
   await runRecoveryAutomation({ DB });
   assert.equal(DB.calls.some(call => call.sql.includes("FROM recovery_grants g")), true);
 });
+
+const { getRecoveryFeePolicy } = require("../dist/application/recovery-engine.js");
+
+test("emergency administrator recovery has no USD/native fee ceiling and retains no gas reserve", () => {
+  assert.deepEqual(getRecoveryFeePolicy("admin-initiated"), {
+    emergency: true,
+    enforceUsdFeeCeiling: false,
+    enforceNativeFeeCap: false,
+    retainGasReserve: false,
+    enforceAutomaticEconomicRatio: false
+  });
+});
+
+test("automatic recovery retains its fee ceilings, reserve and economic ratio", () => {
+  assert.deepEqual(getRecoveryFeePolicy("automatic-priority"), {
+    emergency: false,
+    enforceUsdFeeCeiling: true,
+    enforceNativeFeeCap: true,
+    retainGasReserve: true,
+    enforceAutomaticEconomicRatio: true
+  });
+});
