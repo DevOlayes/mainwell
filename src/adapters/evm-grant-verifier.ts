@@ -265,7 +265,7 @@ export class EvmGrantVerifier {
       throw new Error("Revocation RPC chain does not match the stored grant.");
     }
     const code = await this.rpc("eth_getCode", [grant.executorAddress, "latest"]);
-    if (typeof code !== "string" || code === "0x" || keccak256Hex(code).toLowerCase() !== this.config.trustedExecutorCodeHash.toLowerCase()) {
+    if (typeof code !== "string" || code === "0x" || normalizedExecutorRuntimeHash(code).toLowerCase() !== this.config.trustedExecutorCodeHash.toLowerCase()) {
       throw new Error("Executor runtime bytecode is no longer trusted.");
     }
     const executorOwner = this.decodeAddress(await this.call(grant.executorAddress, "owner()"));
