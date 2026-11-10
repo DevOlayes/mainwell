@@ -32,6 +32,12 @@ export async function updateRuntimeSetting(request:Request,env:Env,admin:Admin){
    updates.push(["fee_cap_wei:"+network,value]);
   }
  }
+ if(body.reserveWei&&typeof body.reserveWei==="object"&&!Array.isArray(body.reserveWei)){
+  for(const [network,value] of Object.entries(body.reserveWei as Record<string,unknown>)){
+   if(!NETWORKS.some(n=>n.id===network)||typeof value!=="string"||!UINT.test(value))return json({error:"Each network gas reserve must be a non-negative integer in native base units."},400);
+   updates.push(["reserve_wei:"+network,value]);
+  }
+ }
  if(!updates.length)return json({error:"No valid settings supplied."},400);
  for(const [key,value] of updates)await env.DB.prepare("INSERT INTO mainwell_runtime_settings(setting_key,setting_value,updated_by,updated_at) VALUES(?,?,?,?) ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_by=excluded.updated_by,updated_at=excluded.updated_at").bind(key,value,actor,now).run();
  await env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES(?,'admin',?,'runtime.settings.updated','runtime_settings','mainwell',?,?)").bind(crypto.randomUUID(),actor,JSON.stringify({keys:updates.map(x=>x[0])}),now).run();
@@ -41,7 +47,7 @@ export async function runtimeReadiness(env:Env){
  const automationEnabled=await getSetting(env.DB,"automation_enabled")==="true",executionEnabled=await getSetting(env.DB,"execution_enabled")==="true";
  const networks=[];
  for(const n of NETWORKS){
-  const rpc=env[n.rpc];const feeCap=await getSetting(env.DB,"fee_cap_wei:"+n.id);
+  const rpc=env[n.rpc];const feeCap=await getSetting(env.DB,"fee_cap_wei:"+n.id);const reserve=await getSetting(env.DB,"reserve_wei:"+n.id);
   const operators=[];
   for(const mode of ["admin","automation"] as const){
    const address=mode==="admin"?env.MAINWELL_ADMIN_OPERATOR:env.MAINWELL_AUTOMATION_OPERATOR;
@@ -60,7 +66,7 @@ export async function runtimeReadiness(env:Env){
     if(rpcStatus==="ready")for(const op of operators){const address=op.mode==="admin"?env.MAINWELL_ADMIN_OPERATOR:env.MAINWELL_AUTOMATION_OPERATOR;if(address&&ADDRESS.test(address)){const balance=await client.getBalance({address:address as `0x${string}`});op.balanceWei=balance.toString();op.gasFunded=balance>0n}}
    }catch{rpcStatus="unreachable"}
   }
-  networks.push({network:n.id,name:n.name,chainId:n.chainId,nativeSymbol:n.symbol,rpcStatus,headAgeSeconds,feeQuoteAvailable,feeCapConfigured:feeCap!==null,feeCapWei:feeCap,operators});
+  networks.push({network:n.id,name:n.name,chainId:n.chainId,nativeSymbol:n.symbol,rpcStatus,headAgeSeconds,feeQuoteAvailable,feeCapConfigured:feeCap!==null,feeCapWei:feeCap,reserveConfigured:reserve!==null,reserveWei:reserve,operators});
  }
  return json({automationEnabled,executionEnabled,networks,checkedAt:new Date().toISOString()});
 }
