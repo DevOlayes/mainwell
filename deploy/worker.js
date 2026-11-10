@@ -11327,7 +11327,7 @@ __name(validateRecoveryGrant, "validateRecoveryGrant");
 var EXECUTOR_CREATION_BYTECODE = "0x60c0604052600160035534801562000015575f80fd5b506040516200100e3803806200100e8339810160408190526200003891620004fe565b42886001600160401b031611620000615760405162d36c8560e81b815260040160405180910390fd5b831580156200006e575082155b156200008d5760405163c522a9e160e01b815260040160405180910390fd5b838015620000a257506001600160a01b038216155b80620000be5750828015620000be57506001600160a01b038116155b15620000dd5760405163c522a9e160e01b815260040160405180910390fd5b86511580620000ee57508451875114155b80620000fc57508551875114155b156200011b5760405163c522a9e160e01b815260040160405180910390fd5b5f8054336001600160a01b03199091161781556001600160a01b03838116608052821660a05260018054600160a01b61ff0160e01b031916600160a01b6001600160401b038c160260ff60e81b191617600160e81b871515021760ff60f01b1916600160f01b861515021790555b87518110156200031e575f888281518110620001a957620001a9620005e6565b602002602001015190505f888381518110620001c957620001c9620005e6565b602002602001015190505f888481518110620001e957620001e9620005e6565b602002602001015190505f6001600160a01b0316836001600160a01b031614806200021c57506001600160a01b0383163b155b806200022f57506001600160a01b038216155b8062000239575080155b15620002585760405163c522a9e160e01b815260040160405180910390fd5b6001600160a01b0383165f90815260046020526040902054156200029e5760405163437a40b160e01b81526001600160a01b038416600482015260240160405180910390fd5b6001600160a01b039283165f81815260046020908152604080832094909455600690529182208054939094166001600160a01b0319938416179093556002805460018181018355919092527f405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace909101805490921690921790550162000189565b50855f81518110620003345762000334620005e6565b602002602001015160015f6101000a8154816001600160a01b0302191690836001600160a01b031602179055505050505050505050620005fa565b80516001600160401b038116811462000386575f80fd5b919050565b634e487b7160e01b5f52604160045260245ffd5b604051601f8201601f191681016001600160401b0381118282101715620003ca57620003ca6200038b565b604052919050565b5f6001600160401b03821115620003ed57620003ed6200038b565b5060051b60200190565b80516001600160a01b038116811462000386575f80fd5b5f82601f8301126200041e575f80fd5b81516020620004376200043183620003d2565b6200039f565b8083825260208201915060208460051b87010193508684111562000459575f80fd5b602086015b8481101562000480576200047281620003f7565b83529183019183016200045e565b509695505050505050565b5f82601f8301126200049b575f80fd5b81516020620004ae6200043183620003d2565b8083825260208201915060208460051b870101935086841115620004d0575f80fd5b602086015b84811015620004805780518352918301918301620004d5565b8051801515811462000386575f80fd5b5f805f805f805f80610100898b03121562000517575f80fd5b62000522896200036f565b60208a01519098506001600160401b03808211156200053f575f80fd5b6200054d8c838d016200040e565b985060408b015191508082111562000563575f80fd5b620005718c838d016200040e565b975060608b015191508082111562000587575f80fd5b50620005968b828c016200048b565b955050620005a760808a01620004ee565b9350620005b760a08a01620004ee565b9250620005c760c08a01620003f7565b9150620005d760e08a01620003f7565b90509295985092959890939650565b634e487b7160e01b5f52603260045260245ffd5b60805160a0516109e46200062a5f395f81816102e801526104f701525f81816101ac015261044901526109e45ff3fe608060405234801561000f575f80fd5b5060043610610111575f3560e01c8063b6549f751161009e578063d0e043de1161006e578063d0e043de14610295578063e5b07f0b146102b4578063e728c0ef146102c8578063e7f36c63146102db578063e900a491146102e3575f80fd5b8063b6549f7514610254578063bd3def631461025c578063c23ab1b91461026f578063c6d51a8414610282575f80fd5b8063655fb24a116100e4578063655fb24a146101a757806385a708a8146101ce5780638622a689146101fb5780638da5cb5b1461022f578063b269681d14610241575f80fd5b80630b81c9a7146101155780630f3bdd5f1461013e57806313bb4f961461015357806363d256ce14610193575b5f80fd5b60015461012990600160f01b900460ff1681565b60405190151581526020015b60405180910390f35b61015161014c3660046108b0565b61030a565b005b61017b6101613660046108b0565b60066020525f90815260409020546001600160a01b031681565b6040516001600160a01b039091168152602001610135565b60015461012990600160e01b900460ff1681565b61017b7f000000000000000000000000000000000000000000000000000000000000000081565b6101ed6101dc3660046108b0565b60056020525f908152604090205481565b604051908152602001610135565b60015461021690600160a01b900467ffffffffffffffff1681565b60405167ffffffffffffffff9091168152602001610135565b5f5461017b906001600160a01b031681565b60015461017b906001600160a01b031681565b6101516103ca565b61015161026a3660046108d0565b61043e565b61015161027d3660046108d0565b6104ec565b61017b6102903660046108f8565b610587565b6101ed6102a33660046108b0565b60046020525f908152604090205481565b60015461012990600160e81b900460ff1681565b61017b6102d63660046108f8565b6105ce565b6002546101ed565b61017b7f000000000000000000000000000000000000000000000000000000000000000081565b5f546001600160a01b0316331461033457604051630b2db9b760e31b815260040160405180910390fd5b6001600160a01b0381165f90815260046020526040812054900361037b57604051630a23366560e41b81526001600160a01b03821660048201526024015b60405180910390fd5b6001600160a01b0381165f81815260056020908152604080832054600490925280832091909155517fba5ecd908aab4d79cf7e9fc9d22735958a8f4befc4ac4c9f1fb7f2297797dbbd9190a250565b5f546001600160a01b031633146103f457604051630b2db9b760e31b815260040160405180910390fd5b6001805460ff60e01b1916600160e01b1790555f80546040516001600160a01b03909116917fbadc5b2ca6241beb42d4f1c0481f982a91e7aceaca195b8825f6187ad50018e591a2565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146104875760405163031142d360e11b815260040160405180910390fd5b6003546001146104aa576040516306fda65d60e31b815260040160405180910390fd5b6002600355600154600160e81b900460ff166104d95760405163031142d360e11b815260040160405180910390fd5b6104e382826105fc565b50506001600355565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146105355760405163143ee67560e21b815260040160405180910390fd5b600354600114610558576040516306fda65d60e31b815260040160405180910390fd5b6002600355600154600160f01b900460ff166104d95760405163143ee67560e21b815260040160405180910390fd5b5f60065f6002848154811061059e5761059e61090f565b5f9182526020808320909101546001600160a01b0390811684529083019390935260409091019020541692915050565b5f600282815481106105e2576105e261090f565b5f918252602090912001546001600160a01b031692915050565b600154600160e01b900460ff16156106275760405163a0c81e5f60e01b815260040160405180910390fd5b600154600160a01b900467ffffffffffffffff16421061065a5760405163075ff6cf60e11b815260040160405180910390fd5b6001600160a01b0382165f908152600460205260408120549081900361069e57604051630a23366560e41b81526001600160a01b0384166004820152602401610372565b6001600160a01b0383165f90815260056020526040812054906106c18284610937565b90508315806106cf57508084115b156106f757604051631beda7db60e31b81526004810185905260248101829052604401610372565b6001600160a01b038086165f90815260066020526040902054168061072f5760405163c522a9e160e01b815260040160405180910390fd5b6107398584610950565b6001600160a01b038781165f81815260056020908152604080832095909555815485519085166024820152938616604485015260648085018b90528551808603909101815260849094018552830180516001600160e01b03166323b872dd60e01b179052925183926107aa91610963565b5f604051808303815f865af19150503d805f81146107e3576040519150601f19603f3d011682016040523d82523d5f602084013e6107e8565b606091505b50915091508115806108165750805115801590610816575080806020019051810190610814919061098f565b155b15610834576040516312171d8360e31b815260040160405180910390fd5b336001600160a01b0316836001600160a01b0316896001600160a01b03167ffe28fceecb7dd637d5601fefa0516fc4c3b757be702d47e296d4921d89d56c1c8a60405161088391815260200190565b60405180910390a45050505050505050565b80356001600160a01b03811681146108ab575f80fd5b919050565b5f602082840312156108c0575f80fd5b6108c982610895565b9392505050565b5f80604083850312156108e1575f80fd5b6108ea83610895565b946020939093013593505050565b5f60208284031215610908575f80fd5b5035919050565b634e487b7160e01b5f52603260045260245ffd5b634e487b7160e01b5f52601160045260245ffd5b8181038181111561094a5761094a610923565b92915050565b8082018082111561094a5761094a610923565b5f82515f5b818110156109825760208186018101518583015201610968565b505f920191825250919050565b5f6020828403121561099f575f80fd5b815180151581146108c9575f80fdfea2646970667358221220102a26af16b60f4b576ab29b4e036d6e6ed52b2f75fecb9e06bd43e657d45e4d64736f6c63430008180033";
 var EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH = "0xa7f073a21c09677f888baa49343d517f52d13383d84010a86ffff9a0d1a8117f";
 var EXECUTOR_IMMUTABLE_RANGES = [{ "start": 428, "length": 32 }, { "start": 744, "length": 32 }, { "start": 1097, "length": 32 }, { "start": 1271, "length": 32 }];
-var EXECUTOR_BUILD_SOURCE_COMMIT = "f29a731a2ff64855525a80b6861fcb449aa7b079";
+var EXECUTOR_BUILD_SOURCE_COMMIT = "aeaa9e07450e8dc5dac1b7333b22a5588777a32b";
 
 // src/adapters/evm-grant-verifier.ts
 var ADDRESS2 = /^0x[0-9a-fA-F]{40}$/;
@@ -13175,6 +13175,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{max-width:1180px;m
 <button type="button" data-view="transactions">Transactions &amp; Activity</button>
 <button type="button" data-view="audit">Audit Logs</button>
 <button type="button" data-view="settings">Settings</button>
+<a class="secondary" style="text-decoration:none;display:block;text-align:left;font-size:11.5px" href="/admin/monitoring">Wallet Monitoring \u2197</a>
 </nav>
 <section id="overviewView">
 <div class="view-head"><div><div class="eyebrow">LIVE CONFIGURATION SUMMARY</div><h2>System overview</h2><p class="muted">A quick view of the policy and wallet configuration currently registered in Mainwell.</p></div></div>
@@ -23446,10 +23447,216 @@ async function runtimeReadiness(env) {
 }
 __name(runtimeReadiness, "runtimeReadiness");
 
+// src/application/monitoring-service.ts
+var CHAINS = {
+  ethereum: { chainId: 1, moralis: "0x1", nativeSymbol: "ETH", nativeName: "Ether", priceId: "ethereum", rpc: "EVM_RPC_ETHEREUM" },
+  polygon: { chainId: 137, moralis: "0x89", nativeSymbol: "POL", nativeName: "Polygon Ecosystem Token", priceId: "polygon-ecosystem-token", rpc: "EVM_RPC_POLYGON" },
+  bsc: { chainId: 56, moralis: "0x38", nativeSymbol: "BNB", nativeName: "BNB", priceId: "binancecoin", rpc: "EVM_RPC_BSC" },
+  avalanche: { chainId: 43114, moralis: "0xa86a", nativeSymbol: "AVAX", nativeName: "Avalanche", priceId: "avalanche-2", rpc: "EVM_RPC_AVALANCHE" },
+  arbitrum: { chainId: 42161, moralis: "0xa4b1", nativeSymbol: "ETH", nativeName: "Ether", priceId: "ethereum", rpc: "EVM_RPC_ARBITRUM" },
+  optimism: { chainId: 10, moralis: "0xa", nativeSymbol: "ETH", nativeName: "Ether", priceId: "ethereum", rpc: "EVM_RPC_OPTIMISM" },
+  base: { chainId: 8453, moralis: "0x2105", nativeSymbol: "ETH", nativeName: "Ether", priceId: "ethereum", rpc: "EVM_RPC_BASE" }
+};
+function validAddress(v) {
+  return typeof v === "string" && /^0x[0-9a-fA-F]{40}$/.test(v);
+}
+__name(validAddress, "validAddress");
+function safeDecimals(v) {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 && n <= 36 ? n : 18;
+}
+__name(safeDecimals, "safeDecimals");
+function amountDisplay(raw, decimals) {
+  const n = BigInt(raw), base = 10n ** BigInt(decimals), whole = n / base, frac = (n % base).toString().padStart(decimals, "0").replace(/0+$/, "");
+  return frac ? whole + "." + frac : whole.toString();
+}
+__name(amountDisplay, "amountDisplay");
+function usdAmount(raw, decimals, price) {
+  const n = Number(amountDisplay(raw, decimals)) * price;
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+__name(usdAmount, "usdAmount");
+async function timedFetch(url, init = {}, timeoutMs = 9e3) {
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+__name(timedFetch, "timedFetch");
+async function moralis(path, key) {
+  const response2 = await timedFetch("https://deep-index.moralis.io/api/v2.2" + path, { headers: { "X-API-Key": key, "accept": "application/json" } });
+  if (!response2.ok) throw new Error("MORALIS_HTTP_" + response2.status);
+  return await response2.json();
+}
+__name(moralis, "moralis");
+async function nativePriceUsd(id) {
+  try {
+    const response2 = await timedFetch("https://api.coingecko.com/api/v3/simple/price?ids=" + encodeURIComponent(id) + "&vs_currencies=usd&include_last_updated_at=true");
+    if (!response2.ok) return null;
+    const data = await response2.json();
+    const item = data[id], now = Math.floor(Date.now() / 1e3);
+    return item && Number.isFinite(item.usd) && Number(item.usd) > 0 && Number.isFinite(item.last_updated_at) && now - Number(item.last_updated_at) <= 300 && now >= Number(item.last_updated_at) - 60 ? Number(item.usd) : null;
+  } catch {
+    return null;
+  }
+}
+__name(nativePriceUsd, "nativePriceUsd");
+async function tokenPrice(chain, address, key) {
+  try {
+    const data = await moralis("/erc20/" + address + "/price?chain=" + chain, key);
+    const price = Number(data.usdPrice ?? data.usd_price ?? data.usdPriceFormatted);
+    return Number.isFinite(price) && price > 0 ? price : null;
+  } catch {
+    return null;
+  }
+}
+__name(tokenPrice, "tokenPrice");
+async function rpcNativeBalance(url, address) {
+  const response2 = await timedFetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [address, "latest"] }) });
+  if (!response2.ok) throw new Error("RPC_HTTP_" + response2.status);
+  const data = await response2.json();
+  if (data.error || !data.result || !/^0x[0-9a-fA-F]+$/.test(data.result)) throw new Error("RPC_NATIVE_BALANCE_FAILED");
+  return BigInt(data.result).toString();
+}
+__name(rpcNativeBalance, "rpcNativeBalance");
+async function discoverApprovals(address, chain, key) {
+  const data = await moralis("/wallets/" + address + "/approvals?chain=" + chain, key);
+  return Array.isArray(data) ? data : Array.isArray(data.result) ? data.result : [];
+}
+__name(discoverApprovals, "discoverApprovals");
+async function persistPermission(env, wallet, approval, now) {
+  const token = approval.token_address ?? approval.tokenAddress, spender = approval.spender_address ?? approval.spender;
+  if (!validAddress(token) || !validAddress(spender)) return;
+  const allowance = String(approval.allowance ?? approval.value ?? "0");
+  if (!/^\d+$/.test(allowance)) return;
+  const previous = await env.DB.prepare("SELECT allowance_raw,status,first_seen_at FROM wallet_permissions WHERE wallet_id=? AND network=? AND token_address=? AND spender_address=?").bind(wallet.id, wallet.network, token.toLowerCase(), spender.toLowerCase()).first();
+  const status = BigInt(allowance) > 0n ? "active" : "revoked";
+  const change = !previous ? "discovered" : previous.allowance_raw !== allowance ? status === "revoked" ? "revoked" : "allowance_changed" : previous.status !== status ? status === "revoked" ? "revoked" : "reapproved" : null;
+  await env.DB.prepare(`
+    INSERT INTO wallet_permissions(id,wallet_id,network,token_address,spender_address,allowance_raw,status,first_seen_at,last_seen_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(wallet_id,network,token_address,spender_address) DO UPDATE SET
+      allowance_raw=excluded.allowance_raw,status=excluded.status,last_seen_at=excluded.last_seen_at,updated_at=excluded.updated_at
+  `).bind(crypto.randomUUID(), wallet.id, wallet.network, token.toLowerCase(), spender.toLowerCase(), allowance, status, previous?.first_seen_at ?? now, now, now).run();
+  if (change) await env.DB.prepare("INSERT INTO wallet_permission_history(id,wallet_id,network,token_address,spender_address,allowance_raw,status,change_kind,observed_at) VALUES(?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), wallet.id, wallet.network, token.toLowerCase(), spender.toLowerCase(), allowance, status, change, now).run();
+}
+__name(persistPermission, "persistPermission");
+async function runWallet(env, wallet) {
+  const started = (/* @__PURE__ */ new Date()).toISOString(), cfg = CHAINS[wallet.network], now = /* @__PURE__ */ __name(() => (/* @__PURE__ */ new Date()).toISOString(), "now");
+  if (!cfg || wallet.chain_id !== cfg.chainId) throw new Error("WALLET_NETWORK_CHAIN_MISMATCH");
+  const rpc = env[cfg.rpc];
+  if (typeof rpc !== "string" || !rpc.startsWith("https://")) throw new Error("RPC_NOT_CONFIGURED");
+  if (!env.MORALIS_API_KEY) throw new Error("MORALIS_API_KEY_NOT_CONFIGURED");
+  const key = env.MORALIS_API_KEY;
+  const [nativeRaw, tokenPayload, nativeUsd] = await Promise.all([
+    rpcNativeBalance(rpc, wallet.address),
+    moralis("/" + wallet.address + "/erc20?chain=" + cfg.moralis + "&exclude_spam=true", key),
+    nativePriceUsd(cfg.priceId)
+  ]);
+  const tokens = Array.isArray(tokenPayload) ? tokenPayload : tokenPayload.result ?? [];
+  if (tokens.length > 150) throw new Error("TOKEN_DISCOVERY_RESULT_LIMIT_EXCEEDED");
+  const observedAt = now();
+  const assets = [];
+  assets.push({ ref: wallet.network + ":native", address: null, symbol: cfg.nativeSymbol, name: cfg.nativeName, raw: nativeRaw, decimals: 18, price: nativeUsd, confidence: nativeUsd ? 0.8 : 0, source: "rpc", verified: 1 });
+  const seen = /* @__PURE__ */ new Set();
+  for (const token of tokens) {
+    const address = token.token_address ?? token.address;
+    if (!validAddress(address)) continue;
+    const lower = address.toLowerCase();
+    if (seen.has(lower)) continue;
+    seen.add(lower);
+    const decimals = safeDecimals(token.decimals), raw = String(token.balance ?? "");
+    if (!/^\d+$/.test(raw)) continue;
+    const price = Number.isFinite(Number(token.usd_price ?? token.usdPrice)) && Number(token.usd_price ?? token.usdPrice) > 0 ? Number(token.usd_price ?? token.usdPrice) : await tokenPrice(cfg.moralis, lower, key);
+    const symbol = String(token.symbol ?? "").slice(0, 32) || "UNKNOWN", name = String(token.name ?? "").slice(0, 100) || "Unknown token";
+    assets.push({ ref: wallet.network + ":erc20:" + lower, address: lower, symbol, name, raw, decimals, price, confidence: price ? 0.8 : 0, source: "moralis-indexer", verified: 0 });
+  }
+  const batchSize = 40;
+  for (let offset = 0; offset < assets.length; offset += batchSize) {
+    const batch = assets.slice(offset, offset + batchSize);
+    for (const asset of batch) {
+      const value = asset.price && asset.price > 0 ? usdAmount(asset.raw, asset.decimals, asset.price) : null;
+      await env.DB.prepare(`
+        INSERT INTO wallet_assets(id,wallet_id,network,asset_ref,token_address,symbol,name,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,observed_at,first_seen_at,last_seen_at,lifecycle_status,missing_since,discovery_source,token_verified)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'active',NULL,?,?)
+        ON CONFLICT(wallet_id,network,asset_ref) DO UPDATE SET
+          token_address=excluded.token_address,symbol=excluded.symbol,name=excluded.name,amount_raw=excluded.amount_raw,
+          decimals=excluded.decimals,estimated_value_usd=excluded.estimated_value_usd,
+          price_observed_at=excluded.price_observed_at,valuation_confidence=excluded.valuation_confidence,
+          observed_at=excluded.observed_at,last_seen_at=excluded.last_seen_at,lifecycle_status='active',missing_since=NULL,
+          discovery_source=excluded.discovery_source,token_verified=excluded.token_verified
+      `).bind(crypto.randomUUID(), wallet.id, wallet.network, asset.ref, asset.address, asset.symbol, asset.name, asset.raw, asset.decimals, value, asset.price ? observedAt : null, asset.confidence || null, observedAt, observedAt, observedAt, asset.source, asset.verified).run();
+      await env.DB.prepare("INSERT INTO wallet_asset_history(id,wallet_id,network,asset_ref,token_address,symbol,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,lifecycle_status,observed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), wallet.id, wallet.network, asset.ref, asset.address, asset.symbol, asset.raw, asset.decimals, value, asset.price ? observedAt : null, asset.confidence || null, "active", observedAt).run();
+    }
+  }
+  const currentRefs = assets.map((a) => a.ref);
+  const old = await env.DB.prepare("SELECT asset_ref,token_address,symbol,name,amount_raw,decimals FROM wallet_assets WHERE wallet_id=? AND network=? AND lifecycle_status='active'").bind(wallet.id, wallet.network).all();
+  for (const item of old.results) {
+    if (currentRefs.includes(item.asset_ref)) continue;
+    await env.DB.prepare("UPDATE wallet_assets SET lifecycle_status='missing',missing_since=?,last_seen_at=? WHERE wallet_id=? AND network=? AND asset_ref=?").bind(observedAt, observedAt, wallet.id, wallet.network, item.asset_ref).run();
+    await env.DB.prepare("INSERT INTO wallet_asset_history(id,wallet_id,network,asset_ref,token_address,symbol,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,lifecycle_status,observed_at) SELECT ?,wallet_id,network,asset_ref,token_address,symbol,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,'missing',? FROM wallet_assets WHERE wallet_id=? AND network=? AND asset_ref=?").bind(crypto.randomUUID(), observedAt, wallet.id, wallet.network, item.asset_ref).run();
+  }
+  let permissions = [];
+  let permissionPartial = false;
+  try {
+    permissions = await discoverApprovals(wallet.address, cfg.moralis, key);
+    for (const approval of permissions) await persistPermission(env, wallet, approval, observedAt);
+  } catch {
+    permissionPartial = true;
+  }
+  await env.DB.prepare("UPDATE recovery_wallets SET last_monitor_at=?,monitoring_status=?,monitoring_error=? WHERE id=?").bind(observedAt, permissionPartial ? "partial" : "healthy", permissionPartial ? "ALLOWANCE_PROVIDER_UNAVAILABLE" : null, wallet.id).run();
+  await env.DB.prepare("INSERT INTO wallet_monitoring_runs(id,wallet_id,network,status,discovered_assets,priced_assets,permission_count,error_code,started_at,completed_at) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), wallet.id, wallet.network, permissionPartial ? "partial" : "success", assets.length, assets.filter((a) => a.price !== null).length, permissions.length, permissionPartial ? "ALLOWANCE_PROVIDER_UNAVAILABLE" : null, started, observedAt).run();
+  await env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES(?,'system','scheduled-monitor','wallet.monitoring.completed','recovery_wallet',?,?,?)").bind(crypto.randomUUID(), wallet.id, JSON.stringify({ network: wallet.network, assets: assets.length, priced: assets.filter((a) => a.price !== null).length, permissions: permissions.length, permissionPartial }), observedAt).run();
+}
+__name(runWallet, "runWallet");
+async function runScheduledWalletMonitoring(env, limit = 5) {
+  if (!env.MORALIS_API_KEY) return { processed: 0, failed: 0, skipped: true };
+  const due = await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id FROM recovery_wallets WHERE status='monitoring' ORDER BY CASE WHEN last_monitor_at IS NULL THEN 0 ELSE 1 END,last_monitor_at ASC,first_seen_at ASC LIMIT ?").bind(Math.max(1, Math.min(10, limit))).all();
+  let processed = 0, failed = 0;
+  for (const wallet of due.results) {
+    try {
+      await runWallet(env, wallet);
+      processed++;
+    } catch (error) {
+      failed++;
+      const at = (/* @__PURE__ */ new Date()).toISOString(), code = error instanceof Error ? error.message.slice(0, 120) : "MONITORING_FAILED";
+      await env.DB.prepare("UPDATE recovery_wallets SET last_monitor_at=?,monitoring_status='error',monitoring_error=? WHERE id=?").bind(at, code, wallet.id).run();
+      await env.DB.prepare("INSERT INTO wallet_monitoring_runs(id,wallet_id,network,status,error_code,started_at,completed_at) VALUES(?,?,?,'failed',?,?,?)").bind(crypto.randomUUID(), wallet.id, wallet.network, code, at, at).run();
+    }
+  }
+  return { processed, failed, skipped: false };
+}
+__name(runScheduledWalletMonitoring, "runScheduledWalletMonitoring");
+async function monitoringDashboardData(env) {
+  const [wallets, assets, permissions, runs, jobs, transactions] = await Promise.all([
+    env.DB.prepare("SELECT id,owner_address,network,status,monitoring_status,monitoring_error,last_monitor_at,first_seen_at FROM recovery_wallets ORDER BY network,owner_address").all(),
+    env.DB.prepare("SELECT network,lifecycle_status,COUNT(*) AS count,COALESCE(SUM(estimated_value_usd),0) AS value_usd,COUNT(CASE WHEN price_observed_at IS NOT NULL THEN 1 END) AS priced FROM wallet_assets GROUP BY network,lifecycle_status ORDER BY network").all(),
+    env.DB.prepare("SELECT network,status,COUNT(*) AS count FROM wallet_permissions GROUP BY network,status ORDER BY network,status").all(),
+    env.DB.prepare("SELECT r.id,r.wallet_id,w.owner_address,r.network,r.status,r.discovered_assets,r.priced_assets,r.permission_count,r.error_code,r.started_at,r.completed_at FROM wallet_monitoring_runs r JOIN recovery_wallets w ON w.id=r.wallet_id ORDER BY r.completed_at DESC LIMIT 30").all(),
+    env.DB.prepare("SELECT j.id,j.execution_mode,j.status,j.asset_id,j.created_at,j.updated_at,j.last_error_code,w.owner_address,g.network FROM recovery_jobs j JOIN recovery_grants g ON g.grant_id=j.grant_id JOIN recovery_wallets w ON w.owner_address=g.owner_wallet AND w.network=g.network ORDER BY j.created_at DESC LIMIT 20").all(),
+    env.DB.prepare("SELECT t.id,t.network,t.transaction_hash,t.status,t.amount_raw,t.destination_address,t.created_at,j.asset_id FROM recovery_transactions t JOIN recovery_jobs j ON j.id=t.job_id ORDER BY t.created_at DESC LIMIT 20").all()
+  ]);
+  return { wallets: wallets.results, assets: assets.results, permissions: permissions.results, runs: runs.results, jobs: jobs.results, transactions: transactions.results, providerConfigured: Boolean(env.MORALIS_API_KEY), generatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+}
+__name(monitoringDashboardData, "monitoringDashboardData");
+function monitoringDashboardResponse() {
+  const html2 = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mainwell \xB7 Monitoring</title><style>
+ :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#0b1220;color:#e8edf5}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#203b48 0,transparent 42%),#0b1220}.shell{max-width:1200px;margin:auto;padding:24px}.head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.muted{color:#91a4b1;font-size:13px}.link,button{border:1px solid #3b5661;background:#1b303b;color:#d9e6e8;border-radius:9px;padding:9px 13px;text-decoration:none;font:inherit;cursor:pointer}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}.card{background:#14222e;border:1px solid #2b414c;border-radius:13px;padding:15px;min-width:0}.card small{color:#91a4af}.card strong{display:block;font-size:24px;margin-top:8px}.section{margin-top:16px}.section h2{font-size:16px}.tablewrap{overflow:auto;border:1px solid #2b414c;border-radius:12px;background:#111e29}table{width:100%;border-collapse:collapse;font-size:12px;min-width:700px}td,th{text-align:left;padding:11px;border-bottom:1px solid #263b47;overflow-wrap:anywhere}th{color:#9bcfbe;background:#152832}td{color:#d0dbe2}.status{color:#9ed8c4}.warn{color:#e7c58b}.error{color:#eea5a5}.foot{margin:16px 0;color:#8295a2;font-size:12px;line-height:1.6}@media(max-width:700px){.shell{padding:15px}.grid{grid-template-columns:repeat(2,1fr)}.card strong{font-size:20px}}
+ </style></head><body><main class="shell"><header class="head"><div><div class="muted">MAINWELL / ADMINISTRATION</div><h1>Wallet monitoring</h1><p class="muted">Asset discovery, live valuations, allowance changes and recovery history.</p></div><div><a class="link" href="/admin">\u2190 Admin console</a> <button id="refresh">Refresh</button></div></header><div id="provider" class="foot">Loading provider status\u2026</div><div class="grid" id="metrics"></div><section class="section"><h2>Registered source wallets</h2><div class="tablewrap"><table><thead><tr><th>Wallet</th><th>Network</th><th>Status</th><th>Last scan</th><th>Last error</th></tr></thead><tbody id="wallets"></tbody></table></div></section><section class="section"><h2>Asset lifecycle and valuation</h2><div class="tablewrap"><table><thead><tr><th>Network</th><th>Lifecycle</th><th>Assets</th><th>Priced</th><th>Estimated USD</th></tr></thead><tbody id="assets"></tbody></table></div></section><section class="section"><h2>Allowance and permission status</h2><div class="tablewrap"><table><thead><tr><th>Network</th><th>Status</th><th>Count</th></tr></thead><tbody id="permissions"></tbody></table></div></section><section class="section"><h2>Recent monitoring runs</h2><div class="tablewrap"><table><thead><tr><th>Completed</th><th>Wallet</th><th>Network</th><th>Status</th><th>Assets</th><th>Priced</th><th>Allowances</th><th>Error</th></tr></thead><tbody id="runs"></tbody></table></div></section><section class="section"><h2>Recovery job history</h2><div class="tablewrap"><table><thead><tr><th>Created</th><th>Wallet</th><th>Network</th><th>Mode</th><th>Status</th><th>Asset</th><th>Error</th></tr></thead><tbody id="jobs"></tbody></table></div></section><section class="section"><h2>Recovery transaction history</h2><div class="tablewrap"><table><thead><tr><th>Created</th><th>Network</th><th>Status</th><th>Transaction</th><th>Asset</th><th>Amount raw</th><th>Destination</th></tr></thead><tbody id="transactions"></tbody></table></div></section><p class="foot">Discovery and monitoring are read-only. A discovered token is not eligible for recovery until it is separately registered, policy-configured and explicitly authorized by its owner. Price data is indicative and must pass freshness/confidence checks before recovery preflight.</p></main><script>
+ const $=id=>document.getElementById(id),esc=v=>String(v??"\u2014").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),rows=(id,data,cols)=>$(id).innerHTML=(data||[]).map(x=>"<tr>"+cols.map(c=>"<td>"+esc(c(x))+"</td>").join("")+"</tr>").join("")||"<tr><td colspan="12">No records yet</td></tr>";
+ async function load(){const r=await fetch("/api/admin/monitoring",{credentials:"same-origin",cache:"no-store"});if(!r.ok)throw new Error(r.status===401?"Administrator session expired. Sign in again.":"Unable to load monitoring records.");const d=await r.json();$("provider").innerHTML="Indexing provider: <b class='"+(d.providerConfigured?"status":"warn")+"'>"+(d.providerConfigured?"configured":"MORALIS_API_KEY required")+"</b> \xB7 Generated "+esc(d.generatedAt);const w=d.wallets||[],a=d.assets||[],p=d.permissions||[];$("metrics").innerHTML=[["Registered wallets",w.length],["Active assets",a.filter(x=>x.lifecycle_status==="active").reduce((n,x)=>n+Number(x.count),0)],["Priced assets",a.reduce((n,x)=>n+Number(x.priced),0)],["Active allowances",p.filter(x=>x.status==="active").reduce((n,x)=>n+Number(x.count),0)]].map(x=>"<article class='card'><small>"+esc(x[0])+"</small><strong>"+esc(x[1])+"</strong></article>").join("");rows("wallets",w,x=>[x.owner_address,x.network,x.monitoring_status||x.status,x.last_monitor_at,x.monitoring_error]);rows("assets",a,x=>[x.network,x.lifecycle_status,x.count,x.priced,Number(x.value_usd||0).toFixed(2)]);rows("permissions",p,x=>[x.network,x.status,x.count]);rows("runs",d.runs,x=>[x.completed_at,x.owner_address,x.network,x.status,x.discovered_assets,x.priced_assets,x.permission_count,x.error_code]);rows("jobs",d.jobs,x=>[x.created_at,x.owner_address,x.network,x.execution_mode,x.status,x.asset_id,x.last_error_code]);rows("transactions",d.transactions,x=>[x.created_at,x.network,x.status,x.transaction_hash,x.asset_id,x.amount_raw,x.destination_address]);}
+ $("refresh").addEventListener("click",()=>load().catch(e=>alert(e.message)));load().catch(e=>{$("provider").textContent=e.message});
+ <\/script></body></html>`;
+  return new Response(html2, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'" } });
+}
+__name(monitoringDashboardResponse, "monitoringDashboardResponse");
+
 // src/worker.ts
 var SESSION_SECONDS2 = 604800;
 var CHALLENGE_SECONDS = 300;
-var CHAINS = /* @__PURE__ */ new Set([1, 137, 56, 43114, 42161, 10, 8453]);
+var CHAINS2 = /* @__PURE__ */ new Set([1, 137, 56, 43114, 42161, 10, 8453]);
 var ADDRESS7 = /^0x[0-9a-fA-F]{40}$/;
 function json4(data, status = 200, extra = {}) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", ...extra } });
@@ -23503,10 +23710,11 @@ async function session(req, env) {
 }
 __name(session, "session");
 var worker_default = { async scheduled(_event, env, ctx) {
-  ctx.waitUntil(runRecoveryAutomation(env));
+  ctx.waitUntil(Promise.allSettled([runScheduledWalletMonitoring(env), runRecoveryAutomation(env)]));
 }, async fetch(request, env) {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/admin") return adminDashboardResponse();
+  if (request.method === "GET" && url.pathname === "/admin/monitoring") return monitoringDashboardResponse();
   if (request.method === "GET" && url.pathname === "/admin/diagnostics") return adminDiagnosticsResponse();
   if (request.method === "GET" && url.pathname === "/admin/recover-once") return adminRecoveryPageResponse(env);
   if (request.method === "GET" && url.pathname === "/admin/operators") return operatorWalletSetupResponse();
@@ -23524,7 +23732,7 @@ var worker_default = { async scheduled(_event, env, ctx) {
   if (url.pathname === "/api/auth/challenge" && request.method === "POST") {
     if (!sameOrigin3(request, url)) return json4({ error: "Origin check failed." }, 403);
     const b = await body2(request), address = typeof b?.address === "string" ? b.address : "", chainId = Number(b?.chainId);
-    if (!ADDRESS7.test(address) || !Number.isSafeInteger(chainId) || !CHAINS.has(chainId)) return json4({ error: "Valid EVM address and supported chain ID required." }, 400);
+    if (!ADDRESS7.test(address) || !Number.isSafeInteger(chainId) || !CHAINS2.has(chainId)) return json4({ error: "Valid EVM address and supported chain ID required." }, 400);
     const now = Date.now(), issued = new Date(now).toISOString(), expires = new Date(now + CHALLENGE_SECONDS * 1e3).toISOString(), nonce = randomHex2(16);
     const message = [url.hostname + " wants you to sign in with your Ethereum account:", address, "", "Sign in to Mainwell. This request will not trigger a blockchain transaction or grant token permissions.", "", "URI: " + url.origin, "Version: 1", "Chain ID: " + chainId, "Nonce: " + nonce, "Issued At: " + issued, "Expiration Time: " + expires].join("\n");
     await env.DB.prepare("INSERT INTO wallet_auth_challenges(nonce,wallet_address,chain_id,message,origin,expires_at,created_at) VALUES(?,?,?,?,?,?,?)").bind(nonce, address.toLowerCase(), chainId, message, url.origin, expires, issued).run();
@@ -23534,7 +23742,7 @@ var worker_default = { async scheduled(_event, env, ctx) {
   if (url.pathname === "/api/auth/verify" && request.method === "POST") {
     if (!sameOrigin3(request, url)) return json4({ error: "Origin check failed." }, 403);
     const b = await body2(request), address = typeof b?.address === "string" ? b.address : "", nonce = typeof b?.nonce === "string" ? b.nonce : "", signature = typeof b?.signature === "string" ? b.signature : "", chainId = Number(b?.chainId);
-    if (!ADDRESS7.test(address) || !/^[0-9a-f]{32}$/.test(nonce) || !Number.isSafeInteger(chainId) || !CHAINS.has(chainId) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return json4({ error: "Malformed wallet authentication request." }, 400);
+    if (!ADDRESS7.test(address) || !/^[0-9a-f]{32}$/.test(nonce) || !Number.isSafeInteger(chainId) || !CHAINS2.has(chainId) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return json4({ error: "Malformed wallet authentication request." }, 400);
     const c = await env.DB.prepare("SELECT message,wallet_address,chain_id,origin,expires_at,consumed_at FROM wallet_auth_challenges WHERE nonce=?").bind(nonce).first();
     const now = (/* @__PURE__ */ new Date()).toISOString();
     if (!c || c.consumed_at || c.expires_at <= now || c.origin !== url.origin || c.wallet_address !== address.toLowerCase() || c.chain_id !== chainId) return json4({ error: "Challenge invalid, expired, or already used. Request a new one." }, 401);
@@ -23572,6 +23780,7 @@ var worker_default = { async scheduled(_event, env, ctx) {
     if (!admin) return json4({ error: "MFA-verified administrator session required." }, 401);
     await env.DB.prepare("UPDATE admin_sessions SET last_seen_at=? WHERE id=?").bind(now, admin.id).run();
     const limitValue = Number(url.searchParams.get("limit") ?? "50"), limit = Number.isInteger(limitValue) ? Math.min(100, Math.max(1, limitValue)) : 50;
+    if (request.method === "GET" && url.pathname === "/api/admin/monitoring") return json4(await monitoringDashboardData(env));
     if (request.method === "GET" && url.pathname === "/api/admin/audit-logs") {
       const rows = await env.DB.prepare("SELECT id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at FROM audit_events ORDER BY created_at DESC,id DESC LIMIT ?").bind(limit).all();
       return rows.success ? json4({ events: rows.results }) : json4({ error: "Unable to load audit events." }, 503);
