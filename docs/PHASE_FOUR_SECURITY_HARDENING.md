@@ -56,13 +56,21 @@ Phase Four strengthens the existing defensive wallet-monitoring and recovery app
 - Portable SQL export is documented as a maintenance-window operation because Cloudflare warns an in-progress export can make D1 unavailable to serve queries.
 - A separate disposable-database restore rehearsal and portable export verification remain prerequisites before claiming fully tested disaster recovery.
 
+## Latest implementation and production verification — 2026-11-10
+
+- Administrator idle timeout, session activity refresh, and shared atomic rate limiting for login/bootstrap/diagnostics/one-time recovery are implemented.
+- Executor revocation regression coverage and unresolved-transaction retry/cancel regression coverage are added.
+- Full CI passed in run `42903321819` for source commit `01127bc7d3e7cdbdb8f105c2a6dc91498db6a743`.
+- Worker artifact SHA-256: `97b3f4f0ecf194c5480c6cf6763b7feca3893d4ed0a9ecf7fd183a228b2c1ebc` (617,961 bytes).
+- Deployed Worker version `f9fe4169-e852-4f31-88f9-67bca8f26473`, deployment `d1dcc30d-a7fa-45ac-b624-805534472fd7`, 100% traffic.
+- D1 binding, RPC bindings, and required secret bindings were preserved; cron remains `* * * * *`; query-string redaction remains enabled.
+- Production D1 switches were re-read after deployment: `automation_enabled=false`, `execution_enabled=false`.
+- No recovery wallets, grants, jobs or transactions were present in the production database at the final pre-deployment check. No recovery transaction was submitted.
+
 ## Remaining Phase Four work
 
-1. Re-run the full CI suite after the final administrator login, executor-revocation and unresolved-transaction regression changes; deploy only the exact passing artifact.
-2. Verify production Worker version, 100% traffic, bindings/secrets, query-string redaction, cron schedule, and both disabled runtime switches.
-3. Confirm production D1 schema and backup bookmark remain available after deployment.
-4. Complete a separate disposable-D1 restore rehearsal and a portable SQL export/checksum verification before claiming disaster recovery is fully tested.
-5. Prepare a controlled practical-test checklist. Real owner-wallet registration and on-chain recovery tests remain deferred until development is complete and the operator explicitly approves testing.
+1. Complete a portable SQL export and restore/checksum rehearsal using a separate disposable D1 database. This requires a planned maintenance window because Cloudflare warns that an active D1 export can temporarily make the production database unavailable.
+2. After the backup rehearsal, use `docs/PHASE_FOUR_CONTROLLED_TEST_PLAN.md` to run the controlled verification sequence. Real owner-wallet registration and on-chain recovery tests remain deferred until the operator explicitly approves practical testing.
 
 ## Assurance boundary
 
