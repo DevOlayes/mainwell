@@ -40,12 +40,21 @@ Phase Four strengthens the existing defensive wallet-monitoring and recovery app
 - No recovery transaction is submitted as part of this phase's audit work.
 - Owner-approved on-chain scope, token allowance, destination restrictions, and operator separation remain mandatory.
 
+## Executor and transaction assurance review
+
+- The non-upgradeable executor enforces separate immutable admin and automation operators, per-token cumulative caps, immutable per-token destinations, expiry, owner-only grant revocation, and owner-only per-asset revocation.
+- On-chain revocation is checked again by the server verifier and enforced by the contract at execution time. Revoking one asset freezes its remaining cap without changing other asset permissions.
+- The verifier checks deployment receipt owner, deployed runtime code hash, immutable owner/operators/destinations, execution modes, expiry, asset ordering, token caps, recovered amounts and live allowance.
+- Recovery jobs are serialized by network/operator lock and use the pending transaction nonce. A signed transaction hash is persisted before broadcast; uncertain broadcast outcomes are reconciled by hash rather than blindly resubmitted.
+- Receipt confirmation requires canonical block hash, network finality, the expected executor event identity and destination balance postcondition. Reverted transactions are failed; mismatched or unproven outcomes remain unknown/blocked.
+- Retry and cancellation are refused while any transaction is prepared, submitted, pending or unknown. New regression tests cover each unresolved state.
+
 ## Remaining Phase Four work
 
 1. Apply migration `0017_wallet_auth_rate_limits.sql` to production D1 and verify the table exists.
 2. Run CI, inspect the generated Worker bundle, and deploy only after successful checks.
 3. Verify live Worker settings, query-string redaction, secret/binding preservation, cron schedule, and the two disabled runtime switches.
-4. Review remaining owner and administrator authentication, session revocation, MFA, one-time recovery, CSRF/origin checks, and rate limits.
+4. Re-run the complete authentication, session revocation, MFA, one-time recovery, CSRF/origin checks, and rate-limit test suite after the latest login throttle changes.
 5. Review executor verification, grant revocation, transaction nonce serialization, pending/unknown transaction handling, receipt finality, and audit-log failure behavior.
 6. Review backup/restore and D1 recovery procedures before real-wallet testing.
 7. Prepare a controlled practical-test checklist. Real owner-wallet registration and on-chain recovery tests remain deferred until development is complete and the operator explicitly approves testing.
