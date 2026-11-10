@@ -15,6 +15,12 @@ Phase Four strengthens the existing defensive wallet-monitoring and recovery app
 - A new additive migration creates the dedicated `wallet_auth_rate_limits` table and lock-expiry index.
 - The limiter applies only to sign-in challenge and verification endpoints; it does not affect signed recovery authorizations or owner recovery operations.
 
+### One-time recovery throttling
+
+- The one-time recovery endpoint uses the shared atomic per-IP, five-attempt/15-minute throttle.
+- Every attempt consumes a slot before credential checks, so concurrent attempts cannot all pass a read-only pre-check before failures are counted.
+- Throttling persistence failures fail closed and do not change the administrator account.
+
 ### Administrator session idle timeout
 
 - Administrator sessions retain the existing eight-hour absolute expiry and now also expire after 30 minutes without an authenticated admin request.
