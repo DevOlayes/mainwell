@@ -115,8 +115,9 @@ async function queueAutomaticJobs(env:EngineEnv):Promise<number>{
 async function processOne(env:EngineEnv):Promise<boolean>{
   const now=new Date().toISOString(),leaseId=crypto.randomUUID(),leaseUntil=new Date(Date.now()+840_000).toISOString();
   await env.DB.prepare("UPDATE recovery_jobs SET status='blocked',last_error_code='worker_lease_expired',last_error_at=?,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE status='simulating' AND lease_expires_at IS NOT NULL AND lease_expires_at<?").bind(now,now,now).run();
-  const candidate=await env.DB.prepare("SELECT id FROM recovery_jobs WHERE status='queued' AND (next_attempt_at IS NULL OR next_attempt_at<=?) AND (lease_expires_at IS NULL OR lease_expires_at<?) ORDER BY priority_score DESC,created_at ASC LIMIT 1")
-    .bind(now,now).first<{id:string}>();
+  const automationSetting=await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("automation_enabled").first<{setting_value:string}>();
+  const candidate=await env.DB.prepare("SELECT id FROM recovery_jobs WHERE status='queued' AND (execution_mode!='automatic-priority' OR ?='true') AND (next_attempt_at IS NULL OR next_attempt_at<=?) AND (lease_expires_at IS NULL OR lease_expires_at<?) ORDER BY priority_score DESC,created_at ASC LIMIT 1")
+    .bind(automationSetting?.setting_value??"false",now,now).first<{id:string}>();
   if(!candidate)return false;
   const claim=await env.DB.prepare("UPDATE recovery_jobs SET status='simulating',lease_owner=?,lease_expires_at=?,attempt_count=attempt_count+1,started_at=COALESCE(started_at,?),updated_at=? WHERE id=? AND status='queued' AND (lease_expires_at IS NULL OR lease_expires_at<?)")
     .bind(leaseId,leaseUntil,now,now,candidate.id,now).run();
