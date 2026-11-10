@@ -257,12 +257,13 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   const b=await body(request);
   const grantId=typeof b?.grantId==="string"?b.grantId:"";
   const assetId=typeof b?.assetId==="string"?b.assetId:"";
-  const amountRaw=typeof b?.amountRaw==="string"?b.amountRaw:"";
+  const amountRaw=typeof b?.amountRaw==="string"?b.amountRaw:null;
+  const sweepAvailable=b?.sweepAvailable===true;
   const idempotencyKey=typeof b?.idempotencyKey==="string"?b.idempotencyKey:"";
   if(!/^[A-Za-z0-9_-]{1,128}$/.test(grantId)||!assetId||assetId.length>160||
-     !/^[1-9][0-9]{0,77}$/.test(amountRaw)||BigInt(amountRaw)>((1n<<256n)-1n)||
+     (sweepAvailable?amountRaw!==null:(!amountRaw||!/^[1-9][0-9]{0,77}$/.test(amountRaw)||BigInt(amountRaw)>((1n<<256n)-1n)))||
      !/^[A-Za-z0-9:_-]{16,128}$/.test(idempotencyKey)){
-   return response({error:"Provide a verified grant, asset, positive token amount in base units, and unique idempotency key."},400);
+   return response({error:"Provide a verified grant, asset, either a positive token amount or the full-available-balance sweep option, and a unique idempotency key."},400);
   }
   const prior=await env.DB.prepare("SELECT id,grant_id,asset_id,requested_amount_raw,status FROM recovery_jobs WHERE idempotency_key=? LIMIT 1").bind(idempotencyKey).first<Record<string,unknown>>();
   if(prior){
@@ -291,7 +292,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
    return response({error:"This Phase Two queue currently supports verified ERC-20 assets only."},409);
   if(scope.amount_kind!=="capped"||typeof scope.max_amount_raw!=="string"||!/^[1-9][0-9]{0,77}$/.test(scope.max_amount_raw))
    return response({error:"This asset does not have a supported explicit on-chain amount cap."},409);
-  if(BigInt(amountRaw)>BigInt(scope.max_amount_raw))
+  if(amountRaw!==null&&BigInt(amountRaw)>BigInt(scope.max_amount_raw))
    return response({error:"Requested amount exceeds the owner-approved asset cap."},409);
   if(Number(scope.destination_locked)!==1||Number(scope.destination_active)!==1)
    return response({error:"The owner-approved destination is no longer active and locked."},409);
@@ -304,9 +305,9 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
    env.DB.prepare("INSERT INTO recovery_jobs(id,grant_id,asset_id,execution_mode,status,priority_score,idempotency_key,requested_by,created_at,updated_at,requested_amount_raw,destination_address,next_attempt_at) VALUES(?,?,?,'admin-initiated','queued',0,?,?,?,?,?,?,?) ON CONFLICT(idempotency_key) DO NOTHING")
     .bind(id,grantId,assetId,idempotencyKey,"admin:"+admin.adminId,now,now,amountRaw,String(scope.destination_address),now),
    env.DB.prepare("INSERT INTO recovery_job_events(id,job_id,event_type,actor_type,actor_id,details_json,created_at) SELECT ?,?,'admin_recovery.queued','admin',?,?,? WHERE changes()=1")
-    .bind(eventId,id,admin.adminId,JSON.stringify({grantId,assetId,amountRaw,network:scope.network}),now),
+    .bind(eventId,id,admin.adminId,JSON.stringify({grantId,assetId,amountRaw,sweepAvailable,network:scope.network}),now),
    env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) SELECT 'admin',?,'recovery.job.queued','recovery_job',?,?,? WHERE changes()=1")
-    .bind(admin.adminId,id,JSON.stringify({grantId,assetId,amountRaw,network:scope.network,executionEnabled:await runtimeExecutionEnabled(env)}),now)
+    .bind(admin.adminId,id,JSON.stringify({grantId,assetId,amountRaw,sweepAvailable,network:scope.network,executionEnabled:await runtimeExecutionEnabled(env)}),now)
   ]);
   if(batch.some(result=>!result.success))return response({error:"The recovery request and its audit records could not be committed."},503);
   if((batch[0]?.meta?.changes??0)!==1){
@@ -315,7 +316,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
     return response({error:"The idempotency key conflicts with another recovery request."},409);
    return response({queued:true,duplicate:true,job:raced,executionEnabled:await runtimeExecutionEnabled(env)},200);
   }
-  return response({queued:true,executionEnabled:await runtimeExecutionEnabled(env),job:{id,grantId,assetId,network:scope.network,executionMode:"admin-initiated",status:"queued",amountRaw,destinationAddress:scope.destination_address,createdAt:now}});
+  return response({queued:true,executionEnabled:await runtimeExecutionEnabled(env),job:{id,grantId,assetId,network:scope.network,executionMode:"admin-initiated",status:"queued",amountRaw,sweepAvailable,destinationAddress:scope.destination_address,createdAt:now}});
  }
  return null;
 }
