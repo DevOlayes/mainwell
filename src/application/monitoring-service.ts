@@ -252,9 +252,14 @@ async function runWallet(env:MonitoringEnv,wallet:{id:string;address:string;netw
     await env.DB.prepare("INSERT INTO wallet_asset_history(id,wallet_id,network,asset_ref,token_address,symbol,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,lifecycle_status,observed_at) SELECT ?,wallet_id,network,asset_ref,token_address,symbol,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,'missing',? FROM wallet_assets WHERE wallet_id=? AND network=? AND asset_ref=?")
       .bind(crypto.randomUUID(),observedAt,wallet.id,wallet.network,item.asset_ref).run();
   }
-  // Alchemy can check an allowance only for a supplied token/spender pair; it does not enumerate every historical spender.
-  // Query only the administrator-configured spender set. Never infer revocation from an incomplete scan.
-  const spenders=configuredSpenders(env.MAINWELL_EVM_ASSETS,wallet.network);
+  // Alchemy cannot enumerate every historical spender. Monitor both administrator-configured
+  // external spenders and every executor address Mainwell has issued for this source wallet.
+  // Include revoked/expired grants too, so a lingering allowance remains visible until on-chain zero.
+  const configured=configuredSpenders(env.MAINWELL_EVM_ASSETS,wallet.network);
+  const grantRows=await env.DB.prepare("SELECT DISTINCT executor_address FROM recovery_grants WHERE owner_wallet=? AND network=?")
+    .bind(wallet.address.toLowerCase(),wallet.network).all<{executor_address:string}>();
+  const grantSpenders=grantRows.results.map(row=>row.executor_address).filter(validAddress).map(address=>address.toLowerCase());
+  const spenders=[...new Set([...configured,...grantSpenders])];
   const previous=await env.DB.prepare("SELECT token_address,spender_address FROM wallet_permissions WHERE wallet_id=? AND network=?")
     .bind(wallet.id,wallet.network).all<{token_address:string;spender_address:string}>();
   const tokenAddresses=[...new Set([...metadata.map(x=>x.address),...previous.results.map(x=>x.token_address.toLowerCase())])];
