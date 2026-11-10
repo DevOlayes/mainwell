@@ -45,7 +45,7 @@ async function readBody(request: Request): Promise<Record<string, unknown> | nul
     return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
   } catch { return null; }
 }
-const GRANT_RPC: Partial<Record<NetworkId, keyof MonitorEnv>> = {
+const GRANT_RPC: Partial<Record<NetworkId, keyof MonitoringEnv>> = {
   ethereum: "EVM_RPC_ETHEREUM", polygon: "EVM_RPC_POLYGON", bsc: "EVM_RPC_BSC",
   avalanche: "EVM_RPC_AVALANCHE", arbitrum: "EVM_RPC_ARBITRUM", optimism: "EVM_RPC_OPTIMISM", base: "EVM_RPC_BASE"
 };
