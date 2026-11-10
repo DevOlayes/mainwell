@@ -129,7 +129,7 @@ async function runWallet(env:MonitoringEnv,wallet:{id:string;address:string;netw
   if(!env.ALCHEMY_API_KEY)throw new Error("ALCHEMY_API_KEY_NOT_CONFIGURED");
   const key=env.ALCHEMY_API_KEY;
   const [nativeRaw,balances]=await Promise.all([rpcNativeBalance(rpc,wallet.address),discoverTokenBalances(cfg,key,wallet.address)]);
-  if(balances.length>500)throw new Error("ALCHEMY_TOKEN_DISCOVERY_RESULT_LIMIT_EXCEEDED");
+  if(balances.length>2500)throw new Error("ALCHEMY_TOKEN_DISCOVERY_RESULT_LIMIT_EXCEEDED");
   const deduped=[...new Map(balances.filter(item=>{try{return BigInt(item.tokenBalance)>0n;}catch{return false;}}).map(item=>[item.contractAddress.toLowerCase(),item])).values()];
   const metadata=await mapLimited(deduped,4,async item=>({address:item.contractAddress.toLowerCase(),balance:BigInt(item.tokenBalance).toString(),metadata:await loadMetadata(cfg,key,item.contractAddress)}));
   const priceAddresses=[cfg.wrappedNative,...metadata.filter(x=>BigInt(x.balance)>0n).map(x=>x.address)];
