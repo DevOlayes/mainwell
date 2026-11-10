@@ -24,6 +24,20 @@ function json(data: unknown, status = 200, extra: Record<string,string> = {}): R
 function hex(bytes: Uint8Array): string { return Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join(""); }
 function randomHex(n: number): string { const b=new Uint8Array(n); crypto.getRandomValues(b); return hex(b); }
 async function hash(s: string): Promise<string> { return hex(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)))); }
+async function walletAuthRateLimit(request: Request, env: Env): Promise<boolean> {
+  const ip=request.headers.get("cf-connecting-ip")??"unknown";
+  const identifierHash=await hash("mainwell-wallet-auth|"+ip);
+  const epoch=Math.floor(Date.now()/1000);
+  try {
+    await env.DB.prepare("INSERT INTO wallet_auth_rate_limits(identifier_hash,attempts,window_started_at,locked_until) VALUES(?,1,?,0) ON CONFLICT(identifier_hash) DO UPDATE SET attempts=CASE WHEN ?-window_started_at>600 THEN 1 ELSE attempts+1 END,window_started_at=CASE WHEN ?-window_started_at>600 THEN ? ELSE window_started_at END,locked_until=CASE WHEN (CASE WHEN ?-window_started_at>600 THEN 1 ELSE attempts+1 END)>=30 THEN ?+600 ELSE locked_until END")
+      .bind(identifierHash,epoch,epoch,epoch,epoch,epoch,epoch).run();
+    const row=await env.DB.prepare("SELECT locked_until FROM wallet_auth_rate_limits WHERE identifier_hash=?").bind(identifierHash).first<{locked_until:number}>();
+    return !!row && row.locked_until<=epoch;
+  } catch {
+    // Authentication throttling fails closed if its persistence layer is unavailable.
+    return false;
+  }
+}
 function cookie(req: Request,name="mw_owner_session"): string|null { for (const part of (req.headers.get("cookie")??"").split(";")) { const [k,...v]=part.trim().split("="); if(k===name) return v.join("=")||null; } return null; }
 function sameOrigin(req: Request,url: URL): boolean { return req.headers.get("origin")===url.origin; }
 async function body(req: Request): Promise<Record<string,unknown>|null> { if(Number(req.headers.get("content-length")??"0")>4096)return null; try { const s=await req.text(); if(s.length>4096)return null; const x=JSON.parse(s); return x&&typeof x==="object"&&!Array.isArray(x)?x:null; } catch{return null;} }
@@ -51,6 +65,7 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
   }catch{return json({service:"mainwell",database:"unavailable",error:"Database health check failed"},503);}
   if(url.pathname==="/api/auth/challenge"&&request.method==="POST"){
     if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
+    if(!(await walletAuthRateLimit(request,env)))return json({error:"Too many wallet authentication requests. Try again in ten minutes."},429,{"retry-after":"600"});
     const b=await body(request),address=typeof b?.address==="string"?b.address:"",chainId=Number(b?.chainId);
     if(!ADDRESS.test(address)||!Number.isSafeInteger(chainId)||!CHAINS.has(chainId))return json({error:"Valid EVM address and supported chain ID required."},400);
     const now=Date.now(),issued=new Date(now).toISOString(),expires=new Date(now+CHALLENGE_SECONDS*1000).toISOString(),nonce=randomHex(16);
@@ -61,6 +76,7 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
   }
   if(url.pathname==="/api/auth/verify"&&request.method==="POST"){
     if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
+    if(!(await walletAuthRateLimit(request,env)))return json({error:"Too many wallet authentication requests. Try again in ten minutes."},429,{"retry-after":"600"});
     const b=await body(request),address=typeof b?.address==="string"?b.address:"",nonce=typeof b?.nonce==="string"?b.nonce:"",signature=typeof b?.signature==="string"?b.signature:"",chainId=Number(b?.chainId);
     if(!ADDRESS.test(address)||!/^[0-9a-f]{32}$/.test(nonce)||!Number.isSafeInteger(chainId)||!CHAINS.has(chainId)||!/^0x[0-9a-fA-F]{130}$/.test(signature))return json({error:"Malformed wallet authentication request."},400);
     const c=await env.DB.prepare("SELECT message,wallet_address,chain_id,origin,expires_at,consumed_at FROM wallet_auth_challenges WHERE nonce=?").bind(nonce).first<{message:string;wallet_address:string;chain_id:number;origin:string;expires_at:string;consumed_at:string|null}>();
