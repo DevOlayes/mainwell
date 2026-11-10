@@ -30,7 +30,7 @@ Phase Four strengthens the existing defensive wallet-monitoring and recovery app
 
 ## Remaining Phase Four work
 
-1. Apply migration `0016_wallet_auth_rate_limits.sql` to production D1 and verify the table exists.
+1. Apply migration `0017_wallet_auth_rate_limits.sql` to production D1 and verify the table exists.
 2. Run CI, inspect the generated Worker bundle, and deploy only after successful checks.
 3. Verify live Worker settings, query-string redaction, secret/binding preservation, cron schedule, and the two disabled runtime switches.
 4. Review owner and administrator authentication, session expiry/revocation, MFA, one-time recovery, CSRF/origin checks, and rate limits.
