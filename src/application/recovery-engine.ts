@@ -270,7 +270,7 @@ async function processOne(env:EngineEnv):Promise<boolean>{
       env.DB.prepare("INSERT INTO recovery_transactions(id,job_id,network,transaction_hash,status,asset_id,amount_raw,destination_address,destination_balance_before_raw,destination_balance_after_raw,estimated_fee_raw,actual_fee_raw,submitted_at,confirmed_at,created_at,sender_address,nonce,gas_limit_raw,max_fee_per_gas_raw,max_priority_fee_per_gas_raw,gas_price_raw) VALUES(?,?,?,?,'prepared',?,?,?,?,NULL,?,NULL,NULL,NULL,?,?,?,?,?,?,?)")
         .bind(txId,job.id,network,hash,job.asset_id,amount.toString(),verifiedAsset.destinationAddress,destinationBalanceBefore.toString(),estimatedFee.toString(),sentAt,account.address,nonce,gas.toString(),maxFeePerGas?.toString()??null,maxPriorityFeePerGas?.toString()??null,gasPrice?.toString()??null),
       env.DB.prepare("INSERT INTO recovery_execution_attempts(id,job_id,attempt_number,phase,simulation_block_number,gas_funding_source,estimated_fee_raw,fee_cap_raw,transaction_hash,error_code,created_at,updated_at) VALUES(?,?,?,?,?,'recovery-sponsor',?,?,?,NULL,?,?)")
-        .bind(attemptId,job.id,job.attempt_count,"signed",Number(await publicClient.getBlockNumber()),estimatedFee.toString(),maxAllowed.toString(),hash,sentAt,sentAt)
+        .bind(attemptId,job.id,job.attempt_count,"signed",Number(await publicClient.getBlockNumber()),estimatedFee.toString(),maxAllowed?.toString()??null,hash,sentAt,sentAt)
     ]);
     if(prepared.some(x=>!x.success))throw new Error("signed_transaction_recording_failed");
     const submittedHash=await publicClient.sendRawTransaction({serializedTransaction:serialized});
