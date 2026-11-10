@@ -204,8 +204,10 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
  if(url.pathname==="/api/admin/auth/me"&&request.method==="GET"){
   const token=cookie(request);if(!token||!/^[0-9a-f]{64}$/.test(token))return json({authenticated:false},401);
   const cutoff=adminSessionIdleCutoff();
-  const row=await env.DB.prepare("SELECT a.email,s.expires_at,s.mfa_verified_at FROM admin_sessions s INNER JOIN admin_accounts a ON a.id=s.admin_id WHERE s.token_hash=? AND s.expires_at>? AND s.last_seen_at>? AND a.status='active' AND a.mfa_enabled=1 LIMIT 1").bind(await sha(token),now,cutoff).first<{email:string;expires_at:string;mfa_verified_at:string}>();
-  return row?json({authenticated:true,email:row.email,mfaVerifiedAt:row.mfa_verified_at,expiresAt:row.expires_at}):json({authenticated:false},401);
+  const row=await env.DB.prepare("SELECT s.id,a.email,s.expires_at,s.mfa_verified_at FROM admin_sessions s INNER JOIN admin_accounts a ON a.id=s.admin_id WHERE s.token_hash=? AND s.expires_at>? AND s.last_seen_at>? AND a.status='active' AND a.mfa_enabled=1 LIMIT 1").bind(await sha(token),now,cutoff).first<{id:string;email:string;expires_at:string;mfa_verified_at:string}>();
+  if(!row)return json({authenticated:false},401);
+  await env.DB.prepare("UPDATE admin_sessions SET last_seen_at=? WHERE id=?").bind(now,row.id).run();
+  return json({authenticated:true,email:row.email,mfaVerifiedAt:row.mfa_verified_at,expiresAt:row.expires_at});
  }
  return null;
 }
