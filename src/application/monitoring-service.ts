@@ -96,8 +96,8 @@ async function loadMetadataBatch(network:typeof CHAINS[string],key:string,addres
   // Alchemy does not support JSON-RPC batching for its enhanced alchemy_* Token
   // APIs. Read standard ERC-20 metadata selectors with eth_call instead; standard
   // JSON-RPC batching is supported and keeps the Worker request count bounded.
-  for(let offset=0;offset<addresses.length;offset+=12){
-    const batch=addresses.slice(offset,offset+12);
+  for(let offset=0;offset<addresses.length;offset+=20){
+    const batch=addresses.slice(offset,offset+20);
     const requests: Array<{jsonrpc:string;id:number;method:string;params:unknown[]}>=[];
     batch.forEach((address,index)=>{
       const base=index*3;
@@ -119,6 +119,31 @@ async function loadMetadataBatch(network:typeof CHAINS[string],key:string,addres
       let decimals:number|null=null;
       try{if(decimalsRaw&&/^0x[0-9a-f]+$/i.test(decimalsRaw)){const n=Number(BigInt(decimalsRaw));if(Number.isInteger(n)&&n>=0&&n<=36)decimals=n;}}catch{}
       out.set(address.toLowerCase(),name||symbol||decimals!==null?{name,symbol,decimals}:null);
+    });
+  }
+  return out;
+}
+async function loadAllowancesBatch(network:typeof CHAINS[string],key:string,owner:string,pairs:Array<{token:string;spender:string}>):Promise<Array<{token:string;spender:string;allowance:string|null}>>{
+  const out:Array<{token:string;spender:string;allowance:string|null}>=[];
+  // ERC-20 allowance(address,address) is a standard eth_call, so pairs can be
+  // batched without invoking Alchemy's non-batchable enhanced Token API.
+  for(let offset=0;offset<pairs.length;offset+=25){
+    const batch=pairs.slice(offset,offset+25);
+    const requests=batch.map((pair,index)=>({
+      jsonrpc:"2.0",id:index+1,method:"eth_call",
+      params:[{to:pair.token,data:"0xdd62ed3e"+owner.slice(2).toLowerCase().padStart(64,"0")+pair.spender.slice(2).toLowerCase().padStart(64,"0")},"latest"]
+    }));
+    const response=await timedFetch("https://"+network.host+".g.alchemy.com/v2/"+encodeURIComponent(key),{
+      method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(requests)
+    });
+    const payload=await response.json() as Array<AlchemyRpcResult<string>>;
+    if(!Array.isArray(payload))throw new Error("ALCHEMY_ALLOWANCE_BATCH_MALFORMED");
+    const byId=new Map(payload.map(item=>[Number(item.id),item]));
+    batch.forEach((pair,index)=>{
+      const raw=byId.get(index+1)?.result;
+      let allowance:string|null=null;
+      if(typeof raw==="string"&&/^0x[0-9a-f]+$/i.test(raw)){try{allowance=BigInt(raw).toString();}catch{}}
+      out.push({...pair,allowance});
     });
   }
   return out;
@@ -216,13 +241,13 @@ async function runWallet(env:MonitoringEnv,wallet:{id:string;address:string;netw
   if(spenders.length&&tokenAddresses.length*spenders.length<=500){
     try{
       const pairs=tokenAddresses.flatMap(token=>spenders.map(spender=>({token,spender})));
-      await mapLimited(pairs,4,async pair=>{
-        const allowance=await alchemyRpc<string>(cfg,key,"alchemy_getTokenAllowance",[{contract:pair.token,owner:wallet.address,spender:pair.spender}]);
-        const raw=/^0x[0-9a-f]+$/i.test(allowance)?BigInt(allowance).toString():String(allowance);
-        if(!/^\d+$/.test(raw))throw new Error("ALCHEMY_ALLOWANCE_MALFORMED");
-        await persistPermission(env,wallet,pair.token,pair.spender,raw,observedAt);
-      });
-      permissionCount=pairs.length;
+      const allowanceRows=await loadAllowancesBatch(cfg,key,wallet.address,pairs);
+      for(const row of allowanceRows){
+        if(row.allowance===null){permissionPartial=true;continue;}
+        await persistPermission(env,wallet,row.token,row.spender,row.allowance,observedAt);
+        permissionCount++;
+      }
+      if(permissionPartial)throw new Error("ALCHEMY_ALLOWANCE_PARTIAL");
       const allowed=new Set(pairs.map(p=>p.token+":"+p.spender));
       for(const p of previous.results){
         if(allowed.has(p.token_address.toLowerCase()+":"+p.spender_address.toLowerCase()))continue;
