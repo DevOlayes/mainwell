@@ -40,9 +40,9 @@ function makeChain(network:Network,rpcUrl:string):Chain {
 }
 function minBigInt(...values:bigint[]):bigint{return values.reduce((a,b)=>a<b?a:b);}
 
-export function getRecoveryFeePolicy(mode:"admin-initiated"|"automatic-priority"):{emergency:boolean;enforceUsdFeeCeiling:boolean;enforceNativeFeeCap:boolean;retainGasReserve:boolean;enforceAutomaticEconomicRatio:boolean}{
+export function getRecoveryFeePolicy(mode:"admin-initiated"|"automatic-priority"):{emergency:boolean;enforceUsdFeeCeiling:boolean;enforceNativeFeeCap:boolean;retainGasReserve:boolean;enforceAutomaticEconomicRatio:boolean;enforceGasLimitCeiling:boolean}{
   const emergency=mode==="admin-initiated";
-  return {emergency,enforceUsdFeeCeiling:!emergency,enforceNativeFeeCap:!emergency,retainGasReserve:!emergency,enforceAutomaticEconomicRatio:!emergency};
+  return {emergency,enforceUsdFeeCeiling:!emergency,enforceNativeFeeCap:!emergency,retainGasReserve:!emergency,enforceAutomaticEconomicRatio:!emergency,enforceGasLimitCeiling:!emergency};
 }
 
 const NATIVE_PRICE_IDS:Record<Network,string>={ethereum:"ethereum",polygon:"polygon-ecosystem-token",bsc:"binancecoin",avalanche:"avalanche-2",arbitrum:"ethereum",optimism:"ethereum",base:"ethereum"};
@@ -196,7 +196,7 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     const functionName=job.execution_mode==="admin-initiated"?"executeAdminToken":"executeAutomaticToken";
     const simulation=await publicClient.simulateContract({account:operatorAddress as Address,address:executor,abi:EXECUTOR_ABI,functionName,args:[token,amount]});
     const estimatedGas=await publicClient.estimateContractGas({account:operatorAddress as Address,address:executor,abi:EXECUTOR_ABI,functionName,args:[token,amount]});
-    if(estimatedGas>1_000_000n)throw new Error("estimated_gas_limit_exceeded");
+    if(feePolicy.enforceGasLimitCeiling&&estimatedGas>1_000_000n)throw new Error("estimated_gas_limit_exceeded");
     const gas=estimatedGas*120n/100n;
     const feeQuote:{maxFeePerGas?:bigint;maxPriorityFeePerGas?:bigint;gasPrice?:bigint}=await publicClient.estimateFeesPerGas().catch(async()=>({gasPrice:await publicClient.getGasPrice()}));
     const useEip1559=feeQuote.maxFeePerGas!==undefined&&feeQuote.maxPriorityFeePerGas!==undefined&&
