@@ -214,8 +214,8 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     const nonce=await publicClient.getTransactionCount({address:account.address,blockTag:"pending"});
     const data=encodeFunctionData({abi:EXECUTOR_ABI,functionName,args:[token,amount]});
     const serialized=useEip1559
-      ? await account.signTransaction({chain,nonce,to:executor,data,value:0n,gas,maxFeePerGas:maxFeePerGas!,maxPriorityFeePerGas:maxPriorityFeePerGas!,type:"eip1559"})
-      : await account.signTransaction({chain,nonce,to:executor,data,value:0n,gas,gasPrice:gasPrice!,type:"legacy"});
+      ? await account.signTransaction({chainId:config.chainId,nonce,to:executor,data,value:0n,gas,maxFeePerGas:maxFeePerGas!,maxPriorityFeePerGas:maxPriorityFeePerGas!,type:"eip1559"})
+      : await account.signTransaction({chainId:config.chainId,nonce,to:executor,data,value:0n,gas,gasPrice:gasPrice!,type:"legacy"});
     const hash=keccak256(serialized);
     const txId=crypto.randomUUID(),sentAt=new Date().toISOString();
     const prepared=await env.DB.batch([
