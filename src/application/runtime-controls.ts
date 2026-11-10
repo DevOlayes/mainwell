@@ -23,25 +23,26 @@ export async function updateRuntimeSetting(request:Request,env:Env,admin:Admin){
  const origin=request.headers.get("origin");if(origin!==new URL(request.url).origin)return json({error:"Origin check failed."},403);
  let body:Record<string,unknown>;try{body=await request.json() as Record<string,unknown>}catch{return json({error:"Invalid JSON body."},400)}
  const now=new Date().toISOString(),actor=admin.adminId;
- const updates:Array<[string,string]>=[];
+ const updates:Array<[string,string]>=[],deletes:string[]=[];
  if(typeof body.automationEnabled==="boolean")updates.push(["automation_enabled",String(body.automationEnabled)]);
  if(typeof body.executionEnabled==="boolean")updates.push(["execution_enabled",String(body.executionEnabled)]);
  if(body.feeCapsWei&&typeof body.feeCapsWei==="object"&&!Array.isArray(body.feeCapsWei)){
   for(const [network,value] of Object.entries(body.feeCapsWei as Record<string,unknown>)){
-   if(!NETWORKS.some(n=>n.id===network)||typeof value!=="string"||!UINT.test(value))return json({error:"Each network fee ceiling must be a non-negative integer in that network's native base units."},400);
-   updates.push(["fee_cap_wei:"+network,value]);
+   if(!NETWORKS.some(n=>n.id===network)||typeof value!=="string"||(value!==""&&!UINT.test(value)))return json({error:"Each network fee ceiling must be a non-negative integer in that network's native base units."},400);
+   if(value==="")deletes.push("fee_cap_wei:"+network);else updates.push(["fee_cap_wei:"+network,value]);
   }
  }
  if(body.reserveWei&&typeof body.reserveWei==="object"&&!Array.isArray(body.reserveWei)){
   for(const [network,value] of Object.entries(body.reserveWei as Record<string,unknown>)){
-   if(!NETWORKS.some(n=>n.id===network)||typeof value!=="string"||!UINT.test(value))return json({error:"Each network gas reserve must be a non-negative integer in native base units."},400);
-   updates.push(["reserve_wei:"+network,value]);
+   if(!NETWORKS.some(n=>n.id===network)||typeof value!=="string"||(value!==""&&!UINT.test(value)))return json({error:"Each network gas reserve must be a non-negative integer in native base units."},400);
+   if(value==="")deletes.push("reserve_wei:"+network);else updates.push(["reserve_wei:"+network,value]);
   }
  }
- if(!updates.length)return json({error:"No valid settings supplied."},400);
+ if(!updates.length&&!deletes.length)return json({error:"No valid settings supplied."},400);
  for(const [key,value] of updates)await env.DB.prepare("INSERT INTO mainwell_runtime_settings(setting_key,setting_value,updated_by,updated_at) VALUES(?,?,?,?) ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_by=excluded.updated_by,updated_at=excluded.updated_at").bind(key,value,actor,now).run();
- await env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES(?,'admin',?,'runtime.settings.updated','runtime_settings','mainwell',?,?)").bind(crypto.randomUUID(),actor,JSON.stringify({keys:updates.map(x=>x[0])}),now).run();
- return json({saved:true,updatedKeys:updates.map(x=>x[0])});
+ for(const key of deletes)await env.DB.prepare("DELETE FROM mainwell_runtime_settings WHERE setting_key=?").bind(key).run();
+ await env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES(?,'admin',?,'runtime.settings.updated','runtime_settings','mainwell',?,?)").bind(crypto.randomUUID(),actor,JSON.stringify({keys:[...updates.map(x=>x[0]),...deletes]}),now).run();
+ return json({saved:true,updatedKeys:[...updates.map(x=>x[0]),...deletes]});
 }
 export async function runtimeReadiness(env:Env){
  const automationEnabled=await getSetting(env.DB,"automation_enabled")==="true",executionEnabled=await getSetting(env.DB,"execution_enabled")==="true";
