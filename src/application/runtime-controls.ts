@@ -46,28 +46,24 @@ export async function updateRuntimeSetting(request:Request,env:Env,admin:Admin){
 }
 export async function runtimeReadiness(env:Env){
  const automationEnabled=await getSetting(env.DB,"automation_enabled")==="true",executionEnabled=await getSetting(env.DB,"execution_enabled")==="true";
- const networks=[];
- for(const n of NETWORKS){
-  const rpc=env[n.rpc];const feeCap=await getSetting(env.DB,"fee_cap_wei:"+n.id);const reserve=await getSetting(env.DB,"reserve_wei:"+n.id);
-  const operators=[];
-  for(const mode of ["admin","automation"] as const){
-   const address=mode==="admin"?env.MAINWELL_ADMIN_OPERATOR:env.MAINWELL_AUTOMATION_OPERATOR;
-   const key=mode==="admin"?env.MAINWELL_ADMIN_PRIVATE_KEY:env.MAINWELL_AUTOMATION_PRIVATE_KEY;
-   let keyMatches=false;
-   if(address&&key&&ADDRESS.test(address)){try{keyMatches=privateKeyToAccount((key.startsWith("0x")?key:"0x"+key) as `0x${string}`).address.toLowerCase()===address.toLowerCase()}catch{}}
-   operators.push({mode,addressConfigured:Boolean(address&&ADDRESS.test(address)),privateKeyConfigured:Boolean(key),keyMatches,balanceWei:null as string|null,gasFunded:false});
-  }
+ const networks=await Promise.all(NETWORKS.map(async n=>{
+  const rpc=env[n.rpc],feeCap=await getSetting(env.DB,"fee_cap_wei:"+n.id),reserve=await getSetting(env.DB,"reserve_wei:"+n.id);
+  const operatorConfigs=[{mode:"admin" as const,address:env.MAINWELL_ADMIN_OPERATOR,key:env.MAINWELL_ADMIN_PRIVATE_KEY},{mode:"automation" as const,address:env.MAINWELL_AUTOMATION_OPERATOR,key:env.MAINWELL_AUTOMATION_PRIVATE_KEY}];
+  const operators=operatorConfigs.map(op=>{let keyMatches=false;if(op.address&&op.key&&ADDRESS.test(op.address)){try{keyMatches=privateKeyToAccount((op.key.startsWith("0x")?op.key:"0x"+op.key) as `0x${string}`).address.toLowerCase()===op.address.toLowerCase()}catch{}}
+   return {mode:op.mode,address:op.address,addressConfigured:Boolean(op.address&&ADDRESS.test(op.address)),privateKeyConfigured:Boolean(op.key),keyMatches,balanceWei:null as string|null,gasFunded:false};
+  });
   let rpcStatus:"not_configured"|"unreachable"|"chain_mismatch"|"ready"="not_configured",headAgeSeconds:number|null=null,feeQuoteAvailable=false;
   if(rpc&&/^https:\/\//i.test(rpc)){
    try{
     const chain:Chain={id:n.chainId,name:n.name,nativeCurrency:{name:n.symbol,symbol:n.symbol,decimals:18},rpcUrls:{default:{http:[rpc]}}};
-    const client=createPublicClient({chain,transport:http(rpc, {timeout:8000})});
+    const client=createPublicClient({chain,transport:http(rpc,{timeout:8000})});
     const [chainId,block,fees]=await Promise.all([client.getChainId(),client.getBlock(),client.estimateFeesPerGas().catch(async()=>({gasPrice:await client.getGasPrice()}))]);
-    rpcStatus=chainId===n.chainId?"ready":"chain_mismatch";headAgeSeconds=Math.max(0,Math.floor(Date.now()/1000-Number(block.timestamp)));feeQuoteAvailable=Boolean(("maxFeePerGas" in fees&&fees.maxFeePerGas>0n)||("gasPrice" in fees&&fees.gasPrice>0n));
-    if(rpcStatus==="ready")for(const op of operators){const address=op.mode==="admin"?env.MAINWELL_ADMIN_OPERATOR:env.MAINWELL_AUTOMATION_OPERATOR;if(address&&ADDRESS.test(address)){const balance=await client.getBalance({address:address as `0x${string}`});op.balanceWei=balance.toString();op.gasFunded=balance>0n}}
+    rpcStatus=chainId===n.chainId?"ready":"chain_mismatch";headAgeSeconds=Math.max(0,Math.floor(Date.now()/1000-Number(block.timestamp)));
+    feeQuoteAvailable=Boolean(("maxFeePerGas" in fees&&fees.maxFeePerGas!==undefined&&fees.maxFeePerGas>0n)||("gasPrice" in fees&&fees.gasPrice!==undefined&&fees.gasPrice>0n));
+    if(rpcStatus==="ready")await Promise.all(operators.map(async op=>{if(op.address&&ADDRESS.test(op.address)){try{const balance=await client.getBalance({address:op.address as `0x${string}`});op.balanceWei=balance.toString();op.gasFunded=balance>0n}catch{}}}));
    }catch{rpcStatus="unreachable"}
   }
-  networks.push({network:n.id,name:n.name,chainId:n.chainId,nativeSymbol:n.symbol,rpcStatus,headAgeSeconds,feeQuoteAvailable,feeCapConfigured:feeCap!==null,feeCapWei:feeCap,reserveConfigured:reserve!==null,reserveWei:reserve,operators});
- }
+  return {network:n.id,name:n.name,chainId:n.chainId,nativeSymbol:n.symbol,rpcStatus,headAgeSeconds,feeQuoteAvailable,feeCapConfigured:feeCap!==null,feeCapWei:feeCap,reserveConfigured:reserve!==null,reserveWei:reserve,operators};
+ }));
  return json({automationEnabled,executionEnabled,networks,checkedAt:new Date().toISOString()});
 }
