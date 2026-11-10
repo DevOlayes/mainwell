@@ -1,7 +1,8 @@
 import {
   createPublicClient, encodeFunctionData, http, keccak256, parseAbi, decodeEventLog,
-  privateKeyToAccount, type Address, type Chain, type Hex
+  type Address, type Chain, type Hex
 } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { EvmGrantVerifier } from "../adapters/evm-grant-verifier";
 import { D1GrantRepository, type D1Database as GrantDatabase } from "../persistence/d1-grant-repository";
 import { EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH } from "./executor-artifact";
@@ -335,7 +336,7 @@ async function trackTransactions(env:EngineEnv):Promise<number>{
 }
 function parseAbiEvent(log:{topics:readonly Hex[];data:Hex;address:Address}):Array<{args:Record<string,unknown>}>{
   if(log.topics.length===0)return [];
-  const decoded=decodeEventLog({abi:EXECUTOR_ABI,data:log.data,topics:log.topics as readonly [Hex,...Hex[]]});
+  const decoded=decodeEventLog({abi:EXECUTOR_ABI,data:log.data,topics:log.topics as [Hex,...Hex[]]});
   return decoded.eventName==="TokenRecovered"?[{args:decoded.args as unknown as Record<string,unknown>}]:[];
 }
 
