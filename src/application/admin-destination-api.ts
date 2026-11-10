@@ -1,3 +1,4 @@
+import { CURATED_ERC20_ASSETS } from "../domain/curated-assets";
 import type { OwnerApiEnv } from "./owner-api";
 
 interface Statement { bind(...values: unknown[]): Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<{success:boolean;results:T[]}>; run<T = Record<string, unknown>>(): Promise<{success:boolean;meta?:{changes?:number}}> }
@@ -37,6 +38,59 @@ function originOk(req:Request,url:URL):boolean{return req.headers.get("origin")=
 async function body(req:Request):Promise<Record<string,unknown>|null>{try{if(Number(req.headers.get("content-length")??"0")>2048)return null;const raw=await req.text();if(raw.length>2048)return null;const v:unknown=JSON.parse(raw);return v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:null;}catch{return null;}}
 export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,admin:AdminSession):Promise<Response|null>{
  const url=new URL(request.url),path=url.pathname,now=new Date().toISOString();
+
+ if(path==="/api/admin/supported-assets/curated"&&request.method==="POST"){
+  if(!originOk(request,url))return response({error:"Origin check failed."},403);
+  // Verify each curated contract against its own configured network before any
+  // registry writes. One JSON-RPC batch per token keeps the request count bounded.
+  const verified:Array<(typeof CURATED_ERC20_ASSETS)[number]>=[],rejected:Array<{network:string;symbol:string;reason:string}>=[];
+  const candidates=[...CURATED_ERC20_ASSETS];
+  let cursor=0;
+  const workers=Array.from({length:4},async()=>{
+   while(true){
+    const index=cursor++;
+    if(index>=candidates.length)return;
+    const asset=candidates[index];
+    try{
+     const rpcName=RPC_BY_NETWORK[asset.network],rpcUrl=env[rpcName];
+     if(!rpcUrl)throw new Error("RPC_NOT_CONFIGURED");
+     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);
+     try{
+      const calls=[
+       {jsonrpc:"2.0",id:1,method:"eth_chainId",params:[]},
+       {jsonrpc:"2.0",id:2,method:"eth_getCode",params:[asset.address,"latest"]},
+       {jsonrpc:"2.0",id:3,method:"eth_call",params:[{to:asset.address,data:"0x313ce567"},"latest"]}
+      ];
+      const res=await fetch(rpcUrl,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(calls),signal:controller.signal});
+      if(!res.ok)throw new Error("RPC_UNAVAILABLE");
+      const payload=await res.json() as Array<{id:number;result?:string;error?:{message?:string}}>;
+      if(!Array.isArray(payload))throw new Error("RPC_BATCH_UNSUPPORTED");
+      const byId=new Map(payload.map(item=>[item.id,item]));
+      const chain=byId.get(1)?.result,code=byId.get(2)?.result,decimalsRaw=byId.get(3)?.result;
+      if(byId.size!==3||payload.some(item=>item.error))throw new Error("RPC_UNAVAILABLE");
+      if(typeof chain!=="string"||BigInt(chain)!==BigInt(NETWORK_CHAIN[asset.network]))throw new Error("RPC_CHAIN_MISMATCH");
+      if(typeof code!=="string"||!/^0x[0-9a-fA-F]+$/.test(code)||/^0x0*$/i.test(code))throw new Error("TOKEN_CONTRACT_NOT_FOUND");
+      if(typeof decimalsRaw!=="string"||!/^0x[0-9a-fA-F]+$/.test(decimalsRaw)||Number(BigInt(decimalsRaw))!==asset.decimals)throw new Error("TOKEN_DECIMALS_MISMATCH");
+     }finally{clearTimeout(timeout);}
+     verified.push(asset);
+    }catch(error){rejected.push({network:asset.network,symbol:asset.symbol,reason:error instanceof Error?error.message:"VERIFICATION_FAILED"});}
+   }
+  });
+  await Promise.all(workers);
+  const statements:Statement[]=[];
+  for(const asset of verified){
+   const normalized=asset.address.toLowerCase(),id=asset.network+":erc20:"+normalized;
+   statements.push(env.DB.prepare("INSERT INTO recovery_supported_assets(id,network,token_address,symbol,name,decimals,is_active,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,1,?,?,?) ON CONFLICT(network,token_address) DO UPDATE SET symbol=excluded.symbol,name=excluded.name,decimals=excluded.decimals,is_active=1,updated_at=excluded.updated_at")
+    .bind(id,asset.network,normalized,asset.symbol,asset.name,asset.decimals,admin.adminId,now,now));
+   statements.push(env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.supported_asset.curated_add','recovery_supported_asset',?,?,?)")
+    .bind(admin.adminId,id,JSON.stringify({network:asset.network,address:normalized,symbol:asset.symbol,name:asset.name,decimals:asset.decimals,provenance:asset.provenance,verification:"chain-id+bytecode+decimals"}),now));
+  }
+  if(statements.length){
+   const results=await env.DB.batch(statements);
+   if(results.some(result=>!result.success))return response({error:"One or more verified assets could not be committed. Review the registry and retry; successful statements are recorded in D1."},503);
+  }
+  return response({registered:verified.length,verified:verified.map(asset=>({network:asset.network,symbol:asset.symbol,address:asset.address,decimals:asset.decimals,provenance:asset.provenance})),rejected});
+ }
  // Administrator-managed ERC-20 registry. JSON-RPC cannot enumerate arbitrary wallet tokens.
  if(path==="/api/admin/supported-assets"&&request.method==="GET"){
   const network=url.searchParams.get("network");
