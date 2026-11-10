@@ -2,7 +2,8 @@
 
 Mainwell uses one Cloudflare Worker secret, `ALCHEMY_API_KEY`, for both Alchemy data products:
 
-- **Token API:** `alchemy_getTokenBalances` discovers ERC-20 contracts with balances/history for an owner; `alchemy_getTokenMetadata` retrieves each token's name, symbol and decimals.
+- **Token API:** `alchemy_getTokenBalances` discovers ERC-20 contracts with balances/history for an owner.
+- **Standard JSON-RPC:** metadata (`name`, `symbol`, `decimals`) and configured ERC-20 `allowance(owner,spender)` values are read with batched `eth_call` requests. This is deliberate: Alchemy does not support JSON-RPC batching for its enhanced `alchemy_*` Token APIs, while standard JSON-RPC methods can be batched.
 - **Prices API:** the address-based price endpoint returns USD prices for network-and-contract pairs. Prices are accepted only when the provider timestamp is no more than five minutes old and no more than one minute in the future.
 
 ## Network mapping
@@ -21,7 +22,7 @@ Native balances continue to come from each network's configured HTTPS RPC endpoi
 
 ## Scheduled monitoring (Phase Three item 3)
 
-The existing Worker cron runs once per minute. Each invocation processes at most five due wallets; an individual wallet is eligible again after five minutes. A conditional D1 claim prevents overlapping cron invocations from scanning the same wallet simultaneously. Requests have timeouts, bounded retries for rate limits/transient server errors, and pagination. A scan fails closed rather than marking assets missing if token-balance pagination exceeds the configured 25-page/2,500-token safety limit.
+The existing Worker cron runs once per minute. Each invocation processes at most one due wallet; an individual wallet is eligible again after five minutes. A conditional D1 claim prevents overlapping cron invocations from scanning the same wallet simultaneously. Metadata and configured allowance reads use standard JSON-RPC batches, and each wallet is isolated to keep its request budget from starving other wallets. Requests have timeouts, bounded retries for rate limits/transient server errors, and pagination. A scan fails closed rather than marking assets missing if token-balance pagination exceeds the configured 25-page/2,500-token safety limit.
 
 Manual owner refresh uses the same Alchemy-backed scanner as scheduled refresh.
 
