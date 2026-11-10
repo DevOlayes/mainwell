@@ -1,11 +1,13 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { verifyTotp, verifyAdminPassword } = require("../dist/application/admin-auth.js");
+const { verifyTotp, verifyTotpStep, verifyAdminPassword } = require("../dist/application/admin-auth.js");
 
 test("validates RFC 6238 six-digit TOTP with a bounded clock window", async () => {
   const secret = new TextEncoder().encode("12345678901234567890");
   assert.equal(await verifyTotp(secret, "287082", 59000), true);
+  assert.equal(await verifyTotpStep(secret, "287082", 59000), 1);
   assert.equal(await verifyTotp(secret, "000000", 59000), false);
+  assert.equal(await verifyTotpStep(secret, "000000", 59000), null);
   assert.equal(await verifyTotp(secret, "287082", 59000 + 10 * 60 * 1000), false);
 });
 
