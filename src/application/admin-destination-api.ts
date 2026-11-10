@@ -5,6 +5,7 @@ interface Database { prepare(sql:string):Statement; batch(statements:Statement[]
 interface AdminSession { id:string; adminId:string }
 const NETWORK_CHAIN: Record<string,number> = { ethereum:1, polygon:137, bsc:56, avalanche:43114, arbitrum:42161, optimism:10, base:8453 };
 const ADDRESS=/^0x[0-9a-fA-F]{40}$/;
+async function runtimeExecutionEnabled(env:OwnerApiEnv):Promise<boolean>{const row=await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("execution_enabled").first<{setting_value:string}>();return row?.setting_value==="true";}
 const RPC_BY_NETWORK = {
  ethereum:"EVM_RPC_ETHEREUM", polygon:"EVM_RPC_POLYGON", bsc:"EVM_RPC_BSC",
  avalanche:"EVM_RPC_AVALANCHE", arbitrum:"EVM_RPC_ARBITRUM", optimism:"EVM_RPC_OPTIMISM", base:"EVM_RPC_BASE"
@@ -219,7 +220,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   ]);
   if(results.some(result=>!result.success))return response({error:"The recovery job state and audit records could not be committed."},503);
   if((results[0]?.meta?.changes??0)!==1)return response({error:"The job is not in a state that permits this action."},409);
-  return response({updated:true,jobId,status:action==="retry"?"queued":"cancelled",executionEnabled:env.MAINWELL_EXECUTION_ENABLED==="true"});
+  return response({updated:true,jobId,status:action==="retry"?"queued":"cancelled",executionEnabled:await runtimeExecutionEnabled(env)});
  }
 
  if(path==="/api/admin/recovery-grants"&&request.method==="GET"){
@@ -247,7 +248,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
      Number(row.destinationLocked)===1&&Number(row.destinationActive)===1&&Boolean(row.symbol);}
    catch{return false;}
   }).map(row=>({...row,executionModes:JSON.parse(String(row.executionModesJson))}));
-  return response({grants,executionEnabled:env.MAINWELL_EXECUTION_ENABLED==="true"});
+  return response({grants,executionEnabled:await runtimeExecutionEnabled(env)});
  }
  // Queue an administrator-initiated recovery for an already verified, owner-authorized ERC-20 grant.
  // Queueing never signs or submits a blockchain transaction.
@@ -266,7 +267,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   const prior=await env.DB.prepare("SELECT id,grant_id,asset_id,requested_amount_raw,status FROM recovery_jobs WHERE idempotency_key=? LIMIT 1").bind(idempotencyKey).first<Record<string,unknown>>();
   if(prior){
    if(prior.grant_id!==grantId||prior.asset_id!==assetId||prior.requested_amount_raw!==amountRaw)return response({error:"This idempotency key was already used for a different recovery request."},409);
-   return response({queued:true,duplicate:true,job:prior,executionEnabled:env.MAINWELL_EXECUTION_ENABLED==="true"},200);
+   return response({queued:true,duplicate:true,job:prior,executionEnabled:await runtimeExecutionEnabled(env)},200);
   }
   const scope=await env.DB.prepare(`
    SELECT g.network,g.owner_wallet,g.execution_modes_json,g.expires_at,g.revoked_at,g.verification_status,
@@ -305,16 +306,16 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
    env.DB.prepare("INSERT INTO recovery_job_events(id,job_id,event_type,actor_type,actor_id,details_json,created_at) SELECT ?,?,'admin_recovery.queued','admin',?,?,? WHERE changes()=1")
     .bind(eventId,id,admin.adminId,JSON.stringify({grantId,assetId,amountRaw,network:scope.network}),now),
    env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) SELECT 'admin',?,'recovery.job.queued','recovery_job',?,?,? WHERE changes()=1")
-    .bind(admin.adminId,id,JSON.stringify({grantId,assetId,amountRaw,network:scope.network,executionEnabled:false}),now)
+    .bind(admin.adminId,id,JSON.stringify({grantId,assetId,amountRaw,network:scope.network,executionEnabled:await runtimeExecutionEnabled(env)}),now)
   ]);
   if(batch.some(result=>!result.success))return response({error:"The recovery request and its audit records could not be committed."},503);
   if((batch[0]?.meta?.changes??0)!==1){
    const raced=await env.DB.prepare("SELECT id,grant_id,asset_id,requested_amount_raw,status FROM recovery_jobs WHERE idempotency_key=? LIMIT 1").bind(idempotencyKey).first<Record<string,unknown>>();
    if(!raced||raced.grant_id!==grantId||raced.asset_id!==assetId||raced.requested_amount_raw!==amountRaw)
     return response({error:"The idempotency key conflicts with another recovery request."},409);
-   return response({queued:true,duplicate:true,job:raced,executionEnabled:false},200);
+   return response({queued:true,duplicate:true,job:raced,executionEnabled:await runtimeExecutionEnabled(env)},200);
   }
-  return response({queued:true,executionEnabled:env.MAINWELL_EXECUTION_ENABLED==="true",job:{id,grantId,assetId,network:scope.network,executionMode:"admin-initiated",status:"queued",amountRaw,destinationAddress:scope.destination_address,createdAt:now}});
+  return response({queued:true,executionEnabled:await runtimeExecutionEnabled(env),job:{id,grantId,assetId,network:scope.network,executionMode:"admin-initiated",status:"queued",amountRaw,destinationAddress:scope.destination_address,createdAt:now}});
  }
  return null;
 }
