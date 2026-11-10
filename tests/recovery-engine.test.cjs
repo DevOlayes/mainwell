@@ -2,14 +2,14 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { runRecoveryAutomation } = require("../dist/application/recovery-engine.js");
 
-function makeDb() {
+function makeDb(settings = {}) {
   const calls = [];
   const db = {
     calls,
     prepare(sql) {
       const statement = {
-        bind() { return this; },
-        async first() { calls.push({ method: "first", sql }); return null; },
+        bind(...values) { this.bound = values; return this; },
+        async first() { calls.push({ method: "first", sql }); const key = statement.bound?.[0]; return key && Object.prototype.hasOwnProperty.call(settings, key) ? { setting_value: settings[key] } : null; },
         async all() { calls.push({ method: "all", sql }); return { success: true, results: [] }; },
         async run() { calls.push({ method: "run", sql }); return { success: true, meta: { changes: 0 } }; }
       };
@@ -29,7 +29,7 @@ test("automatic job discovery is off unless explicitly enabled", async () => {
 });
 
 test("automatic job discovery runs only after its explicit switch is enabled", async () => {
-  const DB = makeDb();
-  await runRecoveryAutomation({ DB, MAINWELL_AUTOMATION_ENABLED: "true" });
+  const DB = makeDb({ automation_enabled: "true" });
+  await runRecoveryAutomation({ DB });
   assert.equal(DB.calls.some(call => call.sql.includes("FROM recovery_grants g")), true);
 });
