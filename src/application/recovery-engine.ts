@@ -212,12 +212,11 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     // or retained gas reserve: the operator may spend its available balance to
     // recover the owner-authorized amount before an attacker moves it.
     const feePolicy=getRecoveryFeePolicy(job.execution_mode);
-    const administratorEmergency=feePolicy.emergency;
     let nativeUsd:number|null=null;
     let feeUsd:number|null=null;
     let recoveredValueUsd:number|null=null;
     let feeToRecoveryValueRatio:number|null=null;
-    if(!administratorEmergency){
+    if(feePolicy.enforceUsdFeeCeiling){
       nativeUsd=await freshNativeUsdPrice(network);
       feeUsd=usdValue(estimatedFee,18,nativeUsd);
       if(!Number.isFinite(feeUsd))throw new Error("recovery_economic_value_invalid");
