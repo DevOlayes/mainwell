@@ -207,7 +207,8 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     if(!assetValuation||typeof assetValuation.estimated_value_usd!=="number"||!Number.isFinite(assetValuation.estimated_value_usd)||assetValuation.estimated_value_usd<=0||typeof assetValuation.valuation_confidence!=="number"||assetValuation.valuation_confidence<0.75||valuationAge<0||valuationAge>300_000)throw new Error("recovery_asset_valuation_unavailable");
     const nativeUsd=await freshNativeUsdPrice(network);
     const feeUsd=usdValue(estimatedFee,18,nativeUsd);
-    const recoveredValueUsd=assetValuation.estimated_value_usd*(Number(amount)/Number(balance));
+    const recoveredFraction=Number((amount*1_000_000_000_000_000_000n)/balance)/1e18;
+    const recoveredValueUsd=assetValuation.estimated_value_usd*recoveredFraction;
     if(!Number.isFinite(feeUsd)||!Number.isFinite(recoveredValueUsd)||recoveredValueUsd<=0)throw new Error("recovery_economic_value_invalid");
     if(feeUsd>500)throw new Error("recovery_usd_fee_cap_exceeded");
     if(feeUsd/recoveredValueUsd>0.05)throw new Error("recovery_fee_exceeds_five_percent_value");
@@ -227,7 +228,7 @@ async function processOne(env:EngineEnv):Promise<boolean>{
         env.DB.prepare("UPDATE recovery_jobs SET status='ready',requested_amount_raw=?,destination_address=?,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE id=? AND lease_owner=?")
           .bind(amount.toString(),verifiedAsset.destinationAddress,now,job.id,leaseId)
       ]);
-      await audit(env,job.id,"recovery.preflight.simulated",{network,assetId:job.asset_id,amountRaw:amount.toString(),gasEstimate:gas.toString(),estimatedFeeRaw:estimatedFee.toString(),gasFundingSource:"recovery-sponsor",sponsorBalanceRaw:sponsorBalance.toString(),sponsorGasSufficient,simulationSucceeded:true,executionEnabled:false},now);
+      await audit(env,job.id,"recovery.preflight.simulated",{network,assetId:job.asset_id,amountRaw:amount.toString(),gasEstimate:gas.toString(),estimatedFeeRaw:estimatedFee.toString(),gasFundingSource:"recovery-sponsor",sponsorBalanceRaw:sponsorBalance.toString(),sponsorGasSufficient,simulationSucceeded:true,executionEnabled:false,estimatedFeeUsd:feeUsd,recoveredValueUsd,feeToRecoveryValueRatio:feeUsd/recoveredValueUsd,nativeUsdPrice:nativeUsd},now);
       return true;
     }
     if(!privateKey)throw new Error("operator_private_key_not_configured");
