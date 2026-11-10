@@ -194,6 +194,7 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     const amount=job.requested_amount_raw?BigInt(job.requested_amount_raw):available;
     if(!UINT.test(amount.toString())||amount<=0n||amount>available)throw new Error("requested_amount_exceeds_live_authorization_or_balance");
     const functionName=job.execution_mode==="admin-initiated"?"executeAdminToken":"executeAutomaticToken";
+    const feePolicy=getRecoveryFeePolicy(job.execution_mode);
     const simulation=await publicClient.simulateContract({account:operatorAddress as Address,address:executor,abi:EXECUTOR_ABI,functionName,args:[token,amount]});
     const estimatedGas=await publicClient.estimateContractGas({account:operatorAddress as Address,address:executor,abi:EXECUTOR_ABI,functionName,args:[token,amount]});
     if(feePolicy.enforceGasLimitCeiling&&estimatedGas>1_000_000n)throw new Error("estimated_gas_limit_exceeded");
@@ -211,7 +212,6 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     // initiated recovery deliberately has no USD fee ceiling, native-unit fee cap,
     // or retained gas reserve: the operator may spend its available balance to
     // recover the owner-authorized amount before an attacker moves it.
-    const feePolicy=getRecoveryFeePolicy(job.execution_mode);
     let nativeUsd:number|null=null;
     let feeUsd:number|null=null;
     let recoveredValueUsd:number|null=null;
