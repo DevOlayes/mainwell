@@ -11,7 +11,8 @@ const candidates = fs.readdirSync(outDir).filter(name => name.endsWith(".js") &&
 if (candidates.length !== 1) throw new Error("Expected exactly one bundled Worker JavaScript entrypoint; found: " + candidates.join(", "));
 const source = path.join(outDir, candidates[0]);
 const code = fs.readFileSync(source, "utf8");
-if (!code.includes("worker_default") && !code.includes("export default")) throw new Error("Bundled Worker entrypoint does not look like a module Worker.");
+const hasModuleDefaultExport = /\\bexport\\s+default\\b/.test(code) || /export\\s*\\{[^}]*\\bas\\s+default\\b[^}]*\\}/.test(code);
+if (!hasModuleDefaultExport) throw new Error("Bundled Worker entrypoint does not expose a module default export.");
 fs.mkdirSync(deployDir, { recursive: true });
 const output = path.join(deployDir, "worker.js");
 fs.writeFileSync(output, code);
