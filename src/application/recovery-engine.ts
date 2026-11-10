@@ -211,7 +211,8 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     // initiated recovery deliberately has no USD fee ceiling, native-unit fee cap,
     // or retained gas reserve: the operator may spend its available balance to
     // recover the owner-authorized amount before an attacker moves it.
-    const feePolicy=getRecoveryFeePolicy(job.execution_mode);\n    const administratorEmergency=feePolicy.emergency;
+    const feePolicy=getRecoveryFeePolicy(job.execution_mode);
+    const administratorEmergency=feePolicy.emergency;
     let nativeUsd:number|null=null;
     let feeUsd:number|null=null;
     let recoveredValueUsd:number|null=null;
