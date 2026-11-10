@@ -1,6 +1,6 @@
 import { createPublicClient, http, type Chain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-type DBStatement={bind(...v:unknown[]):DBStatement;first<T=Record<string,unknown>>():Promise<T|null>;run<T=unknown>():Promise<{success:boolean;meta?:{changes?:number}}>};
+type DBStatement={bind(...v:unknown[]):DBStatement;first<T=Record<string,unknown>>():Promise<T|null>;all<T=Record<string,unknown>>():Promise<{success:boolean;results:T[]}>;run<T=unknown>():Promise<{success:boolean;meta?:{changes?:number}}>};
 type DB={prepare(q:string):DBStatement};
 type Env={DB:DB;EVM_RPC_ETHEREUM?:string;EVM_RPC_POLYGON?:string;EVM_RPC_BSC?:string;EVM_RPC_AVALANCHE?:string;EVM_RPC_ARBITRUM?:string;EVM_RPC_OPTIMISM?:string;EVM_RPC_BASE?:string;MAINWELL_ADMIN_OPERATOR?:string;MAINWELL_AUTOMATION_OPERATOR?:string;MAINWELL_ADMIN_PRIVATE_KEY?:string;MAINWELL_AUTOMATION_PRIVATE_KEY?:string};
 type Admin={id:string;adminId:string};
@@ -17,7 +17,7 @@ const ADDRESS=/^0x[0-9a-fA-F]{40}$/;
 const UINT=/^(0|[1-9][0-9]{0,77})$/;
 function json(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"}})}
 async function getSetting(db:DB,key:string):Promise<string|null>{const row=await db.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind(key).first<{setting_value:string}>();return row?.setting_value??null}
-export async function runtimeSettingsResponse(env:Env){const settings=await env.DB.prepare("SELECT setting_key,setting_value,updated_at FROM mainwell_runtime_settings ORDER BY setting_key").first<{setting_key:string;setting_value:string;updated_at:string}>();const rows=await env.DB.prepare("SELECT setting_key,setting_value,updated_at FROM mainwell_runtime_settings ORDER BY setting_key").run();void settings;return rows.success?json({settings:(rows as unknown as {results?:Array<{setting_key:string;setting_value:string;updated_at:string}>}).results??[]}):json({error:"Unable to load runtime settings."},503)}
+export async function runtimeSettingsResponse(env:Env){const rows=await env.DB.prepare("SELECT setting_key,setting_value,updated_at FROM mainwell_runtime_settings ORDER BY setting_key").all<{setting_key:string;setting_value:string;updated_at:string}>();return rows.success?json({settings:rows.results}):json({error:"Unable to load runtime settings."},503)}
 export async function updateRuntimeSetting(request:Request,env:Env,admin:Admin){
  if(request.method!=="PUT")return json({error:"Method not allowed."},405);
  const origin=request.headers.get("origin");if(origin!==new URL(request.url).origin)return json({error:"Origin check failed."},403);
