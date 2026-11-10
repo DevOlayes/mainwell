@@ -2,44 +2,52 @@
 
 ## Target data flow
 
-1. The owner connects a supported wallet. Connection is read-only and grants no transfer authority.
-2. Network adapters discover balances, assets, and current permissions.
-3. The owner reviews a consolidated authorization setup and approves persistent permissions supported by each chain/asset.
-4. The authorization registry stores verifiable evidence bound to the owner, network, reviewed executor, locked destination, asset scope, amount/allowance scope, execution modes, expiry, and revocation state.
-5. Monitoring and indexing discover existing and incoming authorized assets.
-6. The planner ranks eligible assets by net value after fees, urgency, gas efficiency, execution reliability, and confidence.
-7. Assets covered by an automatic-priority grant may enter the automated execution queue.
-8. Other assets covered by an admin-initiated grant appear in the authenticated admin dashboard for selection and initiation.
-9. Both paths use the same grant validation and reviewed executor. Admin role never expands owner-granted authority.
-10. Transaction simulation, submission, receipt tracking, and audit records complete the lifecycle.
+1. The owner connects a supported EVM wallet. Connection is read-only and grants no transfer authority.
+2. Network adapters discover ERC-20 balances, metadata and configured permission information.
+3. The owner reviews and authorizes a persistent, scoped grant through their wallet.
+4. The authorization registry stores evidence bound to owner, network, immutable executor, locked destination, asset scope, amount cap, execution modes, expiry and revocation state.
+5. Monitoring records supported assets, balances, metadata and fresh price information.
+6. The planner ranks eligible assets by net value after fees, urgency, fee efficiency, confidence and execution reliability.
+7. Eligible assets may enter the automatic-priority queue only when the owner grant and persistent automation switch both permit it.
+8. Assets covered by an admin-initiated grant may be selected in the authenticated admin dashboard only when the persistent execution switch permits it.
+9. Both execution paths use the same grant verifier and immutable scoped executor. Admin role never expands owner authority.
+10. Simulation, signing, submission, receipt reconciliation, destination postcondition checks and audit records complete the transaction lifecycle.
 
-A fresh owner wallet popup is not required for every transfer if a valid persistent grant already covers the transfer. A new owner authorization is required for initial grants, renewal, revocation, or out-of-scope actions.
+A fresh owner signature is not required for every transfer when a valid persistent grant covers it. A new owner authorization is required for initial grants, renewal, revocation or out-of-scope actions.
 
-## Boundaries
+## Security boundaries
 
-- Read-only adapters: balances, assets, and permission metadata.
-- Authorization registry: verifiable grants, explicit execution modes, scope, expiry, and revocation.
-- Destination policy: network-specific locked destinations and optional asset overrides.
-- Planner: fee-aware ranking and hybrid gas source decision.
-- Automatic worker: only processes grants that explicitly permit automatic-priority execution.
-- Admin service: only initiates transfers within grants that explicitly permit admin-initiated execution.
-- Executor: reviewed chain-specific contract/adapter enforces approved destination and asset scope.
-- Audit and receipt services: durable event trail and on-chain status reconciliation.
+- Read-only monitoring adapters retrieve balances, ERC-20 metadata and supported permission information.
+- Authorization registry stores verifiable grants, execution modes, caps, expiry and revocation state.
+- Destination policy stores network-specific locked destinations.
+- Planner ranks eligible work and checks fee and gas policy.
+- Automatic worker processes only grants permitting automatic-priority execution and only when automation_enabled is true.
+- Admin service initiates only grants permitting admin execution and only when execution_enabled is true.
+- The immutable executor enforces owner-approved token scope, destinations, caps, operators, expiry and revocation.
+- Audit and receipt services record transaction lifecycle and reconcile uncertain outcomes.
 
-## Ranking
+## Execution and gas
 
-Eligible assets are ranked by net recoverable value after estimated fees, then urgency and confidence. Unsupported permissions, missing/stale data, invalid destinations, insufficient gas, revoked/expired grants, or fee bounds violations block execution.
+The automation and administrator operators are distinct. The configured operator signs the transaction and sponsors its gas. The current implementation does not use source-wallet-funded EOA gas because an operator-signed EOA transaction cannot spend the source EOA's native balance without its signature. Smart-account/account-abstraction paymaster flows are not implemented.
 
-## Hybrid gas policy
+Automatic execution retains its fee ceiling, fee-to-value ratio, operator reserve, buffer, gas ceiling and fresh valuation requirements. Emergency admin-initiated execution bypasses the automatic economic ceilings but remains limited by available operator funds, live fee estimates and all on-chain owner authorization constraints.
 
-1. Prefer native gas from the affected wallet only when the configured reserve is satisfied.
-2. Otherwise use a dedicated sponsor only when the network integration supports it.
-3. Otherwise block the item.
+## Monitoring scope
 
-A sponsor funds fees only; it never receives transfer authority. Future network-specific approaches include ERC-4337 paymasters where compatible, TRON Energy/Bandwidth delegation, Solana fee payers, and Bitcoin UTXO fee selection.
+Alchemy-based ERC-20 discovery, balances, metadata and prices are implemented across Ethereum, Polygon, BNB Smart Chain, Avalanche, Arbitrum, Optimism and Base. The scheduled monitor processes one due wallet per invocation. Discovered tokens are not automatically whitelisted or authorized.
+
+Permission monitoring currently checks configured known spenders only. MAINWELL_EVM_ASSETS is intentionally not configured yet, so the implementation must not be described as global allowance discovery.
 
 ## Current implementation status
 
-The Phase One foundation is implemented: read-only EVM monitoring and planning; persistent D1 grant and policy records; administrator authentication with MFA; locked source-wallet and destination management; supported ERC-20 registry; per-asset caps, execution modes, and expiry; the non-upgradeable scoped executor; owner deployment and exact token-allowance authorization; independent server-side verification of grant evidence; and the authenticated administration console. CI generates and pins the Worker and executor artifacts, while production deployment is a separate verified step.
+Phases One through Four have implementation in the repository and production deployment. The deployed recovery engine includes owner/grant validation, simulation, gas estimation, operator signing, transaction submission, reconciliation, confirmation checks, automatic-priority planning and administrator-initiated job management. Monitoring includes ERC-20 discovery, balances, metadata, fresh prices and scheduled scans.
 
-Phase Two is still outstanding: automatic-priority execution worker, administrator-initiated execution flow, hybrid gas sponsorship, exact transaction simulation, submission, receipt and replacement tracking, and execution reconciliation. `RECOVERY_EXECUTION_ENABLED` remains false. Do not attempt real asset transfers. The executor has not received an independent third-party security audit.
+Production runtime switches currently remain automation_enabled=false and execution_enabled=false. This is an intentional operational safeguard, not a missing implementation. The admin UI must expose clear status and authorized controls for these persistent switches; neither switch may be silently enabled by deployment or migration.
+
+## Explicitly unsupported scope
+
+The current executor and recovery engine are ERC-20/EVM scoped. Native-coin recovery, NFT recovery, Bitcoin, TRON and other non-EVM recovery are not implemented. They require separate asset-specific authorization, executor/transaction semantics, fee handling, monitoring, simulation and tests. Do not present these as available merely because a network's native coin is used for gas.
+
+## Assurance limits
+
+CI, internal tests and production configuration checks are not an independent security audit. Recovery is not guaranteed: attacker races, chain congestion, RPC failures, insufficient gas, token behavior and other chain conditions can prevent or delay execution.
