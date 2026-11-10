@@ -11032,28 +11032,67 @@ async function discoverTokenBalances(network, key, owner) {
   throw new Error("ALCHEMY_TOKEN_DISCOVERY_PAGE_LIMIT_2500");
 }
 __name(discoverTokenBalances, "discoverTokenBalances");
-async function mapLimited(items, limit, fn) {
-  const out = [];
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (true) {
-      const i = next++;
-      if (i >= items.length) return;
-      out[i] = await fn(items[i]);
-    }
-  });
-  await Promise.all(workers);
-  return out;
-}
-__name(mapLimited, "mapLimited");
-async function loadMetadata(network, key, address) {
+function decodeAbiText(raw) {
+  if (!raw || !/^0x[0-9a-f]*$/i.test(raw)) return null;
+  const data = raw.slice(2);
   try {
-    return await alchemyRpc(network, key, "alchemy_getTokenMetadata", [address]);
+    let bytes;
+    if (data.length === 64) {
+      bytes = data.replace(/(00)+$/i, "");
+    } else {
+      if (data.length < 128) return null;
+      const offset = Number(BigInt("0x" + data.slice(0, 64))) * 2;
+      if (!Number.isSafeInteger(offset) || offset < 0 || offset + 64 > data.length) return null;
+      const length = Number(BigInt("0x" + data.slice(offset, offset + 64)));
+      if (!Number.isSafeInteger(length) || length < 0 || length > 256) return null;
+      bytes = data.slice(offset + 64, offset + 64 + length * 2);
+    }
+    const buffer2 = new Uint8Array(bytes.match(/.{2}/g)?.map((x) => parseInt(x, 16)) ?? []);
+    const value = new TextDecoder("utf-8", { fatal: false }).decode(buffer2).replace(/\\0+$/g, "").trim();
+    return value || null;
   } catch {
     return null;
   }
 }
-__name(loadMetadata, "loadMetadata");
+__name(decodeAbiText, "decodeAbiText");
+async function loadMetadataBatch(network, key, addresses) {
+  const out = /* @__PURE__ */ new Map();
+  for (let offset = 0; offset < addresses.length; offset += 16) {
+    const batch = addresses.slice(offset, offset + 16);
+    const requests = [];
+    batch.forEach((address, index2) => {
+      const base = index2 * 3;
+      requests.push({ jsonrpc: "2.0", id: base + 1, method: "eth_call", params: [{ to: address, data: "0x06fdde03" }, "latest"] });
+      requests.push({ jsonrpc: "2.0", id: base + 2, method: "eth_call", params: [{ to: address, data: "0x95d89b41" }, "latest"] });
+      requests.push({ jsonrpc: "2.0", id: base + 3, method: "eth_call", params: [{ to: address, data: "0x313ce567" }, "latest"] });
+    });
+    const response2 = await timedFetch("https://" + network.host + ".g.alchemy.com/v2/" + encodeURIComponent(key), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(requests)
+    });
+    const payload = await response2.json();
+    if (!Array.isArray(payload)) throw new Error("ALCHEMY_METADATA_BATCH_MALFORMED");
+    const byId = new Map(payload.map((item) => [Number(item.id), item]));
+    batch.forEach((address, index2) => {
+      const base = index2 * 3;
+      const name = decodeAbiText(byId.get(base + 1)?.result);
+      const symbol = decodeAbiText(byId.get(base + 2)?.result);
+      const decimalsRaw = byId.get(base + 3)?.result;
+      let decimals = null;
+      try {
+        if (decimalsRaw && /^0x[0-9a-f]+$/i.test(decimalsRaw)) {
+          const n = Number(BigInt(decimalsRaw));
+          if (Number.isInteger(n) && n >= 0 && n <= 36) decimals = n;
+        }
+      } catch {
+      }
+      out.set(address.toLowerCase(), name || symbol || decimals !== null ? { name, symbol, decimals } : null);
+    });
+  }
+  return out;
+}
+__name(loadMetadataBatch, "loadMetadataBatch");
 async function loadPrices(key, slug, addresses) {
   const result = /* @__PURE__ */ new Map();
   for (let offset = 0; offset < addresses.length; offset += 25) {
@@ -11070,12 +11109,46 @@ async function loadPrices(key, slug, addresses) {
       const price = row.prices?.find((p) => p.currency?.toUpperCase() === "USD");
       const value = Number(price?.value), observedAt = price?.lastUpdatedAt ?? "";
       const age = Date.now() - Date.parse(observedAt);
-      if (Number.isFinite(value) && value > 0 && Number.isFinite(age) && age >= -6e4 && age <= 3e5) result.set(row.address.toLowerCase(), { value, observedAt });
+      if (Number.isFinite(value) && value > 0 && Number.isFinite(age) && age >= -6e4 && age <= 3e5)
+        result.set(row.address.toLowerCase(), { value, observedAt });
     }
   }
   return result;
 }
 __name(loadPrices, "loadPrices");
+async function loadAllowancesBatch(network, key, owner, pairs) {
+  const out = [];
+  for (let offset = 0; offset < pairs.length; offset += 25) {
+    const batch = pairs.slice(offset, offset + 25);
+    const requests = batch.map((pair, index2) => ({
+      jsonrpc: "2.0",
+      id: index2 + 1,
+      method: "eth_call",
+      params: [{ to: pair.token, data: "0xdd62ed3e" + owner.slice(2).toLowerCase().padStart(64, "0") + pair.spender.slice(2).toLowerCase().padStart(64, "0") }, "latest"]
+    }));
+    const response2 = await timedFetch("https://" + network.host + ".g.alchemy.com/v2/" + encodeURIComponent(key), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(requests)
+    });
+    const payload = await response2.json();
+    if (!Array.isArray(payload)) throw new Error("ALCHEMY_ALLOWANCE_BATCH_MALFORMED");
+    const byId = new Map(payload.map((item) => [Number(item.id), item]));
+    batch.forEach((pair, index2) => {
+      const raw = byId.get(index2 + 1)?.result;
+      let allowance = null;
+      if (typeof raw === "string" && /^0x[0-9a-f]+$/i.test(raw)) {
+        try {
+          allowance = BigInt(raw).toString();
+        } catch {
+        }
+      }
+      out.push({ ...pair, allowance });
+    });
+  }
+  return out;
+}
+__name(loadAllowancesBatch, "loadAllowancesBatch");
 function configuredSpenders(raw, network) {
   if (!raw) return [];
   try {
@@ -11123,7 +11196,8 @@ async function runWallet(env, wallet) {
       return false;
     }
   }).map((item) => [item.contractAddress.toLowerCase(), item])).values()];
-  const metadata = await mapLimited(deduped, 4, async (item) => ({ address: item.contractAddress.toLowerCase(), balance: BigInt(item.tokenBalance).toString(), metadata: await loadMetadata(cfg, key, item.contractAddress) }));
+  const metadataByAddress = await loadMetadataBatch(cfg, key, deduped.map((item) => item.contractAddress));
+  const metadata = deduped.map((item) => ({ address: item.contractAddress.toLowerCase(), balance: BigInt(item.tokenBalance).toString(), metadata: metadataByAddress.get(item.contractAddress.toLowerCase()) ?? null }));
   const priceAddresses = [cfg.wrappedNative, ...metadata.filter((x) => BigInt(x.balance) > 0n).map((x) => x.address)];
   let prices = /* @__PURE__ */ new Map(), priceError = false;
   try {
@@ -11180,13 +11254,16 @@ async function runWallet(env, wallet) {
   if (spenders.length && tokenAddresses.length * spenders.length <= 500) {
     try {
       const pairs = tokenAddresses.flatMap((token) => spenders.map((spender) => ({ token, spender })));
-      await mapLimited(pairs, 4, async (pair) => {
-        const allowance = await alchemyRpc(cfg, key, "alchemy_getTokenAllowance", [{ contract: pair.token, owner: wallet.address, spender: pair.spender }]);
-        const raw = /^0x[0-9a-f]+$/i.test(allowance) ? BigInt(allowance).toString() : String(allowance);
-        if (!/^\d+$/.test(raw)) throw new Error("ALCHEMY_ALLOWANCE_MALFORMED");
-        await persistPermission(env, wallet, pair.token, pair.spender, raw, observedAt);
-      });
-      permissionCount = pairs.length;
+      const allowanceRows = await loadAllowancesBatch(cfg, key, wallet.address, pairs);
+      for (const row of allowanceRows) {
+        if (row.allowance === null) {
+          permissionPartial = true;
+          continue;
+        }
+        await persistPermission(env, wallet, row.token, row.spender, row.allowance, observedAt);
+        permissionCount++;
+      }
+      if (permissionPartial) throw new Error("ALCHEMY_ALLOWANCE_PARTIAL");
       const allowed = new Set(pairs.map((p) => p.token + ":" + p.spender));
       for (const p of previous.results) {
         if (allowed.has(p.token_address.toLowerCase() + ":" + p.spender_address.toLowerCase())) continue;
@@ -11215,9 +11292,9 @@ async function refreshWalletWithAlchemy(env, wallet) {
   return { observedAt: (/* @__PURE__ */ new Date()).toISOString(), assets: assets.results.map((a) => ({ ...a, amount: amountDisplay(String(a.amount_raw), Number(a.decimals)), estimatedValueUsd: a.estimatedValueUsd === null ? null : Number(a.estimatedValueUsd) })), permissions: permissions.results };
 }
 __name(refreshWalletWithAlchemy, "refreshWalletWithAlchemy");
-async function runScheduledWalletMonitoring(env, limit = 5) {
+async function runScheduledWalletMonitoring(env, limit = 1) {
   if (!env.ALCHEMY_API_KEY) return { processed: 0, failed: 0, skipped: true };
-  const due = await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id FROM recovery_wallets WHERE status='monitoring' AND (last_monitor_at IS NULL OR last_monitor_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now','-5 minutes')) ORDER BY CASE WHEN last_monitor_at IS NULL THEN 0 ELSE 1 END,last_monitor_at ASC,first_seen_at ASC LIMIT ?").bind(Math.max(1, Math.min(10, limit))).all();
+  const due = await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id FROM recovery_wallets WHERE status='monitoring' AND (last_monitor_at IS NULL OR last_monitor_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now','-5 minutes')) ORDER BY CASE WHEN last_monitor_at IS NULL THEN 0 ELSE 1 END,last_monitor_at ASC,first_seen_at ASC LIMIT ?").bind(Math.max(1, Math.min(1, limit))).all();
   let processed = 0, failed = 0;
   for (const wallet of due.results) {
     const claimedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -11353,7 +11430,7 @@ __name(validateRecoveryGrant, "validateRecoveryGrant");
 var EXECUTOR_CREATION_BYTECODE = "0x60c0604052600160035534801562000015575f80fd5b506040516200100e3803806200100e8339810160408190526200003891620004fe565b42886001600160401b031611620000615760405162d36c8560e81b815260040160405180910390fd5b831580156200006e575082155b156200008d5760405163c522a9e160e01b815260040160405180910390fd5b838015620000a257506001600160a01b038216155b80620000be5750828015620000be57506001600160a01b038116155b15620000dd5760405163c522a9e160e01b815260040160405180910390fd5b86511580620000ee57508451875114155b80620000fc57508551875114155b156200011b5760405163c522a9e160e01b815260040160405180910390fd5b5f8054336001600160a01b03199091161781556001600160a01b03838116608052821660a05260018054600160a01b61ff0160e01b031916600160a01b6001600160401b038c160260ff60e81b191617600160e81b871515021760ff60f01b1916600160f01b861515021790555b87518110156200031e575f888281518110620001a957620001a9620005e6565b602002602001015190505f888381518110620001c957620001c9620005e6565b602002602001015190505f888481518110620001e957620001e9620005e6565b602002602001015190505f6001600160a01b0316836001600160a01b031614806200021c57506001600160a01b0383163b155b806200022f57506001600160a01b038216155b8062000239575080155b15620002585760405163c522a9e160e01b815260040160405180910390fd5b6001600160a01b0383165f90815260046020526040902054156200029e5760405163437a40b160e01b81526001600160a01b038416600482015260240160405180910390fd5b6001600160a01b039283165f81815260046020908152604080832094909455600690529182208054939094166001600160a01b0319938416179093556002805460018181018355919092527f405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace909101805490921690921790550162000189565b50855f81518110620003345762000334620005e6565b602002602001015160015f6101000a8154816001600160a01b0302191690836001600160a01b031602179055505050505050505050620005fa565b80516001600160401b038116811462000386575f80fd5b919050565b634e487b7160e01b5f52604160045260245ffd5b604051601f8201601f191681016001600160401b0381118282101715620003ca57620003ca6200038b565b604052919050565b5f6001600160401b03821115620003ed57620003ed6200038b565b5060051b60200190565b80516001600160a01b038116811462000386575f80fd5b5f82601f8301126200041e575f80fd5b81516020620004376200043183620003d2565b6200039f565b8083825260208201915060208460051b87010193508684111562000459575f80fd5b602086015b8481101562000480576200047281620003f7565b83529183019183016200045e565b509695505050505050565b5f82601f8301126200049b575f80fd5b81516020620004ae6200043183620003d2565b8083825260208201915060208460051b870101935086841115620004d0575f80fd5b602086015b84811015620004805780518352918301918301620004d5565b8051801515811462000386575f80fd5b5f805f805f805f80610100898b03121562000517575f80fd5b62000522896200036f565b60208a01519098506001600160401b03808211156200053f575f80fd5b6200054d8c838d016200040e565b985060408b015191508082111562000563575f80fd5b620005718c838d016200040e565b975060608b015191508082111562000587575f80fd5b50620005968b828c016200048b565b955050620005a760808a01620004ee565b9350620005b760a08a01620004ee565b9250620005c760c08a01620003f7565b9150620005d760e08a01620003f7565b90509295985092959890939650565b634e487b7160e01b5f52603260045260245ffd5b60805160a0516109e46200062a5f395f81816102e801526104f701525f81816101ac015261044901526109e45ff3fe608060405234801561000f575f80fd5b5060043610610111575f3560e01c8063b6549f751161009e578063d0e043de1161006e578063d0e043de14610295578063e5b07f0b146102b4578063e728c0ef146102c8578063e7f36c63146102db578063e900a491146102e3575f80fd5b8063b6549f7514610254578063bd3def631461025c578063c23ab1b91461026f578063c6d51a8414610282575f80fd5b8063655fb24a116100e4578063655fb24a146101a757806385a708a8146101ce5780638622a689146101fb5780638da5cb5b1461022f578063b269681d14610241575f80fd5b80630b81c9a7146101155780630f3bdd5f1461013e57806313bb4f961461015357806363d256ce14610193575b5f80fd5b60015461012990600160f01b900460ff1681565b60405190151581526020015b60405180910390f35b61015161014c3660046108b0565b61030a565b005b61017b6101613660046108b0565b60066020525f90815260409020546001600160a01b031681565b6040516001600160a01b039091168152602001610135565b60015461012990600160e01b900460ff1681565b61017b7f000000000000000000000000000000000000000000000000000000000000000081565b6101ed6101dc3660046108b0565b60056020525f908152604090205481565b604051908152602001610135565b60015461021690600160a01b900467ffffffffffffffff1681565b60405167ffffffffffffffff9091168152602001610135565b5f5461017b906001600160a01b031681565b60015461017b906001600160a01b031681565b6101516103ca565b61015161026a3660046108d0565b61043e565b61015161027d3660046108d0565b6104ec565b61017b6102903660046108f8565b610587565b6101ed6102a33660046108b0565b60046020525f908152604090205481565b60015461012990600160e81b900460ff1681565b61017b6102d63660046108f8565b6105ce565b6002546101ed565b61017b7f000000000000000000000000000000000000000000000000000000000000000081565b5f546001600160a01b0316331461033457604051630b2db9b760e31b815260040160405180910390fd5b6001600160a01b0381165f90815260046020526040812054900361037b57604051630a23366560e41b81526001600160a01b03821660048201526024015b60405180910390fd5b6001600160a01b0381165f81815260056020908152604080832054600490925280832091909155517fba5ecd908aab4d79cf7e9fc9d22735958a8f4befc4ac4c9f1fb7f2297797dbbd9190a250565b5f546001600160a01b031633146103f457604051630b2db9b760e31b815260040160405180910390fd5b6001805460ff60e01b1916600160e01b1790555f80546040516001600160a01b03909116917fbadc5b2ca6241beb42d4f1c0481f982a91e7aceaca195b8825f6187ad50018e591a2565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146104875760405163031142d360e11b815260040160405180910390fd5b6003546001146104aa576040516306fda65d60e31b815260040160405180910390fd5b6002600355600154600160e81b900460ff166104d95760405163031142d360e11b815260040160405180910390fd5b6104e382826105fc565b50506001600355565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146105355760405163143ee67560e21b815260040160405180910390fd5b600354600114610558576040516306fda65d60e31b815260040160405180910390fd5b6002600355600154600160f01b900460ff166104d95760405163143ee67560e21b815260040160405180910390fd5b5f60065f6002848154811061059e5761059e61090f565b5f9182526020808320909101546001600160a01b0390811684529083019390935260409091019020541692915050565b5f600282815481106105e2576105e261090f565b5f918252602090912001546001600160a01b031692915050565b600154600160e01b900460ff16156106275760405163a0c81e5f60e01b815260040160405180910390fd5b600154600160a01b900467ffffffffffffffff16421061065a5760405163075ff6cf60e11b815260040160405180910390fd5b6001600160a01b0382165f908152600460205260408120549081900361069e57604051630a23366560e41b81526001600160a01b0384166004820152602401610372565b6001600160a01b0383165f90815260056020526040812054906106c18284610937565b90508315806106cf57508084115b156106f757604051631beda7db60e31b81526004810185905260248101829052604401610372565b6001600160a01b038086165f90815260066020526040902054168061072f5760405163c522a9e160e01b815260040160405180910390fd5b6107398584610950565b6001600160a01b038781165f81815260056020908152604080832095909555815485519085166024820152938616604485015260648085018b90528551808603909101815260849094018552830180516001600160e01b03166323b872dd60e01b179052925183926107aa91610963565b5f604051808303815f865af19150503d805f81146107e3576040519150601f19603f3d011682016040523d82523d5f602084013e6107e8565b606091505b50915091508115806108165750805115801590610816575080806020019051810190610814919061098f565b155b15610834576040516312171d8360e31b815260040160405180910390fd5b336001600160a01b0316836001600160a01b0316896001600160a01b03167ffe28fceecb7dd637d5601fefa0516fc4c3b757be702d47e296d4921d89d56c1c8a60405161088391815260200190565b60405180910390a45050505050505050565b80356001600160a01b03811681146108ab575f80fd5b919050565b5f602082840312156108c0575f80fd5b6108c982610895565b9392505050565b5f80604083850312156108e1575f80fd5b6108ea83610895565b946020939093013593505050565b5f60208284031215610908575f80fd5b5035919050565b634e487b7160e01b5f52603260045260245ffd5b634e487b7160e01b5f52601160045260245ffd5b8181038181111561094a5761094a610923565b92915050565b8082018082111561094a5761094a610923565b5f82515f5b818110156109825760208186018101518583015201610968565b505f920191825250919050565b5f6020828403121561099f575f80fd5b815180151581146108c9575f80fdfea2646970667358221220102a26af16b60f4b576ab29b4e036d6e6ed52b2f75fecb9e06bd43e657d45e4d64736f6c63430008180033";
 var EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH = "0xa7f073a21c09677f888baa49343d517f52d13383d84010a86ffff9a0d1a8117f";
 var EXECUTOR_IMMUTABLE_RANGES = [{ "start": 428, "length": 32 }, { "start": 744, "length": 32 }, { "start": 1097, "length": 32 }, { "start": 1271, "length": 32 }];
-var EXECUTOR_BUILD_SOURCE_COMMIT = "759b5be3e0fa195dc50877abb2c03ac44841bc82";
+var EXECUTOR_BUILD_SOURCE_COMMIT = "54015de569d90894c8c30204844131c79e471e62";
 
 // src/adapters/evm-grant-verifier.ts
 var ADDRESS2 = /^0x[0-9a-fA-F]{40}$/;
