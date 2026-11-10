@@ -103,8 +103,8 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
   if(url.pathname.startsWith("/api/admin/")){
     const token=cookie(request,"mw_admin_session");
     if(!token||!/^[0-9a-f]{64}$/.test(token))return json({error:"MFA-verified administrator session required."},401);
-    const now=new Date().toISOString(),mfaCutoff=new Date(Date.now()-12*60*60*1000).toISOString();
-    const admin=await env.DB.prepare("SELECT s.id,s.admin_id FROM admin_sessions s INNER JOIN admin_accounts a ON a.id=s.admin_id WHERE s.token_hash=? AND s.expires_at>? AND s.mfa_verified_at>? AND a.status='active' AND a.mfa_enabled=1 LIMIT 1").bind(await hash(token),now,mfaCutoff).first<{id:string;admin_id:string}>();
+    const now=new Date().toISOString(),idleCutoff=new Date(Date.now()-30*60*1000).toISOString();
+    const admin=await env.DB.prepare("SELECT s.id,s.admin_id FROM admin_sessions s INNER JOIN admin_accounts a ON a.id=s.admin_id WHERE s.token_hash=? AND s.expires_at>? AND s.last_seen_at>? AND a.status='active' AND a.mfa_enabled=1 LIMIT 1").bind(await hash(token),now,idleCutoff).first<{id:string;admin_id:string}>();
     if(!admin)return json({error:"MFA-verified administrator session required."},401);
     await env.DB.prepare("UPDATE admin_sessions SET last_seen_at=? WHERE id=?").bind(now,admin.id).run();
     const limitValue=Number(url.searchParams.get("limit")??"50"),limit=Number.isInteger(limitValue)?Math.min(100,Math.max(1,limitValue)):50;
