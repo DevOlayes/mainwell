@@ -28,7 +28,7 @@ const payload = {
   amountRaw: "250000",
   idempotencyKey: "idempotency-key-00000001"
 };
-function makeEnv({ scope = baseScope, prior = null } = {}) {
+function makeEnv({ scope = baseScope, prior = null, activeTx = null } = {}) {
   const calls = { batch: [], run: [] };
   const DB = {
     prepare(sql) {
@@ -36,6 +36,7 @@ function makeEnv({ scope = baseScope, prior = null } = {}) {
         sql, values: [],
         bind(...values) { this.values = values; return this; },
         async first() {
+          if (sql.includes("FROM recovery_transactions WHERE job_id")) return activeTx;
           if (sql.includes("FROM recovery_jobs WHERE idempotency_key")) return prior;
           if (sql.includes("SELECT g.network,g.owner_wallet")) return scope;
           return null;
@@ -132,3 +133,16 @@ test("cancellation is recorded as an atomic terminal state change", async () => 
   assert.equal(calls.batch.length, 1);
   assert.equal(calls.batch[0].length, 3);
 });
+
+for (const status of ["prepared", "submitted", "pending", "unknown"]) {
+  test(`refuses retry or cancellation while transaction status is ${status}`, async () => {
+    const { env, calls } = makeEnv({ activeTx: { id: "tx-1", status } });
+    for (const action of ["retry", "cancel"]) {
+      const response = await handleAdminDestinationApi(request({}, "https://mainwell.example", `/api/admin/recovery-jobs/job-1/${action}`), env, admin);
+      assert.equal(response.status, 409);
+      assert.match((await response.json()).error, /may still be on-chain/);
+    }
+    assert.equal(calls.batch.length, 0);
+    assert.equal(calls.run.length, 0);
+  });
+}
