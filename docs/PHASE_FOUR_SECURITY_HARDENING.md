@@ -49,15 +49,20 @@ Phase Four strengthens the existing defensive wallet-monitoring and recovery app
 - Receipt confirmation requires canonical block hash, network finality, the expected executor event identity and destination balance postcondition. Reverted transactions are failed; mismatched or unproven outcomes remain unknown/blocked.
 - Retry and cancellation are refused while any transaction is prepared, submitted, pending or unknown. New regression tests cover each unresolved state.
 
+## Production database recovery readiness
+
+- A current production D1 Time Travel bookmark has been retrieved and recorded in `docs/D1_BACKUP_RESTORE_RUNBOOK.md`.
+- A destructive production restore was intentionally not executed. The runbook defines the pre-restore pause, bookmark, rollback, schema, runtime-switch and binding checks.
+- Portable SQL export is documented as a maintenance-window operation because Cloudflare warns an in-progress export can make D1 unavailable to serve queries.
+- A separate disposable-database restore rehearsal and portable export verification remain prerequisites before claiming fully tested disaster recovery.
+
 ## Remaining Phase Four work
 
-1. Apply migration `0017_wallet_auth_rate_limits.sql` to production D1 and verify the table exists.
-2. Run CI, inspect the generated Worker bundle, and deploy only after successful checks.
-3. Verify live Worker settings, query-string redaction, secret/binding preservation, cron schedule, and the two disabled runtime switches.
-4. Re-run the complete authentication, session revocation, MFA, one-time recovery, CSRF/origin checks, and rate-limit test suite after the latest login throttle changes.
-5. Review executor verification, grant revocation, transaction nonce serialization, pending/unknown transaction handling, receipt finality, and audit-log failure behavior.
-6. Review backup/restore and D1 recovery procedures before real-wallet testing.
-7. Prepare a controlled practical-test checklist. Real owner-wallet registration and on-chain recovery tests remain deferred until development is complete and the operator explicitly approves testing.
+1. Re-run the full CI suite after the final administrator login, executor-revocation and unresolved-transaction regression changes; deploy only the exact passing artifact.
+2. Verify production Worker version, 100% traffic, bindings/secrets, query-string redaction, cron schedule, and both disabled runtime switches.
+3. Confirm production D1 schema and backup bookmark remain available after deployment.
+4. Complete a separate disposable-D1 restore rehearsal and a portable SQL export/checksum verification before claiming disaster recovery is fully tested.
+5. Prepare a controlled practical-test checklist. Real owner-wallet registration and on-chain recovery tests remain deferred until development is complete and the operator explicitly approves testing.
 
 ## Assurance boundary
 
