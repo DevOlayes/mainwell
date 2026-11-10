@@ -34,3 +34,10 @@ test("creates and verifies Worker-compatible chained PBKDF2 hashes", async () =>
     globalThis.crypto.subtle.deriveBits = original;
   }
 });
+
+
+test("administrator sessions have a 30-minute idle timeout", () => {
+  const { adminSessionIdleCutoff } = require("../dist/application/admin-auth.js");
+  const now = Date.UTC(2026, 10, 10, 12, 0, 0);
+  assert.equal(adminSessionIdleCutoff(now), new Date(now - 30 * 60 * 1000).toISOString());
+});
