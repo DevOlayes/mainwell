@@ -11,6 +11,42 @@ const RPC_BY_NETWORK = {
  ethereum:"EVM_RPC_ETHEREUM", polygon:"EVM_RPC_POLYGON", bsc:"EVM_RPC_BSC",
  avalanche:"EVM_RPC_AVALANCHE", arbitrum:"EVM_RPC_ARBITRUM", optimism:"EVM_RPC_OPTIMISM", base:"EVM_RPC_BASE"
 } as const;
+async function verifyCuratedAssetWithRetry(env:OwnerApiEnv,asset:(typeof CURATED_ERC20_ASSETS)[number]):Promise<void>{
+ const rpcUrl=env[RPC_BY_NETWORK[asset.network]];
+ if(!rpcUrl)throw new Error("RPC_NOT_CONFIGURED");
+ let lastError:unknown;
+ for(let attempt=0;attempt<2;attempt++){
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
+  try{
+   const calls=[
+    {jsonrpc:"2.0",id:1,method:"eth_chainId",params:[]},
+    {jsonrpc:"2.0",id:2,method:"eth_getCode",params:[asset.address,"latest"]},
+    {jsonrpc:"2.0",id:3,method:"eth_call",params:[{to:asset.address,data:"0x313ce567"},"latest"]}
+   ];
+   let res:Response;
+   try{res=await fetch(rpcUrl,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(calls),signal:controller.signal});}
+   catch{throw new Error("RPC_UNAVAILABLE");}
+   if(!res.ok)throw new Error("RPC_UNAVAILABLE");
+   let payload:unknown;
+   try{payload=await res.json();}catch{throw new Error("RPC_UNAVAILABLE");}
+   if(!Array.isArray(payload))throw new Error("RPC_BATCH_UNSUPPORTED");
+   const byId=new Map((payload as Array<{id:number;result?:string;error?:{message?:string}}>).map(item=>[item.id,item]));
+   const chain=byId.get(1)?.result,code=byId.get(2)?.result,decimalsRaw=byId.get(3)?.result;
+   if(byId.size!==3||(payload as Array<{error?:unknown}>).some(item=>item.error))throw new Error("RPC_UNAVAILABLE");
+   if(typeof chain!=="string"||BigInt(chain)!==BigInt(NETWORK_CHAIN[asset.network]))throw new Error("RPC_CHAIN_MISMATCH");
+   if(typeof code!=="string"||!/^0x[0-9a-fA-F]+$/.test(code)||/^0x0*$/i.test(code))throw new Error("TOKEN_CONTRACT_NOT_FOUND");
+   if(typeof decimalsRaw!=="string"||!/^0x[0-9a-fA-F]+$/.test(decimalsRaw)||Number(BigInt(decimalsRaw))!==asset.decimals)throw new Error("TOKEN_DECIMALS_MISMATCH");
+   return;
+  }catch(error){
+   lastError=error;
+   const reason=error instanceof Error?error.message:"";
+   const transient=reason==="RPC_UNAVAILABLE"||reason==="RPC_BATCH_UNSUPPORTED"||reason==="AbortError";
+   if(!transient||attempt===1)throw error;
+  }finally{clearTimeout(timeout);}
+  await new Promise(resolve=>setTimeout(resolve,350));
+ }
+ throw lastError instanceof Error?lastError:new Error("RPC_UNAVAILABLE");
+}
 async function verifyRegisteredToken(env:OwnerApiEnv,network:keyof typeof RPC_BY_NETWORK,address:string,decimals:number):Promise<void>{
  const rpcName=RPC_BY_NETWORK[network],rpcUrl=env[rpcName];
  if(!rpcUrl)throw new Error("RPC_NOT_CONFIGURED");
@@ -41,9 +77,9 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
 
  if(path==="/api/admin/supported-assets/curated"&&request.method==="POST"){
   if(!originOk(request,url))return response({error:"Origin check failed."},403);
-  // Verify each curated contract against its own configured network before any
-  // registry writes. One JSON-RPC batch per token keeps the request count bounded.
-  const verified:Array<(typeof CURATED_ERC20_ASSETS)[number]>=[],rejected:Array<{network:string;symbol:string;reason:string}>=[];
+  // Retry transient RPC failures once. Keep a bounded worker pool so a flaky
+  // endpoint does not fan out an unbounded burst of requests.
+  const verified:Array<(typeof CURATED_ERC20_ASSETS)[number]>=[],rejected:Array<{network:string;symbol:string;reason:string}>= [];
   const candidates=[...CURATED_ERC20_ASSETS];
   let cursor=0;
   const workers=Array.from({length:4},async()=>{
@@ -51,29 +87,8 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
     const index=cursor++;
     if(index>=candidates.length)return;
     const asset=candidates[index];
-    try{
-     const rpcName=RPC_BY_NETWORK[asset.network],rpcUrl=env[rpcName];
-     if(!rpcUrl)throw new Error("RPC_NOT_CONFIGURED");
-     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),10000);
-     try{
-      const calls=[
-       {jsonrpc:"2.0",id:1,method:"eth_chainId",params:[]},
-       {jsonrpc:"2.0",id:2,method:"eth_getCode",params:[asset.address,"latest"]},
-       {jsonrpc:"2.0",id:3,method:"eth_call",params:[{to:asset.address,data:"0x313ce567"},"latest"]}
-      ];
-      const res=await fetch(rpcUrl,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(calls),signal:controller.signal});
-      if(!res.ok)throw new Error("RPC_UNAVAILABLE");
-      const payload=await res.json() as Array<{id:number;result?:string;error?:{message?:string}}>;
-      if(!Array.isArray(payload))throw new Error("RPC_BATCH_UNSUPPORTED");
-      const byId=new Map(payload.map(item=>[item.id,item]));
-      const chain=byId.get(1)?.result,code=byId.get(2)?.result,decimalsRaw=byId.get(3)?.result;
-      if(byId.size!==3||payload.some(item=>item.error))throw new Error("RPC_UNAVAILABLE");
-      if(typeof chain!=="string"||BigInt(chain)!==BigInt(NETWORK_CHAIN[asset.network]))throw new Error("RPC_CHAIN_MISMATCH");
-      if(typeof code!=="string"||!/^0x[0-9a-fA-F]+$/.test(code)||/^0x0*$/i.test(code))throw new Error("TOKEN_CONTRACT_NOT_FOUND");
-      if(typeof decimalsRaw!=="string"||!/^0x[0-9a-fA-F]+$/.test(decimalsRaw)||Number(BigInt(decimalsRaw))!==asset.decimals)throw new Error("TOKEN_DECIMALS_MISMATCH");
-     }finally{clearTimeout(timeout);}
-     verified.push(asset);
-    }catch(error){rejected.push({network:asset.network,symbol:asset.symbol,reason:error instanceof Error?error.message:"VERIFICATION_FAILED"});}
+    try{await verifyCuratedAssetWithRetry(env,asset);verified.push(asset);}
+    catch(error){rejected.push({network:asset.network,symbol:asset.symbol,reason:error instanceof Error?error.message:"VERIFICATION_FAILED"});}
    }
   });
   await Promise.all(workers);
@@ -89,7 +104,8 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
    const results=await env.DB.batch(statements as unknown as Parameters<typeof env.DB.batch>[0]);
    if(results.some(result=>!result.success))return response({error:"One or more verified assets could not be committed. Review the registry and retry; successful statements are recorded in D1."},503);
   }
-  return response({registered:verified.length,verified:verified.map(asset=>({network:asset.network,symbol:asset.symbol,address:asset.address,decimals:asset.decimals,provenance:asset.provenance})),rejected});
+  const activeCount=await env.DB.prepare("SELECT COUNT(*) AS total FROM recovery_supported_assets WHERE is_active=1").first<{total:number}>();
+  return response({registered:verified.length,verifiedThisRun:verified.length,activeTotal:Number(activeCount?.total??0),catalogTotal:CURATED_ERC20_ASSETS.length,verified:verified.map(asset=>({network:asset.network,symbol:asset.symbol,address:asset.address,decimals:asset.decimals,provenance:asset.provenance})),rejected});
  }
  // Administrator-managed ERC-20 registry. JSON-RPC cannot enumerate arbitrary wallet tokens.
  if(path==="/api/admin/supported-assets"&&request.method==="GET"){
