@@ -11,7 +11,8 @@ test("monitoring dashboard returns a no-store same-origin HTML page", async () =
  const response=monitoringDashboardResponse();
  assert.equal(response.status,200);
  assert.match(response.headers.get("content-type"),/text\/html/);
- assert.match(await response.text(),/Wallet monitoring/);
- assert.match(await response.text(),/ALCHEMY_API_KEY required/);
+ const html=await response.text();
+ assert.match(html,/Wallet monitoring/);
+ assert.match(html,/ALCHEMY_API_KEY required/);
  assert.match(response.headers.get("content-security-policy"),/connect-src 'self'/);
 });
