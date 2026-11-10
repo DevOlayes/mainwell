@@ -21,7 +21,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{max-width:1180px;m
 .section-note{background:#142630;border:1px solid #35515a;border-radius:14px;padding:18px;color:#b8c9d1;font-size:13px;line-height:1.65;margin-bottom:18px}
 .section-note b{color:#dcece8}.setup-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin:14px 0 18px}.setup-step{background:#14222e;border:1px solid #2b414c;border-radius:12px;padding:14px}.setup-step .step-no{font-size:10px;color:#8fcdbb;font-weight:800;letter-spacing:.12em}.setup-step b{display:block;font-size:13px;margin:8px 0 5px}.setup-step p{font-size:11px;color:#8fa2ae;line-height:1.55;margin:0}.setup-step a{display:inline-block;margin-top:10px;color:#a6dece;font-size:11px;text-decoration:none;font-weight:700}@media(max-width:1050px){.setup-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:480px){.setup-steps{grid-template-columns:1fr}}
 .section-note a{color:#a8e0d0}
-[data-admin-section].view-hidden,.placeholder-view.view-hidden{display:none!important}
+[data-admin-section].view-hidden,.placeholder-view.view-hidden,#overviewView.view-hidden{display:none!important}
 .console-head,#overviewView,.placeholder-view,.console-grid{margin-left:220px}.console-grid{align-items:start}
 .console-head{margin-bottom:24px}
 .console-head h1{font-size:32px}
