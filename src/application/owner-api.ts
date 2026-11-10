@@ -1,4 +1,4 @@
-import { refreshEvmWallet, type MonitorEnv } from "./evm-monitor";
+import { refreshWalletWithAlchemy, type MonitoringEnv } from "./monitoring-service";
 import type { NetworkId } from "../domain/types";
 import type { RecoveryAuthorizationGrant } from "../domain/recovery-grant";
 import { EvmGrantVerifier } from "../adapters/evm-grant-verifier";
@@ -10,7 +10,7 @@ interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]
 interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
 interface D1Database { prepare(query: string): D1Statement; batch<T = unknown>(statements: D1Statement[]): Promise<D1Result<T>[]> }
 type GrantHashBinding = "MAINWELL_EXECUTOR_CODE_HASH_ETHEREUM" | "MAINWELL_EXECUTOR_CODE_HASH_POLYGON" | "MAINWELL_EXECUTOR_CODE_HASH_BSC" | "MAINWELL_EXECUTOR_CODE_HASH_AVALANCHE" | "MAINWELL_EXECUTOR_CODE_HASH_ARBITRUM" | "MAINWELL_EXECUTOR_CODE_HASH_OPTIMISM" | "MAINWELL_EXECUTOR_CODE_HASH_BASE";
-export interface OwnerApiEnv extends Omit<MonitorEnv, "DB"> {
+export interface OwnerApiEnv extends Omit<MonitoringEnv, "DB"> {
   DB: D1Database;
   MAINWELL_EXECUTOR_CODE_HASH_ETHEREUM?: string; MAINWELL_EXECUTOR_CODE_HASH_POLYGON?: string;
   MAINWELL_EXECUTOR_CODE_HASH_BSC?: string; MAINWELL_EXECUTOR_CODE_HASH_AVALANCHE?: string;
@@ -286,10 +286,10 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     if (!wallet || wallet.status === "revoked") return reply({ error: "Wallet not found or unavailable." }, 404);
     if (wallet.status !== "monitoring") return reply({ error: "Monitoring is paused for this wallet." }, 409);
     try {
-      const result = await refreshEvmWallet(env as OwnerApiEnv & MonitorEnv, wallet);
+      const result = await refreshWalletWithAlchemy(env, wallet);
       return reply({ refreshed: true, network: wallet.network, observedAt: result.observedAt,
         assets: result.assets.map(a => ({ id: a.id, symbol: a.symbol, name: a.name, amount: a.amount,
-          decimals: a.decimals, contractAddress: a.contractAddress ?? null, estimatedValueUsd: a.estimatedValueUsd || null })),
+          decimals: a.decimals, contractAddress: a.contractAddress ?? null, estimatedValueUsd: a.estimatedValueUsd ?? null })),
         permissions: result.permissions });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Monitoring failed.";
