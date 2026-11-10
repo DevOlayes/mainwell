@@ -49,14 +49,15 @@ These are deliberate safety switches. The recovery code is implemented and deplo
 
 ## Latest implementation and production verification — 2026-11-10
 
-- Administrator idle timeout, session activity refresh, and shared atomic rate limiting are implemented.
-- Executor revocation and unresolved-transaction retry/cancel regression tests are included.
-- Latest production source commit recorded in the deployment notes: e88c93c0a74caaabf88550177533afcaf247651e.
-- Production Worker deployment and traffic assignment must be re-verified after each new source change.
-- D1 runtime switches were last verified as automation_enabled=false and execution_enabled=false.
-- No recovery wallets, grants, jobs or transactions were present at the last recorded production check.
-- No recovery transaction was submitted as part of the Phase Four implementation.
-
+- Administrator idle timeout, session activity refresh, shared atomic rate limiting, TOTP replay protection, executor revocation tests, and unresolved-transaction retry/cancel regression tests are included.
+- CI run [42910595659](https://github.com/DevOlayes/mainwell/actions/runs/42910595659) passed for source commit `8f062d60599323f0e7b4e5bb422df0ef2ed8bc22`, including TypeScript checks, application tests, Foundry tests, executor artifact generation and Worker dry-run bundling.
+- Generated Worker bundle: 617,984 bytes; SHA-256 `66e3f2a20a2ec2b7844d3dd1251378edb3190ab2244496aaf07469c229fab682`.
+- Latest Worker version: `6c0b8ba1-1716-4fea-9efb-8f1c0cf884cc`; deployment: `30e2e084-700f-46e7-94fd-d47e39541616`; 100% traffic assigned to that version.
+- D1 binding, seven RPC bindings, secret bindings, observability and query-string redaction were preserved during deployment.
+- Cron remains `* * * * *`.
+- Production D1 settings were re-read after deployment: `automation_enabled=false`, `execution_enabled=false`.
+- Production D1 still has one administrator and zero recovery wallets, grants, jobs or transactions.
+- No recovery transaction was submitted.
 ## Remaining operational assurance
 
 A disposable-database restore rehearsal remains recommended to verify the portable SQL backup and restore procedure. This is a backup validation task, not a prerequisite to continue software development. The operator may proceed with dummy-wallet testing when ready, understanding that the configured EVM networks are mainnets and that transactions can incur real gas costs.
