@@ -346,8 +346,8 @@ function parseAbiEvent(log:{topics:readonly Hex[];data:Hex;address:Address}):Arr
 }
 
 export async function runRecoveryAutomation(env:EngineEnv):Promise<void>{
-  // All automation is opt-in. The execution switch remains separate and defaults off.
-  if(env.MAINWELL_AUTOMATION_ENABLED==="true")await queueAutomaticJobs(env);
+  // Persistent administrator control is authoritative; missing settings fail closed.
+  await queueAutomaticJobs(env);
   await trackTransactions(env);
   await processOne(env);
 }
