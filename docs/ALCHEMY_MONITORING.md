@@ -1,0 +1,37 @@
+# Alchemy wallet monitoring
+
+Mainwell uses one Cloudflare Worker secret, `ALCHEMY_API_KEY`, for both Alchemy data products:
+
+- **Token API:** `alchemy_getTokenBalances` discovers ERC-20 contracts with balances/history for an owner; `alchemy_getTokenMetadata` retrieves each token's name, symbol and decimals.
+- **Prices API:** the address-based price endpoint returns USD prices for network-and-contract pairs. Prices are accepted only when the provider timestamp is no more than five minutes old and no more than one minute in the future.
+
+## Network mapping
+
+| Mainwell network | Alchemy RPC host / Prices API network |
+|---|---|
+| Ethereum | `eth-mainnet` |
+| Polygon | `polygon-mainnet` |
+| BNB Smart Chain | `bnb-mainnet` |
+| Avalanche | `avax-mainnet` |
+| Arbitrum | `arb-mainnet` |
+| Optimism | `opt-mainnet` |
+| Base | `base-mainnet` |
+
+Native balances continue to come from each network's configured HTTPS RPC endpoint. Native USD prices are looked up using the network's wrapped-native token address.
+
+## Scheduled monitoring (Phase Three item 3)
+
+The existing Worker cron runs once per minute. Each invocation processes at most five due wallets; an individual wallet is eligible again after five minutes. A conditional D1 claim prevents overlapping cron invocations from scanning the same wallet simultaneously. Requests have timeouts, bounded retries for rate limits/transient server errors, and pagination. A scan fails closed rather than marking assets missing if token-balance pagination exceeds the configured five-page/500-token safety limit.
+
+Manual owner refresh uses the same Alchemy-backed scanner as scheduled refresh.
+
+## Safety and limitations
+
+- Discovery is read-only. Discovered tokens are stored as unverified and are **not** inserted into the administrator-controlled recovery-supported-asset registry or treated as owner authorization.
+- Missing or stale prices remain null; the monitor does not invent a USD value.
+- Alchemy's allowance method checks a specified token/owner/spender tuple; it does not enumerate every historical spender. Mainwell therefore checks only spender addresses explicitly configured under `knownSpenders` in the per-network `MAINWELL_EVM_ASSETS` Worker variable. Existing permissions outside that configured set are marked `unknown`, never automatically declared revoked. Exhaustive historical spender discovery remains a separate capability gap.
+- Monitoring never enables recovery automation or transaction execution. Those persistent switches remain independent and must stay disabled during provider validation.
+
+## Secret handling
+
+Set `ALCHEMY_API_KEY` as a Cloudflare Worker secret. Do not place the value in source code, Wrangler configuration, a committed environment file, or chat. The same key authenticates the Token API RPC calls and the Prices API HTTP requests.
