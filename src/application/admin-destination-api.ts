@@ -198,7 +198,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
 
 
 
- const jobAction=path.match(/^\\/api\\/admin\\/recovery-jobs\\/([A-Za-z0-9_-]{1,128})\\/(retry|cancel)$/);
+ const jobAction=path.match(/^\/api\/admin\/recovery-jobs\/([A-Za-z0-9_-]{1,128})\/(retry|cancel)$/);
  if(jobAction&&request.method==="POST"){
   if(!originOk(request,url))return response({error:"Origin check failed."},403);
   const jobId=jobAction[1],action=jobAction[2];
@@ -249,7 +249,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   }).map(row=>({...row,executionModes:JSON.parse(String(row.executionModesJson))}));
   return response({grants,executionEnabled:env.MAINWELL_EXECUTION_ENABLED==="true"});
  }
-\n // Queue an administrator-initiated recovery for an already verified, owner-authorized ERC-20 grant.
+ // Queue an administrator-initiated recovery for an already verified, owner-authorized ERC-20 grant.
  // Queueing never signs or submits a blockchain transaction.
  if(path==="/api/admin/recovery-jobs"&&request.method==="POST"){
   if(!originOk(request,url))return response({error:"Origin check failed."},403);
