@@ -27,7 +27,7 @@ type AlchemyRpcResult<T> = {jsonrpc?:string;id?:number;result?:T;error?:{code?:n
 type PriceRow = {network?:string;address?:string;prices?:Array<{currency?:string;value?:string;lastUpdatedAt?:string}>;error?:string|null};
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 function validAddress(v:unknown):v is string { return typeof v==="string" && ADDRESS.test(v); }
-function safeDecimals(v:unknown):number|null { const n=Number(v); return Number.isInteger(n)&&n>=0&&n<=36?n:null; }
+function safeDecimals(v:unknown):number|null { if(v===null||v===undefined)return null; const n=Number(v); return Number.isInteger(n)&&n>=0&&n<=36?n:null; }
 function amountDisplay(raw:string,decimals:number):string { const n=BigInt(raw),base=10n**BigInt(decimals),whole=n/base,frac=(n%base).toString().padStart(decimals,"0").replace(/0+$/,"");return frac?whole+"."+frac:whole.toString(); }
 function usdAmount(raw:string,decimals:number,price:number):number { const n=Number(amountDisplay(raw,decimals))*price;return Number.isFinite(n)&&n>=0?n:0; }
 async function timedFetch(url:string,init:RequestInit={},timeoutMs=9000):Promise<Response>{
@@ -56,7 +56,7 @@ async function alchemyRpc<T>(network:typeof CHAINS[string],key:string,method:str
 }
 async function discoverTokenBalances(network:typeof CHAINS[string],key:string,owner:string):Promise<TokenBalance[]>{
   const all:TokenBalance[]=[];let pageKey:string|undefined;
-  for(let page=0;page<5;page++){
+  for(let page=0;page<25;page++){
     const options:Record<string,unknown>={maxCount:100};if(pageKey)options.pageKey=pageKey;
     const result=await alchemyRpc<{tokenBalances?:TokenBalance[];pageKey?:string}>(network,key,"alchemy_getTokenBalances",[owner,"erc20",options]);
     if(!Array.isArray(result.tokenBalances))throw new Error("ALCHEMY_TOKEN_BALANCES_MALFORMED");
@@ -64,7 +64,7 @@ async function discoverTokenBalances(network:typeof CHAINS[string],key:string,ow
     pageKey=typeof result.pageKey==="string"&&result.pageKey?result.pageKey:undefined;
     if(!pageKey)return all;
   }
-  throw new Error("ALCHEMY_TOKEN_DISCOVERY_PAGE_LIMIT");
+  throw new Error("ALCHEMY_TOKEN_DISCOVERY_PAGE_LIMIT_2500");
 }
 async function mapLimited<T,R>(items:T[],limit:number,fn:(item:T)=>Promise<R>):Promise<R[]>{
   const out:R[]=[];let next=0;
@@ -130,7 +130,7 @@ async function runWallet(env:MonitoringEnv,wallet:{id:string;address:string;netw
   const key=env.ALCHEMY_API_KEY;
   const [nativeRaw,balances]=await Promise.all([rpcNativeBalance(rpc,wallet.address),discoverTokenBalances(cfg,key,wallet.address)]);
   if(balances.length>500)throw new Error("ALCHEMY_TOKEN_DISCOVERY_RESULT_LIMIT_EXCEEDED");
-  const deduped=[...new Map(balances.map(item=>[item.contractAddress.toLowerCase(),item])).values()];
+  const deduped=[...new Map(balances.filter(item=>{try{return BigInt(item.tokenBalance)>0n;}catch{return false;}}).map(item=>[item.contractAddress.toLowerCase(),item])).values()];
   const metadata=await mapLimited(deduped,4,async item=>({address:item.contractAddress.toLowerCase(),balance:BigInt(item.tokenBalance).toString(),metadata:await loadMetadata(cfg,key,item.contractAddress)}));
   const priceAddresses=[cfg.wrappedNative,...metadata.filter(x=>BigInt(x.balance)>0n).map(x=>x.address)];
   let prices=new Map<string,{value:number;observedAt:string}>(),priceError=false;
