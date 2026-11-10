@@ -1,5 +1,5 @@
 import type { OwnerApiEnv } from "./owner-api";
-import { decryptTotpSecret, hashAdminPassword, verifyTotp } from "./admin-auth";
+import { decryptTotpSecret, hashAdminPassword, verifyTotpStep } from "./admin-auth";
 interface Stmt { bind(...v:unknown[]):Stmt; first<T=Record<string,unknown>>():Promise<T|null>; run<T=Record<string,unknown>>():Promise<{success:boolean;meta?:{changes?:number}}> }
 interface Result { success:boolean; meta?:{changes?:number} }
 interface DB { prepare(sql:string):Stmt; batch(statements:Stmt[]):Promise<Result[]> }
@@ -29,11 +29,11 @@ export async function handleAdminRecoveryApi(request:Request,env:Env):Promise<Re
  if(!equal(await digest(token),await digest(env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN))){await recordFailure(env,rateKey,epoch);return json({error:"Recovery authorization failed."},401);}
  const account=await env.DB.prepare("SELECT id,mfa_enabled,mfa_secret_ciphertext,status FROM admin_accounts LIMIT 1").first<{id:string;mfa_enabled:number;mfa_secret_ciphertext:string|null;status:string}>();
  if(!account||account.status!=="active"||account.mfa_enabled!==1||!account.mfa_secret_ciphertext)return json({error:"The existing administrator MFA enrollment is unavailable; no changes were made."},409);
- let valid=false;try{valid=await verifyTotp(await decryptTotpSecret(account.mfa_secret_ciphertext,env.ADMIN_MFA_ENCRYPTION_KEY),otp);}catch{return json({error:"The existing MFA configuration could not be verified; no changes were made."},503);}
- if(!valid){await recordFailure(env,rateKey,epoch);return json({error:"The authenticator code is invalid. No changes were made."},401);}
+ let matchedStep:number|null=null;try{matchedStep=await verifyTotpStep(await decryptTotpSecret(account.mfa_secret_ciphertext,env.ADMIN_MFA_ENCRYPTION_KEY),otp);}catch{return json({error:"The existing MFA configuration could not be verified; no changes were made."},503);}
+ if(matchedStep===null){await recordFailure(env,rateKey,epoch);return json({error:"The authenticator code is invalid. No changes were made."},401);}
  const now=new Date().toISOString(),newHash=await hashAdminPassword(password),db=env.DB as unknown as DB;
  const results=await db.batch([
-  db.prepare("UPDATE admin_accounts SET password_hash=?,updated_at=? WHERE id=? AND status='active' AND mfa_enabled=1 AND EXISTS (SELECT 1 FROM admin_recovery_state WHERE id=1 AND consumed_at IS NULL)").bind(newHash,now,account.id),
+  db.prepare("UPDATE admin_accounts SET password_hash=?,mfa_last_verified_step=?,updated_at=? WHERE id=? AND status='active' AND mfa_enabled=1 AND mfa_last_verified_step<? AND EXISTS (SELECT 1 FROM admin_recovery_state WHERE id=1 AND consumed_at IS NULL)").bind(newHash,matchedStep,now,account.id,matchedStep),
   db.prepare("UPDATE admin_recovery_state SET consumed_at=?,consumed_by=? WHERE id=1 AND consumed_at IS NULL AND EXISTS (SELECT 1 FROM admin_accounts WHERE id=? AND updated_at=?)").bind(now,account.id,account.id,now),
   db.prepare("DELETE FROM admin_sessions WHERE EXISTS (SELECT 1 FROM admin_recovery_state WHERE id=1 AND consumed_at=? AND consumed_by=?)").bind(now,account.id),
   db.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) SELECT 'admin',?,'admin.password.recovered.once','admin_account',?,'{\"mfa_preserved\":true}',? WHERE EXISTS (SELECT 1 FROM admin_recovery_state WHERE id=1 AND consumed_at=? AND consumed_by=?)").bind(account.id,account.id,now,now,account.id)
