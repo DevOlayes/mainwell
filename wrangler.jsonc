@@ -4,6 +4,7 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-11-09",
   "upload_source_maps": true,
+  "minify": true,
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,
