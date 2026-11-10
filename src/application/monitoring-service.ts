@@ -71,46 +71,57 @@ async function mapLimited<T,R>(items:T[],limit:number,fn:(item:T)=>Promise<R>):P
   const workers=Array.from({length:Math.min(limit,items.length)},async()=>{while(true){const i=next++;if(i>=items.length)return;out[i]=await fn(items[i]);}});
   await Promise.all(workers);return out;
 }
+function decodeAbiText(raw:string|undefined):string|null{
+  if(!raw||!/^0x[0-9a-f]*$/i.test(raw))return null;
+  const data=raw.slice(2);
+  try{
+    let bytes:string;
+    if(data.length===64){
+      bytes=data.replace(/(00)+$/i,"");
+    }else{
+      if(data.length<128)return null;
+      const offset=Number(BigInt("0x"+data.slice(0,64)))*2;
+      if(!Number.isSafeInteger(offset)||offset<0||offset+64>data.length)return null;
+      const length=Number(BigInt("0x"+data.slice(offset,offset+64)));
+      if(!Number.isSafeInteger(length)||length<0||length>256)return null;
+      bytes=data.slice(offset+64,offset+64+length*2);
+    }
+    const buffer=new Uint8Array(bytes.match(/.{2}/g)?.map(x=>parseInt(x,16))??[]);
+    const value=new TextDecoder("utf-8",{fatal:false}).decode(buffer).replace(/\\0+$/g,"").trim();
+    return value||null;
+  }catch{return null;}
+}
 async function loadMetadataBatch(network:typeof CHAINS[string],key:string,addresses:string[]):Promise<Map<string,TokenMetadata|null>>{
   const out=new Map<string,TokenMetadata|null>();
-  // Alchemy supports JSON-RPC batch requests. Keep each HTTP request bounded so
-  // a wallet with hundreds of tokens does not exhaust the Worker subrequest budget.
-  for(let offset=0;offset<addresses.length;offset+=25){
-    const batch=addresses.slice(offset,offset+25);
-    const requests=batch.map((address,index)=>({jsonrpc:"2.0",id:index+1,method:"alchemy_getTokenMetadata",params:[address]}));
+  // Alchemy does not support JSON-RPC batching for its enhanced alchemy_* Token
+  // APIs. Read standard ERC-20 metadata selectors with eth_call instead; standard
+  // JSON-RPC batching is supported and keeps the Worker request count bounded.
+  for(let offset=0;offset<addresses.length;offset+=12){
+    const batch=addresses.slice(offset,offset+12);
+    const requests: Array<{jsonrpc:string;id:number;method:string;params:unknown[]}>=[];
+    batch.forEach((address,index)=>{
+      const base=index*3;
+      requests.push({jsonrpc:"2.0",id:base+1,method:"eth_call",params:[{to:address,data:"0x06fdde03"},"latest"]});
+      requests.push({jsonrpc:"2.0",id:base+2,method:"eth_call",params:[{to:address,data:"0x95d89b41"},"latest"]});
+      requests.push({jsonrpc:"2.0",id:base+3,method:"eth_call",params:[{to:address,data:"0x313ce567"},"latest"]});
+    });
     const response=await timedFetch("https://"+network.host+".g.alchemy.com/v2/"+encodeURIComponent(key),{
       method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(requests)
     });
-    const payload=await response.json() as Array<AlchemyRpcResult<TokenMetadata>>;
+    const payload=await response.json() as Array<AlchemyRpcResult<string>>;
     if(!Array.isArray(payload))throw new Error("ALCHEMY_METADATA_BATCH_MALFORMED");
-    for(const item of payload){
-      const index=Number(item.id)-1;
-      if(!Number.isInteger(index)||index<0||index>=batch.length)continue;
-      out.set(batch[index].toLowerCase(),item.error?null:(item.result??null));
-    }
-    for(let index=0;index<batch.length;index++)if(!out.has(batch[index].toLowerCase()))out.set(batch[index].toLowerCase(),null);
+    const byId=new Map(payload.map(item=>[Number(item.id),item]));
+    batch.forEach((address,index)=>{
+      const base=index*3;
+      const name=decodeAbiText(byId.get(base+1)?.result);
+      const symbol=decodeAbiText(byId.get(base+2)?.result);
+      const decimalsRaw=byId.get(base+3)?.result;
+      let decimals:number|null=null;
+      try{if(decimalsRaw&&/^0x[0-9a-f]+$/i.test(decimalsRaw)){const n=Number(BigInt(decimalsRaw));if(Number.isInteger(n)&&n>=0&&n<=36)decimals=n;}}catch{}
+      out.set(address.toLowerCase(),name||symbol||decimals!==null?{name,symbol,decimals}:null);
+    });
   }
   return out;
-}
-async function loadPrices(key:string,slug:string,addresses:string[]):Promise<Map<string,{value:number;observedAt:string}>>{
-  const result=new Map<string,{value:number;observedAt:string}>();
-  for(let offset=0;offset<addresses.length;offset+=25){
-    const batch=addresses.slice(offset,offset+25);
-    const response=await timedFetch("https://api.g.alchemy.com/prices/v1/"+encodeURIComponent(key)+"/tokens/by-address",{
-      method:"POST",headers:{"content-type":"application/json","authorization":"Bearer "+key},
-      body:JSON.stringify({addresses:batch.map(address=>({network:slug,address}))})
-    });
-    const payload=await response.json() as {data?:PriceRow[]};
-    if(!Array.isArray(payload.data))throw new Error("ALCHEMY_PRICE_RESPONSE_MALFORMED");
-    for(const row of payload.data){
-      if(!validAddress(row.address))continue;
-      const price=row.prices?.find(p=>p.currency?.toUpperCase()==="USD");
-      const value=Number(price?.value),observedAt=price?.lastUpdatedAt??"";
-      const age=Date.now()-Date.parse(observedAt);
-      if(Number.isFinite(value)&&value>0&&Number.isFinite(age)&&age>=-60_000&&age<=300_000)result.set(row.address.toLowerCase(),{value,observedAt});
-    }
-  }
-  return result;
 }
 function configuredSpenders(raw:string|undefined,network:string):string[]{
   if(!raw)return [];
