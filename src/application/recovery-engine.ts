@@ -188,8 +188,9 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     const estimatedFee=gas*feePerGasCap;
     const feeCapSetting=await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("fee_cap_wei:"+network).first<{setting_value:string}>();
     const maxAllowed=feeCapSetting?.setting_value&&UINT.test(feeCapSetting.setting_value)?BigInt(feeCapSetting.setting_value):null;
-    if(env.MAINWELL_SPONSOR_RESERVE_WEI&&!UINT.test(env.MAINWELL_SPONSOR_RESERVE_WEI))throw new Error("sponsor_reserve_invalid");
-    const reserve=env.MAINWELL_SPONSOR_RESERVE_WEI?BigInt(env.MAINWELL_SPONSOR_RESERVE_WEI):0n;
+    const reserveSetting=await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("reserve_wei:"+network).first<{setting_value:string}>();
+    if(reserveSetting?.setting_value&&!UINT.test(reserveSetting.setting_value))throw new Error("sponsor_reserve_invalid");
+    const reserve=reserveSetting?.setting_value?BigInt(reserveSetting.setting_value):0n;
     const attemptBase={id:attemptId,job_id:job.id,attempt_number:job.attempt_count,phase:"simulated",simulation_block_number:Number(await publicClient.getBlockNumber()),gas_funding_source:"recovery-sponsor",estimated_fee_raw:estimatedFee.toString(),fee_cap_raw:maxAllowed?.toString()??null,transaction_hash:null,error_code:null,created_at:now,updated_at:now};
     const sponsorBalance=await publicClient.getBalance({address:operatorAddress as Address});
     const sponsorGasSufficient=sponsorBalance>=estimatedFee+reserve;
