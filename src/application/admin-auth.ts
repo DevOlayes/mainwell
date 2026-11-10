@@ -56,18 +56,20 @@ export async function decryptTotpSecret(ciphertext:string,keyText:string):Promis
  const clear=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64(p[1])},key,b64(p[2]));
  return base32(new TextDecoder().decode(clear));
 }
-export async function verifyTotp(secret:Uint8Array,code:string,now=Date.now()):Promise<boolean>{
- if(!/^\d{6}$/.test(code))return false;
+export async function verifyTotpStep(secret:Uint8Array,code:string,now=Date.now()):Promise<number|null>{
+ if(!/^\d{6}$/.test(code))return null;
  const key=await crypto.subtle.importKey("raw",secret,{name:"HMAC",hash:"SHA-1"},false,["sign"]);
  const counter=Math.floor(now/30000);
  for(let offset=-1;offset<=1;offset++){
-  const msg=new Uint8Array(8),n=BigInt(counter+offset);for(let i=7;i>=0;i--)msg[i]=Number((n>>BigInt((7-i)*8))&255n);
+  const matchedStep=counter+offset;if(matchedStep<0)continue;
+  const msg=new Uint8Array(8),n=BigInt(matchedStep);for(let i=7;i>=0;i--)msg[i]=Number((n>>BigInt((7-i)*8))&255n);
   const mac=new Uint8Array(await crypto.subtle.sign("HMAC",key,msg)),idx=mac[mac.length-1]&15;
   const bin=((mac[idx]&127)<<24)|(mac[idx+1]<<16)|(mac[idx+2]<<8)|mac[idx+3];
-  if(String(bin%1000000).padStart(6,"0")===code)return true;
+  if(String(bin%1000000).padStart(6,"0")===code)return matchedStep;
  }
- return false;
+ return null;
 }
+export async function verifyTotp(secret:Uint8Array,code:string,now=Date.now()):Promise<boolean>{return (await verifyTotpStep(secret,code,now))!==null;}
 
 function base32Encode(bytes:Uint8Array):string{const alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";let bits=0,value=0,out="";for(const byte of bytes){value=(value<<8)|byte;bits+=8;while(bits>=5){out+=alphabet[(value>>(bits-5))&31];bits-=5;value&=(1<<bits)-1;}}if(bits)out+=alphabet[(value<<(5-bits))&31];return out;}
 export async function encryptTotpSecret(secret:string,keyText:string):Promise<string>{const keyBytes=b64(keyText);if(keyBytes.length!==32)throw new Error("MFA encryption key must be 32 bytes.");const key=await crypto.subtle.importKey("raw",keyBytes,{name:"AES-GCM"},false,["encrypt"]);const iv=new Uint8Array(12);crypto.getRandomValues(iv);const encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(secret));const enc=(x:Uint8Array)=>btoa(String.fromCharCode(...x));return "v1:"+enc(iv)+":"+enc(new Uint8Array(encrypted));}
@@ -146,9 +148,9 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
   const b=await read(request),email=typeof b?.email==="string"?b.email.trim().toLowerCase():"",otp=typeof b?.otp==="string"?b.otp:"";
   const account=await env.DB.prepare("SELECT id,mfa_secret_ciphertext,mfa_enabled FROM admin_accounts WHERE email=? COLLATE NOCASE LIMIT 1").bind(email).first<{id:string;mfa_secret_ciphertext:string|null;mfa_enabled:number}>();
   if(!account||account.mfa_enabled!==0||!account.mfa_secret_ciphertext||!env.ADMIN_MFA_ENCRYPTION_KEY)return json({error:"Pending administrator setup not found."},404);
-  let valid=false;try{valid=await verifyTotp(await decryptTotpSecret(account.mfa_secret_ciphertext,env.ADMIN_MFA_ENCRYPTION_KEY),otp);}catch{return json({error:"MFA setup is not configured correctly."},503);}
-  if(!valid)return json({error:"Authenticator code is invalid."},401);
-  const enabled=await env.DB.prepare("UPDATE admin_accounts SET mfa_enabled=1,updated_at=? WHERE id=? AND mfa_enabled=0").bind(now,account.id).run();
+  let matchedStep:number|null=null;try{matchedStep=await verifyTotpStep(await decryptTotpSecret(account.mfa_secret_ciphertext,env.ADMIN_MFA_ENCRYPTION_KEY),otp);}catch{return json({error:"MFA setup is not configured correctly."},503);}
+  if(matchedStep===null)return json({error:"Authenticator code is invalid."},401);
+  const enabled=await env.DB.prepare("UPDATE admin_accounts SET mfa_enabled=1,mfa_last_verified_step=?,updated_at=? WHERE id=? AND mfa_enabled=0 AND mfa_last_verified_step<?").bind(matchedStep,now,account.id,matchedStep).run();
   if(!enabled.success||(enabled.meta?.changes??0)!==1)return json({error:"MFA setup state changed; sign in again."},409);
   await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'admin.mfa.enabled','admin_account',?,'{}',?)").bind(account.id,account.id,now).run();
   await clearAdminEndpointRateLimit(env,confirmLimit.key);
@@ -174,11 +176,16 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
   return json({error:"Invalid administrator credentials or MFA configuration."},401);
 }
   if(!account||!account.mfa_secret_ciphertext||!env.ADMIN_MFA_ENCRYPTION_KEY)return json({error:"Administrator MFA is not configured correctly."},503);
-  let valid=false;try{const secret=await decryptTotpSecret(account.mfa_secret_ciphertext,env.ADMIN_MFA_ENCRYPTION_KEY);valid=await verifyTotp(secret,otp);}catch{return json({error:"Administrator MFA is not configured correctly."},503);}
-  if(!valid){
+  let matchedStep:number|null=null;try{const secret=await decryptTotpSecret(account.mfa_secret_ciphertext,env.ADMIN_MFA_ENCRYPTION_KEY);matchedStep=await verifyTotpStep(secret,otp);}catch{return json({error:"Administrator MFA is not configured correctly."},503);}
+  if(matchedStep===null){
   await env.DB.prepare("INSERT INTO admin_auth_rate_limits(identifier_hash,attempts,window_started_at,locked_until) VALUES(?,1,?,0) ON CONFLICT(identifier_hash) DO UPDATE SET attempts=CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END,window_started_at=CASE WHEN ?-window_started_at>900 THEN ? ELSE window_started_at END,locked_until=CASE WHEN (CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END)>=5 THEN ?+900 ELSE locked_until END").bind(rateKey,epoch,epoch,epoch,epoch,epoch,epoch).run();
   return json({error:"Invalid administrator credentials or MFA code."},401);
 }
+  const acceptedStep=await env.DB.prepare("UPDATE admin_accounts SET mfa_last_verified_step=?,updated_at=? WHERE id=? AND status='active' AND mfa_enabled=1 AND mfa_last_verified_step<?").bind(matchedStep,now,account.id,matchedStep).run();
+  if(!acceptedStep.success||(acceptedStep.meta?.changes??0)!==1){
+   await env.DB.prepare("INSERT INTO admin_auth_rate_limits(identifier_hash,attempts,window_started_at,locked_until) VALUES(?,1,?,0) ON CONFLICT(identifier_hash) DO UPDATE SET attempts=CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END,window_started_at=CASE WHEN ?-window_started_at>900 THEN ? ELSE window_started_at END,locked_until=CASE WHEN (CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END)>=5 THEN ?+900 ELSE locked_until END").bind(rateKey,epoch,epoch,epoch,epoch,epoch,epoch).run();
+   return json({error:"Invalid administrator credentials or MFA code."},401);
+  }
   await env.DB.prepare("DELETE FROM admin_auth_rate_limits WHERE identifier_hash=?").bind(rateKey).run();
   const token=randomHex(32),id=crypto.randomUUID(),expires=new Date(Date.now()+SESSION_SECONDS*1000).toISOString();
   const saved=await env.DB.prepare("INSERT INTO admin_sessions(id,admin_id,token_hash,mfa_verified_at,expires_at,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?)").bind(id,account!.id,await sha(token),now,expires,now,now).run();
