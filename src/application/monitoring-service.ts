@@ -67,7 +67,8 @@ async function discoverApprovals(address:string,chain:string,key:string):Promise
 async function persistPermission(env:MonitoringEnv,wallet:{id:string;network:string},approval:Approval,now:string):Promise<void>{
   const token=approval.token_address??approval.tokenAddress,spender=approval.spender_address??approval.spender;
   if(!validAddress(token)||!validAddress(spender))return;
-  const allowance=String(approval.allowance??approval.value??"0");
+  const rawAllowance=String(approval.allowance??approval.value??"0");
+  const allowance=/^0x[0-9a-f]+$/i.test(rawAllowance)?BigInt(rawAllowance).toString():rawAllowance;
   if(!/^\d+$/.test(allowance))return;
   const previous=await env.DB.prepare("SELECT allowance_raw,status,first_seen_at FROM wallet_permissions WHERE wallet_id=? AND network=? AND token_address=? AND spender_address=?")
     .bind(wallet.id,wallet.network,token.toLowerCase(),spender.toLowerCase()).first<{allowance_raw:string;status:string;first_seen_at:string}>();
@@ -90,7 +91,7 @@ async function runWallet(env:MonitoringEnv,wallet:{id:string;address:string;netw
   const key=env.MORALIS_API_KEY;
   const [nativeRaw,tokenPayload,nativeUsd]=await Promise.all([
     rpcNativeBalance(rpc,wallet.address),
-    moralis<Token[]|{result?:Token[]}>("/"+wallet.address+"/erc20?chain="+cfg.moralis+"&exclude_spam=true",key),
+    moralis<Token[]|{result?:Token[]}>("/wallets/"+wallet.address+"/tokens?chain="+cfg.moralis+"&exclude_spam=true",key),
     nativePriceUsd(cfg.priceId)
   ]);
   const tokens=Array.isArray(tokenPayload)?tokenPayload:(tokenPayload.result??[]);
@@ -151,7 +152,7 @@ async function runWallet(env:MonitoringEnv,wallet:{id:string;address:string;netw
 }
 export async function runScheduledWalletMonitoring(env:MonitoringEnv,limit=5):Promise<{processed:number;failed:number;skipped:boolean}>{
   if(!env.MORALIS_API_KEY)return {processed:0,failed:0,skipped:true};
-  const due=await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id FROM recovery_wallets WHERE status='monitoring' ORDER BY CASE WHEN last_monitor_at IS NULL THEN 0 ELSE 1 END,last_monitor_at ASC,first_seen_at ASC LIMIT ?")
+  const due=await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id FROM recovery_wallets WHERE status='monitoring' AND (last_monitor_at IS NULL OR last_monitor_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now','-5 minutes')) ORDER BY CASE WHEN last_monitor_at IS NULL THEN 0 ELSE 1 END,last_monitor_at ASC,first_seen_at ASC LIMIT ?")
     .bind(Math.max(1,Math.min(10,limit))).all<{id:string;address:string;network:string;chain_id:number|null}>();
   let processed=0,failed=0;
   for(const wallet of due.results){
