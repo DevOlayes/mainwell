@@ -1,54 +1,54 @@
-# Mainwell Phase Two execution operations
+# Mainwell Recovery Execution — Operations Guide
 
-## Safety defaults
+## Current production switches
 
-- `MAINWELL_EXECUTION_ENABLED` must remain unset or set to `false` while validating. The worker will run authorization checks and simulations but will not sign or broadcast transactions.
-- `MAINWELL_AUTOMATION_ENABLED` controls whether the scheduled worker creates automatic-priority jobs. It is independent of the transaction execution switch.
-- Do not enable live execution until the worker bundle is current, CI passes, operator secrets are configured, sponsor gas is funded, and a third-party security review has been completed.
+The persistent D1 runtime settings control two separate capabilities:
 
-## Cloudflare Worker configuration
+- `automation_enabled`: permits the scheduled worker to discover and queue automatic-priority jobs.
+- `execution_enabled`: permits eligible jobs to be signed and submitted on-chain.
+
+Both currently default to `false`. The authenticated admin console exposes both switches under **Settings → Runtime controls**. Changes are persisted in D1 and audited. Enabling either switch does not bypass owner-granted authorization, executor rules or transaction preflight.
+
+For an operator's first dummy-wallet test, leave automation off and use the admin-initiated path. Only enable transaction execution when ready for an actual on-chain transfer and prepared to pay mainnet gas. Do not enable automation merely to test the manual path.
+
+## Operator key handling
 
 Private keys are Cloudflare Worker secrets only. Never commit them, put them in Wrangler configuration, send them through chat, or expose them in browser code.
 
-Required signing secrets for later live execution:
-
+Required secrets:
 - `MAINWELL_ADMIN_PRIVATE_KEY`
 - `MAINWELL_AUTOMATION_PRIVATE_KEY`
 
-The derived addresses must match the existing public operator bindings:
-
+Their derived addresses must match:
 - `MAINWELL_ADMIN_OPERATOR`
 - `MAINWELL_AUTOMATION_OPERATOR`
 
-The current production secret inventory has not yet confirmed either private-key secret. The execution engine checks the derived address against the configured public address before signing.
+The Worker checks the key-derived address against the configured public operator address before signing. Readiness diagnostics report configuration/match status and gas balance, never private key values.
 
-Fee controls:
+## Gas and fee policy
 
-- `MAINWELL_MAX_RECOVERY_FEE_WEI`: required maximum total fee per recovery transaction, denominated in the network's native smallest unit (18-decimal EVM units).
-- `MAINWELL_SPONSOR_RESERVE_WEI`: optional minimum balance to preserve in the operator/sponsor wallet after paying a transaction fee.
+The configured operator is the transaction sender and gas sponsor for ordinary EOA recovery. Admin-initiated jobs use the admin operator; automatic-priority jobs use the automation operator.
 
-The operator wallet is the transaction sender and gas sponsor for ordinary EOA recovery. An EOA source wallet cannot pay gas for a transaction submitted by the separate operator without an additional owner-authorized gas-transfer step. Source-wallet-funded gas for smart accounts requires a separately reviewed account-abstraction integration; it is not implemented by this EOA executor.
+The automatic path uses persistent per-network fee ceilings and reserves, a 20% buffer, a $500 USD transaction fee ceiling, a 5% fee-to-recovery-value ceiling, a $20 USD operator reserve, and fresh valuation requirements. Emergency administrator-initiated jobs bypass the automatic economic ceilings but still require a valid live fee estimate and sufficient operator balance. No gas policy bypass expands token-transfer permission.
+
+An EOA source wallet cannot pay gas for a transaction submitted by a separate operator without an additional owner-authorized gas-transfer step. Source-wallet-funded gas for smart accounts/account abstraction is not implemented.
 
 ## Supported execution scope
 
-- The current executor supports owner-authorized ERC-20 transfers only.
-- Native-coin balances can be displayed, but this executor cannot pull native coin from an ordinary EOA without an owner-signed transaction or a different smart-account design.
-- Bitcoin, TRON/TRC20, and Solana are not supported.
-- Unlimited ERC-20 allowance grants are not accepted by the Phase Two processor; the processor requires explicit capped authorization.
-- Every job is revalidated against the current on-chain executor code, owner, operator identities, expiry, revocation state, token allowance, balance, immutable destination, and amount cap before simulation.
+- The current immutable executor and recovery engine support owner-authorized ERC-20 transfers on Ethereum, Polygon, BNB Smart Chain, Avalanche, Arbitrum, Optimism and Base.
+- Native-coin balances can be monitored as network gas assets, but native-coin recovery from ordinary EOAs is not implemented.
+- NFT recovery, Bitcoin, TRON/TRC20, Solana and other non-EVM recovery are not implemented.
+- The processor requires capped ERC-20 authorization and rechecks the live allowance, balance, cap, destination, owner, operator, expiry, revocation and executor code hash before simulation.
+- A blank admin amount requests the maximum available amount within balance, remaining cap and allowance; it is not an unlimited authorization.
 
-## Scheduled processing
+## Scheduled processing and transaction lifecycle
 
-The Worker cron runs every minute. It:
-1. Creates automatic-priority jobs only when `MAINWELL_AUTOMATION_ENABLED=true`.
-2. Rechecks and simulates queued jobs.
-3. Signs and broadcasts only when `MAINWELL_EXECUTION_ENABLED=true`, the matching operator secret exists, the key-derived address matches, the fee cap is configured, and sponsor balance covers the fee plus reserve.
-4. Tracks submitted transactions and waits for chain-specific finality before recording confirmation.
+The Worker cron runs every minute. It creates automatic-priority jobs only when automation is enabled, revalidates queued jobs, and signs/broadcasts only when execution is enabled and all grant, operator, gas, fee and simulation checks pass.
 
-Signing is serialized per operator and network to avoid nonce collisions. Prepared transactions whose broadcast outcome cannot be established are not blindly retried. They require reconciliation first.
+The engine persists transaction details before broadcast, reconciles uncertain outcomes by hash, prevents blind resubmission, tracks receipts and finality, checks the expected executor event and verifies the destination balance postcondition. Retry and cancellation are blocked while a transaction remains prepared, submitted, pending or unknown.
 
-## Production readiness
+## CI, deployment and audit boundary
 
-A successful TypeScript build and Foundry test suite are required. The generated `deploy/worker.js` and `deploy/worker-build.json` must match the latest main-branch source before deployment. Production D1 migrations `0012_execution_lifecycle.sql`, `0013_transfer_postconditions.sql`, and `0014_execution_nonce_locks.sql` are additive and have been applied. The receipt tracker also checks the executor event and recipient token-balance increase before marking a transfer confirmed. Database migrations alone do not deploy the new Worker code.
+TypeScript checks, application tests, Foundry contract tests, executor artifact generation and Worker dry-run bundling are part of CI. A passing CI run does not itself deploy the Worker. Verify the deployed Worker version, traffic assignment, bindings, secrets, cron and D1 migrations separately.
 
-No independent third-party security audit has been completed. Keep live execution disabled until that review and controlled end-to-end tests are complete.
+No independent third-party security audit has been completed. Internal tests and CI do not establish that recovery is guaranteed or eliminate attacker-race, chain, RPC, token-contract or gas risks.
