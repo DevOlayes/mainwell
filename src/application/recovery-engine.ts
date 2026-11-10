@@ -202,17 +202,20 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     if(!useEip1559&&(!gasPrice||gasPrice<=0n))throw new Error("gas_fee_quote_unavailable");
     const feePerGasCap=useEip1559?maxFeePerGas!:gasPrice!;
     const estimatedFee=gas*feePerGasCap;
-    // Every execution path enforces the hard USD fee ceiling. Automatic recovery also
-    // enforces the valuation-confidence and 5% economic rule. An explicitly queued
-    // administrator-initiated job is the human-review path and may proceed above 5%
-    // or without a fresh asset valuation, but never without a fresh native gas price.
-    const nativeUsd=await freshNativeUsdPrice(network);
-    const feeUsd=usdValue(estimatedFee,18,nativeUsd);
-    if(!Number.isFinite(feeUsd))throw new Error("recovery_economic_value_invalid");
-    if(feeUsd>500)throw new Error("recovery_usd_fee_cap_exceeded");
+    // Automatic recovery is economically constrained. Emergency administrator-
+    // initiated recovery deliberately has no USD fee ceiling, native-unit fee cap,
+    // or retained gas reserve: the operator may spend its available balance to
+    // recover the owner-authorized amount before an attacker moves it.
+    const administratorEmergency=job.execution_mode==="admin-initiated";
+    let nativeUsd:number|null=null;
+    let feeUsd:number|null=null;
     let recoveredValueUsd:number|null=null;
     let feeToRecoveryValueRatio:number|null=null;
-    if(job.execution_mode!=="admin-initiated"){
+    if(!administratorEmergency){
+      nativeUsd=await freshNativeUsdPrice(network);
+      feeUsd=usdValue(estimatedFee,18,nativeUsd);
+      if(!Number.isFinite(feeUsd))throw new Error("recovery_economic_value_invalid");
+      if(feeUsd>500)throw new Error("recovery_usd_fee_cap_exceeded");
       const assetValuation=await env.DB.prepare("SELECT estimated_value_usd,valuation_confidence,price_observed_at FROM wallet_assets WHERE wallet_id=? AND asset_ref=? LIMIT 1").bind(scope.wallet_id,job.asset_id).first<{estimated_value_usd:number|null;valuation_confidence:number|null;price_observed_at:string|null}>();
       const valuationAge=assetValuation?.price_observed_at?Date.now()-Date.parse(assetValuation.price_observed_at):Number.POSITIVE_INFINITY;
       if(!assetValuation||typeof assetValuation.estimated_value_usd!=="number"||!Number.isFinite(assetValuation.estimated_value_usd)||assetValuation.estimated_value_usd<=0||typeof assetValuation.valuation_confidence!=="number"||assetValuation.valuation_confidence<0.75||valuationAge<0||valuationAge>300_000)throw new Error("recovery_asset_valuation_unavailable");
@@ -222,14 +225,14 @@ async function processOne(env:EngineEnv):Promise<boolean>{
       feeToRecoveryValueRatio=feeUsd/recoveredValueUsd;
       if(feeToRecoveryValueRatio>0.05)throw new Error("recovery_fee_exceeds_five_percent_value");
     }
-    const feeCapSetting=await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("fee_cap_wei:"+network).first<{setting_value:string}>();
+    const feeCapSetting=administratorEmergency?null:await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("fee_cap_wei:"+network).first<{setting_value:string}>();
     const maxAllowed=feeCapSetting?.setting_value&&UINT.test(feeCapSetting.setting_value)?BigInt(feeCapSetting.setting_value):null;
-    const reserveSetting=await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("reserve_wei:"+network).first<{setting_value:string}>();
+    const reserveSetting=administratorEmergency?null:await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("reserve_wei:"+network).first<{setting_value:string}>();
     if(reserveSetting?.setting_value&&!UINT.test(reserveSetting.setting_value))throw new Error("sponsor_reserve_invalid");
     const reserve=reserveSetting?.setting_value?BigInt(reserveSetting.setting_value):0n;
     const attemptBase={id:attemptId,job_id:job.id,attempt_number:job.attempt_count,phase:"simulated",simulation_block_number:Number(await publicClient.getBlockNumber()),gas_funding_source:"recovery-sponsor",estimated_fee_raw:estimatedFee.toString(),fee_cap_raw:maxAllowed?.toString()??null,transaction_hash:null,error_code:null,created_at:now,updated_at:now};
     const sponsorBalance=await publicClient.getBalance({address:operatorAddress as Address});
-    const sponsorGasSufficient=sponsorBalance>=estimatedFee+reserve;
+    const sponsorGasSufficient=sponsorBalance>=estimatedFee+(administratorEmergency?0n:reserve);
     const runtimeExecution=await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("execution_enabled").first<{setting_value:string}>();
     if(runtimeExecution?.setting_value!=="true"){
       await env.DB.batch([
@@ -238,11 +241,11 @@ async function processOne(env:EngineEnv):Promise<boolean>{
         env.DB.prepare("UPDATE recovery_jobs SET status='ready',requested_amount_raw=?,destination_address=?,lease_owner=NULL,lease_expires_at=NULL,updated_at=? WHERE id=? AND lease_owner=?")
           .bind(amount.toString(),verifiedAsset.destinationAddress,now,job.id,leaseId)
       ]);
-      await audit(env,job.id,"recovery.preflight.simulated",{network,assetId:job.asset_id,amountRaw:amount.toString(),gasEstimate:gas.toString(),estimatedFeeRaw:estimatedFee.toString(),gasFundingSource:"recovery-sponsor",sponsorBalanceRaw:sponsorBalance.toString(),sponsorGasSufficient,simulationSucceeded:true,executionEnabled:false,estimatedFeeUsd:feeUsd,recoveredValueUsd,feeToRecoveryValueRatio,economicReviewMode:job.execution_mode==="admin-initiated"?"administrator-reviewed":"automatic-5-percent-gate",nativeUsdPrice:nativeUsd},now);
+      await audit(env,job.id,"recovery.preflight.simulated",{network,assetId:job.asset_id,amountRaw:amount.toString(),gasEstimate:gas.toString(),estimatedFeeRaw:estimatedFee.toString(),gasFundingSource:"recovery-sponsor",sponsorBalanceRaw:sponsorBalance.toString(),sponsorGasSufficient,simulationSucceeded:true,executionEnabled:false,estimatedFeeUsd:feeUsd,recoveredValueUsd,feeToRecoveryValueRatio,economicReviewMode:administratorEmergency?"emergency-unbounded-admin":"automatic-5-percent-gate",nativeUsdPrice:nativeUsd},now);
       return true;
     }
     if(!privateKey)throw new Error("operator_private_key_not_configured");
-    if(!maxAllowed||estimatedFee>maxAllowed)throw new Error("recovery_fee_cap_missing_or_exceeded");
+    if(!administratorEmergency&&(!maxAllowed||estimatedFee>maxAllowed))throw new Error("recovery_fee_cap_missing_or_exceeded");
     const account=privateKeyToAccount((privateKey.startsWith("0x")?privateKey:"0x"+privateKey) as Hex);
     if(account.address.toLowerCase()!==operatorAddress.toLowerCase())throw new Error("operator_private_key_address_mismatch");
     if(!sponsorGasSufficient)throw new Error("sponsor_gas_insufficient");
