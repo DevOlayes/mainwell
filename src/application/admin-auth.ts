@@ -72,11 +72,21 @@ export async function verifyTotp(secret:Uint8Array,code:string,now=Date.now()):P
 function base32Encode(bytes:Uint8Array):string{const alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";let bits=0,value=0,out="";for(const byte of bytes){value=(value<<8)|byte;bits+=8;while(bits>=5){out+=alphabet[(value>>(bits-5))&31];bits-=5;value&=(1<<bits)-1;}}if(bits)out+=alphabet[(value<<(5-bits))&31];return out;}
 export async function encryptTotpSecret(secret:string,keyText:string):Promise<string>{const keyBytes=b64(keyText);if(keyBytes.length!==32)throw new Error("MFA encryption key must be 32 bytes.");const key=await crypto.subtle.importKey("raw",keyBytes,{name:"AES-GCM"},false,["encrypt"]);const iv=new Uint8Array(12);crypto.getRandomValues(iv);const encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(secret));const enc=(x:Uint8Array)=>btoa(String.fromCharCode(...x));return "v1:"+enc(iv)+":"+enc(new Uint8Array(encrypted));}
 const passwordHash=hashAdminPassword;
+
+export async function checkAdminEndpointRateLimit(env:AdminAuthEnv,request:Request,scope:string,maxAttempts=5):Promise<{allowed:boolean;key:string}>{
+ const ip=request.headers.get("cf-connecting-ip")??"unknown",key=await sha("mainwell-admin-endpoint|"+scope+"|"+ip),epoch=Math.floor(Date.now()/1000);
+ await env.DB.prepare("INSERT INTO admin_auth_rate_limits(identifier_hash,attempts,window_started_at,locked_until) VALUES(?,1,?,0) ON CONFLICT(identifier_hash) DO UPDATE SET attempts=CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END,window_started_at=CASE WHEN ?-window_started_at>900 THEN ? ELSE window_started_at END,locked_until=CASE WHEN (CASE WHEN ?-window_started_at>900 THEN 1 ELSE attempts+1 END)>=? THEN ?+900 ELSE locked_until END").bind(key,epoch,epoch,epoch,epoch,epoch,maxAttempts,epoch).run();
+ const row=await env.DB.prepare("SELECT locked_until FROM admin_auth_rate_limits WHERE identifier_hash=?").bind(key).first<{locked_until:number}>();
+ return {allowed:!!row&&row.locked_until<=epoch,key};
+}
+async function clearAdminEndpointRateLimit(env:AdminAuthEnv,key:string):Promise<void>{await env.DB.prepare("DELETE FROM admin_auth_rate_limits WHERE identifier_hash=?").bind(key).run();}
 export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promise<Response|null>{
  const url=new URL(request.url),now=new Date().toISOString();
 
  if(url.pathname==="/api/admin/auth/diagnostics"&&request.method==="POST"){
   if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
+  let diagnosticLimit:{allowed:boolean;key:string};try{diagnosticLimit=await checkAdminEndpointRateLimit(env,request,"diagnostics");}catch{return json({error:"Security throttling is temporarily unavailable."},503);}
+  if(!diagnosticLimit.allowed)return json({error:"Too many diagnostic attempts. Try again after the temporary lockout."},429,{"retry-after":"900"});
   if(!env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN)return json({error:"Diagnostic authorization is not configured."},503);
   const b=await read(request),token=typeof b?.bootstrapToken==="string"?b.bootstrapToken:"";
   const supplied=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(token)));
@@ -107,6 +117,7 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
     if(!equal(directBits,copiedBits))bufferCompatibility=false;
     direct=directBits;copied=copiedBits;
    }
+   await clearAdminEndpointRateLimit(env,diagnosticLimit.key);
    return json({diagnostic:"mainwell-admin-password-v1",checks:{storedAccountPresent:!!row,storedHashStructureValid,syntheticRoundTrip,wrongPasswordRejected,bufferCompatibility},note:"No administrator password, hash, salt, digest, MFA data, or account values are returned. No database records are changed."});
   }catch{
    return json({diagnostic:"mainwell-admin-password-v1",checks:{diagnosticExecution:false},error:"A diagnostic check could not complete. No account data was changed."},503);
@@ -114,6 +125,8 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
  }
  if(url.pathname==="/api/admin/auth/bootstrap"&&request.method==="POST"){
   if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
+  let bootstrapLimit:{allowed:boolean;key:string};try{bootstrapLimit=await checkAdminEndpointRateLimit(env,request,"bootstrap");}catch{return json({error:"Security throttling is temporarily unavailable."},503);}
+  if(!bootstrapLimit.allowed)return json({error:"Too many bootstrap attempts. Try again after the temporary lockout."},429,{"retry-after":"900"});
   if(!env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN||!env.ADMIN_MFA_ENCRYPTION_KEY)return json({error:"First-admin bootstrap secrets are not configured."},503);
   const b=await read(request),token=typeof b?.bootstrapToken==="string"?b.bootstrapToken:"",email=typeof b?.email==="string"?b.email.trim().toLowerCase():"",password=typeof b?.password==="string"?b.password:"";
   if(!(await equal(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(token))),new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(env.MAINWELL_ADMIN_BOOTSTRAP_TOKEN)))))||!email.includes("@")||!email.includes(".")||email.length>254||password.length<14||password.length>1024)return json({error:"Bootstrap credentials are invalid."},401);
@@ -123,10 +136,13 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
   const stored=await env.DB.prepare("INSERT INTO admin_accounts(id,email,password_hash,mfa_enabled,mfa_secret_ciphertext,status,created_at,updated_at) SELECT ?,?,?,0,?,'active',?,? WHERE NOT EXISTS (SELECT 1 FROM admin_accounts)").bind(id,email,await passwordHash(password),await encryptTotpSecret(secret,env.ADMIN_MFA_ENCRYPTION_KEY),now,now).run();
   if(!stored.success||(stored.meta?.changes??0)!==1)return json({error:"Initial administrator could not be created; refresh and check setup status."},409);
   await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'admin.bootstrap.pending','admin_account',?,'{}',?)").bind(id,id,now).run();
+  await clearAdminEndpointRateLimit(env,bootstrapLimit.key);
   return json({created:true,mfaEnabled:false,secret,otpauthUri:"otpauth://totp/Mainwell:"+encodeURIComponent(email)+"?secret="+secret+"&issuer=Mainwell&algorithm=SHA1&digits=6&period=30",next:"POST /api/admin/auth/bootstrap/confirm with email and current six-digit authenticator code."},201);
  }
  if(url.pathname==="/api/admin/auth/bootstrap/confirm"&&request.method==="POST"){
   if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
+  let confirmLimit:{allowed:boolean;key:string};try{confirmLimit=await checkAdminEndpointRateLimit(env,request,"bootstrap-confirm");}catch{return json({error:"Security throttling is temporarily unavailable."},503);}
+  if(!confirmLimit.allowed)return json({error:"Too many MFA setup attempts. Try again after the temporary lockout."},429,{"retry-after":"900"});
   const b=await read(request),email=typeof b?.email==="string"?b.email.trim().toLowerCase():"",otp=typeof b?.otp==="string"?b.otp:"";
   const account=await env.DB.prepare("SELECT id,mfa_secret_ciphertext,mfa_enabled FROM admin_accounts WHERE email=? COLLATE NOCASE LIMIT 1").bind(email).first<{id:string;mfa_secret_ciphertext:string|null;mfa_enabled:number}>();
   if(!account||account.mfa_enabled!==0||!account.mfa_secret_ciphertext||!env.ADMIN_MFA_ENCRYPTION_KEY)return json({error:"Pending administrator setup not found."},404);
@@ -135,6 +151,7 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
   const enabled=await env.DB.prepare("UPDATE admin_accounts SET mfa_enabled=1,updated_at=? WHERE id=? AND mfa_enabled=0").bind(now,account.id).run();
   if(!enabled.success||(enabled.meta?.changes??0)!==1)return json({error:"MFA setup state changed; sign in again."},409);
   await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'admin.mfa.enabled','admin_account',?,'{}',?)").bind(account.id,account.id,now).run();
+  await clearAdminEndpointRateLimit(env,confirmLimit.key);
   return json({mfaEnabled:true,loginRequired:true});
  }
  if(url.pathname==="/api/admin/auth/login"&&request.method==="POST"){
