@@ -71,8 +71,26 @@ async function mapLimited<T,R>(items:T[],limit:number,fn:(item:T)=>Promise<R>):P
   const workers=Array.from({length:Math.min(limit,items.length)},async()=>{while(true){const i=next++;if(i>=items.length)return;out[i]=await fn(items[i]);}});
   await Promise.all(workers);return out;
 }
-async function loadMetadata(network:typeof CHAINS[string],key:string,address:string):Promise<TokenMetadata|null>{
-  try{return await alchemyRpc<TokenMetadata>(network,key,"alchemy_getTokenMetadata",[address]);}catch{return null;}
+async function loadMetadataBatch(network:typeof CHAINS[string],key:string,addresses:string[]):Promise<Map<string,TokenMetadata|null>>{
+  const out=new Map<string,TokenMetadata|null>();
+  // Alchemy supports JSON-RPC batch requests. Keep each HTTP request bounded so
+  // a wallet with hundreds of tokens does not exhaust the Worker subrequest budget.
+  for(let offset=0;offset<addresses.length;offset+=25){
+    const batch=addresses.slice(offset,offset+25);
+    const requests=batch.map((address,index)=>({jsonrpc:"2.0",id:index+1,method:"alchemy_getTokenMetadata",params:[address]}));
+    const response=await timedFetch("https://"+network.host+".g.alchemy.com/v2/"+encodeURIComponent(key),{
+      method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(requests)
+    });
+    const payload=await response.json() as Array<AlchemyRpcResult<TokenMetadata>>;
+    if(!Array.isArray(payload))throw new Error("ALCHEMY_METADATA_BATCH_MALFORMED");
+    for(const item of payload){
+      const index=Number(item.id)-1;
+      if(!Number.isInteger(index)||index<0||index>=batch.length)continue;
+      out.set(batch[index].toLowerCase(),item.error?null:(item.result??null));
+    }
+    for(let index=0;index<batch.length;index++)if(!out.has(batch[index].toLowerCase()))out.set(batch[index].toLowerCase(),null);
+  }
+  return out;
 }
 async function loadPrices(key:string,slug:string,addresses:string[]):Promise<Map<string,{value:number;observedAt:string}>>{
   const result=new Map<string,{value:number;observedAt:string}>();
@@ -131,7 +149,8 @@ async function runWallet(env:MonitoringEnv,wallet:{id:string;address:string;netw
   const [nativeRaw,balances]=await Promise.all([rpcNativeBalance(rpc,wallet.address),discoverTokenBalances(cfg,key,wallet.address)]);
   if(balances.length>2500)throw new Error("ALCHEMY_TOKEN_DISCOVERY_RESULT_LIMIT_EXCEEDED");
   const deduped=[...new Map(balances.filter(item=>{try{return BigInt(item.tokenBalance)>0n;}catch{return false;}}).map(item=>[item.contractAddress.toLowerCase(),item])).values()];
-  const metadata=await mapLimited(deduped,4,async item=>({address:item.contractAddress.toLowerCase(),balance:BigInt(item.tokenBalance).toString(),metadata:await loadMetadata(cfg,key,item.contractAddress)}));
+  const metadataByAddress=await loadMetadataBatch(cfg,key,deduped.map(item=>item.contractAddress));
+  const metadata=deduped.map(item=>({address:item.contractAddress.toLowerCase(),balance:BigInt(item.tokenBalance).toString(),metadata:metadataByAddress.get(item.contractAddress.toLowerCase())??null}));
   const priceAddresses=[cfg.wrappedNative,...metadata.filter(x=>BigInt(x.balance)>0n).map(x=>x.address)];
   let prices=new Map<string,{value:number;observedAt:string}>(),priceError=false;
   try{prices=await loadPrices(key,cfg.slug,[...new Set(priceAddresses.map(x=>x.toLowerCase()))]);}catch{priceError=true;}
@@ -222,10 +241,13 @@ export async function refreshWalletWithAlchemy(env:MonitoringEnv,wallet:{id:stri
   ]);
   return {observedAt:new Date().toISOString(),assets:assets.results.map(a=>({...a,amount:amountDisplay(String(a.amount_raw),Number(a.decimals)),estimatedValueUsd:a.estimatedValueUsd===null?null:Number(a.estimatedValueUsd)})),permissions:permissions.results};
 }
-export async function runScheduledWalletMonitoring(env:MonitoringEnv,limit=5):Promise<{processed:number;failed:number;skipped:boolean}>{
+export async function runScheduledWalletMonitoring(env:MonitoringEnv,limit=1):Promise<{processed:number;failed:number;skipped:boolean}>{
   if(!env.ALCHEMY_API_KEY)return {processed:0,failed:0,skipped:true};
   const due=await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id FROM recovery_wallets WHERE status='monitoring' AND (last_monitor_at IS NULL OR last_monitor_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now','-5 minutes')) ORDER BY CASE WHEN last_monitor_at IS NULL THEN 0 ELSE 1 END,last_monitor_at ASC,first_seen_at ASC LIMIT ?")
-    .bind(Math.max(1,Math.min(10,limit))).all<{id:string;address:string;network:string;chain_id:number|null}>();
+    // Process one wallet per invocation. Token metadata and price lookups are
+    // batched, but isolating wallets prevents a large scan from consuming the
+    // remaining subrequest budget of unrelated wallets in the same cron run.
+    .bind(Math.max(1,Math.min(1,limit))).all<{id:string;address:string;network:string;chain_id:number|null}>();
   let processed=0,failed=0;
   for(const wallet of due.results){
     const claimedAt=new Date().toISOString();
