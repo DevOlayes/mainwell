@@ -21,7 +21,7 @@ Native balances continue to come from each network's configured HTTPS RPC endpoi
 
 ## Scheduled monitoring (Phase Three item 3)
 
-The existing Worker cron runs once per minute. Each invocation processes at most five due wallets; an individual wallet is eligible again after five minutes. A conditional D1 claim prevents overlapping cron invocations from scanning the same wallet simultaneously. Requests have timeouts, bounded retries for rate limits/transient server errors, and pagination. A scan fails closed rather than marking assets missing if token-balance pagination exceeds the configured five-page/500-token safety limit.
+The existing Worker cron runs once per minute. Each invocation processes at most five due wallets; an individual wallet is eligible again after five minutes. A conditional D1 claim prevents overlapping cron invocations from scanning the same wallet simultaneously. Requests have timeouts, bounded retries for rate limits/transient server errors, and pagination. A scan fails closed rather than marking assets missing if token-balance pagination exceeds the configured 25-page/2,500-token safety limit.
 
 Manual owner refresh uses the same Alchemy-backed scanner as scheduled refresh.
 
