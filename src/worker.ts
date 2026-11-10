@@ -9,6 +9,7 @@ import { ownerAuthorizationResponse } from "./application/owner-authorization";
 import { operatorWalletSetupResponse } from "./application/operator-wallet-setup";
 import { adminDiagnosticsResponse } from "./application/admin-diagnostics";
 import { runRecoveryAutomation } from "./application/recovery-engine";
+import { runtimeReadiness, runtimeSettingsResponse, updateRuntimeSetting } from "./application/runtime-controls";
 interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]; meta?: { changes?: number } }
 interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
 interface D1Database { prepare(query: string): D1Statement; batch<T = unknown>(statements: D1Statement[]): Promise<D1Result<T>[]> }
@@ -101,6 +102,9 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
       const rows=await env.DB.prepare("SELECT id,job_id,network,transaction_hash,status,asset_id,amount_raw,destination_address,estimated_fee_raw,actual_fee_raw,submitted_at,confirmed_at,created_at,sender_address,nonce,gas_limit_raw,max_fee_per_gas_raw,max_priority_fee_per_gas_raw,block_number,block_hash,gas_used_raw,effective_gas_price_raw,failure_code,destination_balance_before_raw,destination_balance_after_raw,last_checked_at FROM recovery_transactions ORDER BY created_at DESC,id DESC LIMIT ?").bind(limit).all<Record<string,unknown>>();
       return rows.success?json({transactions:rows.results}):json({error:"Unable to load transaction records."},503);
     }
+    if(request.method==="GET"&&url.pathname==="/api/admin/runtime-settings")return runtimeSettingsResponse(env);
+    if(url.pathname==="/api/admin/runtime-settings"&&request.method==="PUT")return updateRuntimeSetting(request,env,{id:admin.id,adminId:admin.admin_id});
+    if(request.method==="GET"&&url.pathname==="/api/admin/runtime-readiness")return runtimeReadiness(env);
     if(request.method==="GET"&&url.pathname==="/api/admin/settings"){
       return json({
         databaseConfigured:Boolean(env.DB),
