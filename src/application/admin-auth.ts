@@ -3,6 +3,8 @@ interface Stmt { bind(...v:unknown[]):Stmt; first<T=Record<string,unknown>>():Pr
 interface DB { prepare(sql:string):Stmt }
 interface AdminAuthEnv extends OwnerApiEnv { ADMIN_MFA_ENCRYPTION_KEY?: string; MAINWELL_ADMIN_BOOTSTRAP_TOKEN?: string }
 const SESSION_SECONDS=8*60*60;
+const ADMIN_IDLE_SECONDS=30*60;
+export function adminSessionIdleCutoff(now=Date.now()):string{return new Date(now-ADMIN_IDLE_SECONDS*1000).toISOString();}
 function json(data:unknown,status=200,headers:Record<string,string>={}):Response{return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer",...headers}});}
 function b64(s:string):Uint8Array{const raw=atob(s);return Uint8Array.from(raw,c=>c.charCodeAt(0));}
 function hex(b:Uint8Array):string{return Array.from(b,x=>x.toString(16).padStart(2,"0")).join("");}
@@ -200,8 +202,8 @@ export async function handleAdminAuthApi(request:Request,env:AdminAuthEnv):Promi
  }
  if(url.pathname==="/api/admin/auth/me"&&request.method==="GET"){
   const token=cookie(request);if(!token||!/^[0-9a-f]{64}$/.test(token))return json({authenticated:false},401);
-  const cutoff=new Date(Date.now()-12*60*60*1000).toISOString();
-  const row=await env.DB.prepare("SELECT a.email,s.expires_at,s.mfa_verified_at FROM admin_sessions s INNER JOIN admin_accounts a ON a.id=s.admin_id WHERE s.token_hash=? AND s.expires_at>? AND s.mfa_verified_at>? AND a.status='active' AND a.mfa_enabled=1 LIMIT 1").bind(await sha(token),now,cutoff).first<{email:string;expires_at:string;mfa_verified_at:string}>();
+  const cutoff=adminSessionIdleCutoff();
+  const row=await env.DB.prepare("SELECT a.email,s.expires_at,s.mfa_verified_at FROM admin_sessions s INNER JOIN admin_accounts a ON a.id=s.admin_id WHERE s.token_hash=? AND s.expires_at>? AND s.last_seen_at>? AND a.status='active' AND a.mfa_enabled=1 LIMIT 1").bind(await sha(token),now,cutoff).first<{email:string;expires_at:string;mfa_verified_at:string}>();
   return row?json({authenticated:true,email:row.email,mfaVerifiedAt:row.mfa_verified_at,expiresAt:row.expires_at}):json({authenticated:false},401);
  }
  return null;
