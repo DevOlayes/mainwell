@@ -96,8 +96,8 @@ async function loadMetadataBatch(network:typeof CHAINS[string],key:string,addres
   // Alchemy does not support JSON-RPC batching for its enhanced alchemy_* Token
   // APIs. Read standard ERC-20 metadata selectors with eth_call instead; standard
   // JSON-RPC batching is supported and keeps the Worker request count bounded.
-  for(let offset=0;offset<addresses.length;offset+=20){
-    const batch=addresses.slice(offset,offset+20);
+  for(let offset=0;offset<addresses.length;offset+=16){
+    const batch=addresses.slice(offset,offset+16);
     const requests: Array<{jsonrpc:string;id:number;method:string;params:unknown[]}>=[];
     batch.forEach((address,index)=>{
       const base=index*3;
