@@ -141,8 +141,24 @@ async function runWallet(env:MonitoringEnv,wallet:{id:string;address:string;netw
   }
   let permissions:Approval[]=[];
   let permissionPartial=false;
-  try{permissions=await discoverApprovals(wallet.address,cfg.moralis,key);for(const approval of permissions)await persistPermission(env,wallet,approval,observedAt);}
-  catch{permissionPartial=true;}
+  try{
+    permissions=await discoverApprovals(wallet.address,cfg.moralis,key);
+    const seenPermissions=new Set<string>();
+    for(const approval of permissions){
+      const token=approval.token_address??approval.tokenAddress,spender=approval.spender_address??approval.spender;
+      if(validAddress(token)&&validAddress(spender))seenPermissions.add(token.toLowerCase()+":"+spender.toLowerCase());
+      await persistPermission(env,wallet,approval,observedAt);
+    }
+    const active=await env.DB.prepare("SELECT token_address,spender_address FROM wallet_permissions WHERE wallet_id=? AND network=? AND status='active'")
+      .bind(wallet.id,wallet.network).all<{token_address:string;spender_address:string}>();
+    for(const previous of active.results){
+      if(seenPermissions.has(previous.token_address.toLowerCase()+":"+previous.spender_address.toLowerCase()))continue;
+      await env.DB.prepare("UPDATE wallet_permissions SET allowance_raw='0',status='revoked',last_seen_at=?,updated_at=? WHERE wallet_id=? AND network=? AND token_address=? AND spender_address=? AND status='active'")
+        .bind(observedAt,observedAt,wallet.id,wallet.network,previous.token_address,previous.spender_address).run();
+      await env.DB.prepare("INSERT INTO wallet_permission_history(id,wallet_id,network,token_address,spender_address,allowance_raw,status,change_kind,observed_at) VALUES(?,?,?,?,?,'0','revoked','no_longer_reported',?)")
+        .bind(crypto.randomUUID(),wallet.id,wallet.network,previous.token_address,previous.spender_address,observedAt).run();
+    }
+  }catch{permissionPartial=true;}
   await env.DB.prepare("UPDATE recovery_wallets SET last_monitor_at=?,monitoring_status=?,monitoring_error=? WHERE id=?")
     .bind(observedAt,permissionPartial?"partial":"healthy",permissionPartial?"ALLOWANCE_PROVIDER_UNAVAILABLE":null,wallet.id).run();
   await env.DB.prepare("INSERT INTO wallet_monitoring_runs(id,wallet_id,network,status,discovered_assets,priced_assets,permission_count,error_code,started_at,completed_at) VALUES(?,?,?,?,?,?,?,?,?,?)")
