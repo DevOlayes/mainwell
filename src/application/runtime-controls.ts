@@ -1,5 +1,6 @@
 import { createPublicClient, http, type Chain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH } from "./executor-artifact";
 type DBStatement={bind(...v:unknown[]):DBStatement;first<T=Record<string,unknown>>():Promise<T|null>;all<T=Record<string,unknown>>():Promise<{success:boolean;results:T[]}>;run<T=unknown>():Promise<{success:boolean;meta?:{changes?:number}}>};
 type DB={prepare(q:string):DBStatement;batch(statements:DBStatement[]):Promise<Array<{success:boolean}>>};
 type Env={DB:DB;EVM_RPC_ETHEREUM?:string;EVM_RPC_POLYGON?:string;EVM_RPC_BSC?:string;EVM_RPC_AVALANCHE?:string;EVM_RPC_ARBITRUM?:string;EVM_RPC_OPTIMISM?:string;EVM_RPC_BASE?:string;MAINWELL_EXECUTOR_CODE_HASH_ETHEREUM?:string;MAINWELL_EXECUTOR_CODE_HASH_POLYGON?:string;MAINWELL_EXECUTOR_CODE_HASH_BSC?:string;MAINWELL_EXECUTOR_CODE_HASH_AVALANCHE?:string;MAINWELL_EXECUTOR_CODE_HASH_ARBITRUM?:string;MAINWELL_EXECUTOR_CODE_HASH_OPTIMISM?:string;MAINWELL_EXECUTOR_CODE_HASH_BASE?:string;MAINWELL_ADMIN_OPERATOR?:string;MAINWELL_AUTOMATION_OPERATOR?:string;MAINWELL_ADMIN_PRIVATE_KEY?:string;MAINWELL_AUTOMATION_PRIVATE_KEY?:string};
@@ -66,7 +67,7 @@ export async function runtimeReadiness(env:Env){
     if(rpcStatus==="ready")await Promise.all(operators.map(async op=>{if(op.address&&ADDRESS.test(op.address)){try{const balance=await client.getBalance({address:op.address as `0x${string}`});op.balanceWei=balance.toString();op.gasFunded=balance>0n}catch{}}}));
    }catch{rpcStatus="unreachable"}
   }
-  return {network:n.id,name:n.name,chainId:n.chainId,nativeSymbol:n.symbol,rpcStatus,headAgeSeconds,headFresh,feeQuoteAvailable,executorHashConfigured:Boolean(executorHash&&/^0x[0-9a-fA-F]{64}$/.test(executorHash)),feeCapConfigured:feeCap!==null,feeCapWei:feeCap,reserveConfigured:reserve!==null,reserveWei:reserve,operators};
+  return {network:n.id,name:n.name,chainId:n.chainId,nativeSymbol:n.symbol,rpcStatus,headAgeSeconds,headFresh,feeQuoteAvailable,executorHashReady:!executorHash||executorHash.toLowerCase()===EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase(),executorHashSource:executorHash?"environment override":"pinned build artifact",feeCapConfigured:feeCap!==null,feeCapWei:feeCap,reserveConfigured:reserve!==null,reserveWei:reserve,operators};
  }));
  return json({automationEnabled,executionEnabled,networks,checkedAt:new Date().toISOString()});
 }
