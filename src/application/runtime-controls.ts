@@ -1,7 +1,7 @@
 import { createPublicClient, http, type Chain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 type DBStatement={bind(...v:unknown[]):DBStatement;first<T=Record<string,unknown>>():Promise<T|null>;all<T=Record<string,unknown>>():Promise<{success:boolean;results:T[]}>;run<T=unknown>():Promise<{success:boolean;meta?:{changes?:number}}>};
-type DB={prepare(q:string):DBStatement};
+type DB={prepare(q:string):DBStatement;batch(statements:DBStatement[]):Promise<Array<{success:boolean}>>};
 type Env={DB:DB;EVM_RPC_ETHEREUM?:string;EVM_RPC_POLYGON?:string;EVM_RPC_BSC?:string;EVM_RPC_AVALANCHE?:string;EVM_RPC_ARBITRUM?:string;EVM_RPC_OPTIMISM?:string;EVM_RPC_BASE?:string;MAINWELL_ADMIN_OPERATOR?:string;MAINWELL_AUTOMATION_OPERATOR?:string;MAINWELL_ADMIN_PRIVATE_KEY?:string;MAINWELL_AUTOMATION_PRIVATE_KEY?:string};
 type Admin={id:string;adminId:string};
 const NETWORKS=[
@@ -39,9 +39,12 @@ export async function updateRuntimeSetting(request:Request,env:Env,admin:Admin){
   }
  }
  if(!updates.length&&!deletes.length)return json({error:"No valid settings supplied."},400);
- for(const [key,value] of updates)await env.DB.prepare("INSERT INTO mainwell_runtime_settings(setting_key,setting_value,updated_by,updated_at) VALUES(?,?,?,?) ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_by=excluded.updated_by,updated_at=excluded.updated_at").bind(key,value,actor,now).run();
- for(const key of deletes)await env.DB.prepare("DELETE FROM mainwell_runtime_settings WHERE setting_key=?").bind(key).run();
- await env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES(?,'admin',?,'runtime.settings.updated','runtime_settings','mainwell',?,?)").bind(crypto.randomUUID(),actor,JSON.stringify({keys:[...updates.map(x=>x[0]),...deletes]}),now).run();
+ const statements:DBStatement[]=[];
+ for(const [key,value] of updates)statements.push(env.DB.prepare("INSERT INTO mainwell_runtime_settings(setting_key,setting_value,updated_by,updated_at) VALUES(?,?,?,?) ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_by=excluded.updated_by,updated_at=excluded.updated_at").bind(key,value,actor,now));
+ for(const key of deletes)statements.push(env.DB.prepare("DELETE FROM mainwell_runtime_settings WHERE setting_key=?").bind(key));
+ statements.push(env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES(?,'admin',?,'runtime.settings.updated','runtime_settings','mainwell',?,?)").bind(crypto.randomUUID(),actor,JSON.stringify({keys:[...updates.map(x=>x[0]),...deletes]}),now));
+ const results=await env.DB.batch(statements);
+ if(results.some(result=>!result.success))return json({error:"Runtime settings and audit record could not be committed."},503);
  return json({saved:true,updatedKeys:[...updates.map(x=>x[0]),...deletes]});
 }
 export async function runtimeReadiness(env:Env){
