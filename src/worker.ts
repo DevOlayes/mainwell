@@ -10,10 +10,11 @@ import { operatorWalletSetupResponse } from "./application/operator-wallet-setup
 import { adminDiagnosticsResponse } from "./application/admin-diagnostics";
 import { runRecoveryAutomation } from "./application/recovery-engine";
 import { runtimeReadiness, runtimeSettingsResponse, updateRuntimeSetting } from "./application/runtime-controls";
+import { runScheduledWalletMonitoring, monitoringDashboardData, monitoringDashboardResponse } from "./application/monitoring-service";
 interface D1Result<T = Record<string, unknown>> { success: boolean; results: T[]; meta?: { changes?: number } }
 interface D1Statement { bind(...values: unknown[]): D1Statement; first<T = Record<string, unknown>>(): Promise<T | null>; all<T = Record<string, unknown>>(): Promise<D1Result<T>>; run<T = Record<string, unknown>>(): Promise<D1Result<T>> }
 interface D1Database { prepare(query: string): D1Statement; batch<T = unknown>(statements: D1Statement[]): Promise<D1Result<T>[]> }
-interface Env extends OwnerApiEnv { ADMIN_MFA_ENCRYPTION_KEY?: string; MAINWELL_ADMIN_BOOTSTRAP_TOKEN?: string; MAINWELL_ADMIN_PRIVATE_KEY?: string; MAINWELL_AUTOMATION_PRIVATE_KEY?: string; MAINWELL_EXECUTION_ENABLED?: string; MAINWELL_AUTOMATION_ENABLED?: string; MAINWELL_MAX_RECOVERY_FEE_WEI?: string; MAINWELL_SPONSOR_RESERVE_WEI?: string }
+interface Env extends OwnerApiEnv { MORALIS_API_KEY?: string; ADMIN_MFA_ENCRYPTION_KEY?: string; MAINWELL_ADMIN_BOOTSTRAP_TOKEN?: string; MAINWELL_ADMIN_PRIVATE_KEY?: string; MAINWELL_AUTOMATION_PRIVATE_KEY?: string; MAINWELL_EXECUTION_ENABLED?: string; MAINWELL_AUTOMATION_ENABLED?: string; MAINWELL_MAX_RECOVERY_FEE_WEI?: string; MAINWELL_SPONSOR_RESERVE_WEI?: string }
 const SESSION_SECONDS = 604800, CHALLENGE_SECONDS = 300;
 const CHAINS = new Set([1, 137, 56, 43114, 42161, 10, 8453]);
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
@@ -32,9 +33,10 @@ async function session(req: Request,env: Env) {
   if(!row)return null; await env.DB.prepare("UPDATE wallet_sessions SET last_seen_at=? WHERE id=?").bind(now,row.id).run();
   return {wallet:row.wallet_address,chainId:row.chain_id};
 }
-export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(promise:Promise<unknown>):void}):Promise<void> { ctx.waitUntil(runRecoveryAutomation(env)); }, async fetch(request: Request,env: Env): Promise<Response> {
+export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(promise:Promise<unknown>):void}):Promise<void> { ctx.waitUntil(Promise.allSettled([runScheduledWalletMonitoring(env), runRecoveryAutomation(env)])); }, async fetch(request: Request,env: Env): Promise<Response> {
   const url=new URL(request.url);
   if(request.method==="GET"&&url.pathname==="/admin")return adminDashboardResponse();
+  if(request.method==="GET"&&url.pathname==="/admin/monitoring")return monitoringDashboardResponse();
   if(request.method==="GET"&&url.pathname==="/admin/diagnostics")return adminDiagnosticsResponse();
   if(request.method==="GET"&&url.pathname==="/admin/recover-once")return adminRecoveryPageResponse(env);
   if(request.method==="GET"&&url.pathname==="/admin/operators")return operatorWalletSetupResponse();
@@ -90,6 +92,7 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
     if(!admin)return json({error:"MFA-verified administrator session required."},401);
     await env.DB.prepare("UPDATE admin_sessions SET last_seen_at=? WHERE id=?").bind(now,admin.id).run();
     const limitValue=Number(url.searchParams.get("limit")??"50"),limit=Number.isInteger(limitValue)?Math.min(100,Math.max(1,limitValue)):50;
+    if(request.method==="GET"&&url.pathname==="/api/admin/monitoring")return json(await monitoringDashboardData(env));
     if(request.method==="GET"&&url.pathname==="/api/admin/audit-logs"){
       const rows=await env.DB.prepare("SELECT id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at FROM audit_events ORDER BY created_at DESC,id DESC LIMIT ?").bind(limit).all<Record<string,unknown>>();
       return rows.success?json({events:rows.results}):json({error:"Unable to load audit events."},503);

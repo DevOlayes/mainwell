@@ -136,6 +136,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{max-width:1180px;m
 <button type="button" data-view="transactions">Transactions &amp; Activity</button>
 <button type="button" data-view="audit">Audit Logs</button>
 <button type="button" data-view="settings">Settings</button>
+<a class="secondary" style="text-decoration:none;display:block;text-align:left;font-size:11.5px" href="/admin/monitoring">Wallet Monitoring ↗</a>
 </nav>
 <section id="overviewView">
 <div class="view-head"><div><div class="eyebrow">LIVE CONFIGURATION SUMMARY</div><h2>System overview</h2><p class="muted">A quick view of the policy and wallet configuration currently registered in Mainwell.</p></div></div>
