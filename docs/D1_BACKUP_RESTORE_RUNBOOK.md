@@ -49,6 +49,8 @@ Cloudflare documents that an in-progress export may make the D1 database unavail
 ## Restore readiness boundary
 
 - The production Time Travel bookmark was retrieved and verified.
+- A portable D1-compatible SQL export was generated on 2026-11-10; the operator confirmed downloading the SQL file.
+- The downloaded SQL file should be stored encrypted in a separate, access-controlled location and its SHA-256 checksum recorded.
 - The restore procedure is documented.
 - A destructive restore has **not** been run against production.
-- A separate-database restore rehearsal and portable SQL export have **not** yet been completed. Do not claim a fully tested disaster-recovery process until those are done.
+- A disposable-database restore rehearsal has **not** yet been completed. Do not claim a fully rehearsed disaster-recovery process until that is done.
