@@ -41,3 +41,30 @@ test("administrator sessions have a 30-minute idle timeout", () => {
   const now = Date.UTC(2026, 10, 10, 12, 0, 0);
   assert.equal(adminSessionIdleCutoff(now), new Date(now - 30 * 60 * 1000).toISOString());
 });
+
+
+test("administrator endpoint throttling atomically locks after five attempts", async () => {
+  const { checkAdminEndpointRateLimit } = require("../dist/application/admin-auth.js");
+  const state = new Map();
+  const env = { DB: { prepare() {
+    let values = [];
+    return {
+      bind(...args) { values = args; return this; },
+      async run() {
+        const [key, epoch] = values;
+        const old = state.get(key);
+        const fresh = old && epoch - old.window_started_at <= 900;
+        const attempts = fresh ? old.attempts + 1 : 1;
+        const window_started_at = fresh ? old.window_started_at : epoch;
+        const locked_until = attempts >= 5 ? epoch + 900 : (old?.locked_until || 0);
+        state.set(key, { attempts, window_started_at, locked_until });
+        return { success: true };
+      },
+      async first() { return state.get(values[0]) || null; }
+    };
+  } } };
+  const request = new Request("https://mainwell.example/api/admin/auth/recover-once", { method: "POST", headers: { "cf-connecting-ip": "203.0.113.8" } });
+  const outcomes = [];
+  for (let i = 0; i < 5; i++) outcomes.push((await checkAdminEndpointRateLimit(env, request, "recover-once")).allowed);
+  assert.deepEqual(outcomes, [true, true, true, true, false]);
+});
