@@ -69,7 +69,8 @@ async function audit(env:EngineEnv,jobId:string,action:string,details:Record<str
   }
 }
 async function queueAutomaticJobs(env:EngineEnv):Promise<number>{
-  if(env.MAINWELL_AUTOMATION_ENABLED!=="true")return 0;
+  const runtimeAutomation=await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("automation_enabled").first<{setting_value:string}>();
+  if(runtimeAutomation?.setting_value!=="true")return 0;
   const now=new Date().toISOString(),minute=Math.floor(Date.now()/60000);
   const rows=await env.DB.prepare(`
     SELECT g.grant_id,g.owner_wallet,g.network,g.execution_modes_json,g.expires_at,
@@ -185,13 +186,15 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     if(!useEip1559&&(!gasPrice||gasPrice<=0n))throw new Error("gas_fee_quote_unavailable");
     const feePerGasCap=useEip1559?maxFeePerGas!:gasPrice!;
     const estimatedFee=gas*feePerGasCap;
-    const maxAllowed=env.MAINWELL_MAX_RECOVERY_FEE_WEI&&UINT.test(env.MAINWELL_MAX_RECOVERY_FEE_WEI)?BigInt(env.MAINWELL_MAX_RECOVERY_FEE_WEI):null;
+    const feeCapSetting=await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("fee_cap_wei:"+network).first<{setting_value:string}>();
+    const maxAllowed=feeCapSetting?.setting_value&&UINT.test(feeCapSetting.setting_value)?BigInt(feeCapSetting.setting_value):null;
     if(env.MAINWELL_SPONSOR_RESERVE_WEI&&!UINT.test(env.MAINWELL_SPONSOR_RESERVE_WEI))throw new Error("sponsor_reserve_invalid");
     const reserve=env.MAINWELL_SPONSOR_RESERVE_WEI?BigInt(env.MAINWELL_SPONSOR_RESERVE_WEI):0n;
     const attemptBase={id:attemptId,job_id:job.id,attempt_number:job.attempt_count,phase:"simulated",simulation_block_number:Number(await publicClient.getBlockNumber()),gas_funding_source:"recovery-sponsor",estimated_fee_raw:estimatedFee.toString(),fee_cap_raw:maxAllowed?.toString()??null,transaction_hash:null,error_code:null,created_at:now,updated_at:now};
     const sponsorBalance=await publicClient.getBalance({address:operatorAddress as Address});
     const sponsorGasSufficient=sponsorBalance>=estimatedFee+reserve;
-    if(env.MAINWELL_EXECUTION_ENABLED!=="true"){
+    const runtimeExecution=await env.DB.prepare("SELECT setting_value FROM mainwell_runtime_settings WHERE setting_key=?").bind("execution_enabled").first<{setting_value:string}>();
+    if(runtimeExecution?.setting_value!=="true"){
       await env.DB.batch([
         env.DB.prepare("INSERT INTO recovery_execution_attempts(id,job_id,attempt_number,phase,simulation_block_number,gas_funding_source,estimated_fee_raw,fee_cap_raw,transaction_hash,error_code,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")
           .bind(attemptBase.id,attemptBase.job_id,attemptBase.attempt_number,attemptBase.phase,attemptBase.simulation_block_number,attemptBase.gas_funding_source,attemptBase.estimated_fee_raw,attemptBase.fee_cap_raw,attemptBase.transaction_hash,attemptBase.error_code,attemptBase.created_at,attemptBase.updated_at),
