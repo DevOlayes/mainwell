@@ -15,6 +15,12 @@ Phase Four strengthens the existing defensive wallet-monitoring and recovery app
 - A new additive migration creates the dedicated `wallet_auth_rate_limits` table and lock-expiry index.
 - The limiter applies only to sign-in challenge and verification endpoints; it does not affect signed recovery authorizations or owner recovery operations.
 
+### Administrator session idle timeout
+
+- Administrator sessions retain the existing eight-hour absolute expiry and now also expire after 30 minutes without an authenticated admin request.
+- The idle cutoff is enforced both by the administrator session introspection endpoint and the central `/api/admin/*` authorization gate.
+- Existing `last_seen_at` updates keep active sessions alive; expired idle sessions must authenticate again with password and MFA.
+
 ### Observability privacy
 
 - Worker observability now has `redact_query_string: true`, reducing the chance that query-string values are retained in logs or traces.
@@ -33,7 +39,7 @@ Phase Four strengthens the existing defensive wallet-monitoring and recovery app
 1. Apply migration `0017_wallet_auth_rate_limits.sql` to production D1 and verify the table exists.
 2. Run CI, inspect the generated Worker bundle, and deploy only after successful checks.
 3. Verify live Worker settings, query-string redaction, secret/binding preservation, cron schedule, and the two disabled runtime switches.
-4. Review owner and administrator authentication, session expiry/revocation, MFA, one-time recovery, CSRF/origin checks, and rate limits.
+4. Review remaining owner and administrator authentication, session revocation, MFA, one-time recovery, CSRF/origin checks, and rate limits.
 5. Review executor verification, grant revocation, transaction nonce serialization, pending/unknown transaction handling, receipt finality, and audit-log failure behavior.
 6. Review backup/restore and D1 recovery procedures before real-wallet testing.
 7. Prepare a controlled practical-test checklist. Real owner-wallet registration and on-chain recovery tests remain deferred until development is complete and the operator explicitly approves testing.
