@@ -228,6 +228,9 @@ export async function runScheduledWalletMonitoring(env:MonitoringEnv,limit=5):Pr
     .bind(Math.max(1,Math.min(10,limit))).all<{id:string;address:string;network:string;chain_id:number|null}>();
   let processed=0,failed=0;
   for(const wallet of due.results){
+    const claimedAt=new Date().toISOString();
+    const claim=await env.DB.prepare("UPDATE recovery_wallets SET last_monitor_at=?,monitoring_status='running',monitoring_error=NULL WHERE id=? AND status='monitoring' AND (last_monitor_at IS NULL OR last_monitor_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now','-5 minutes'))").bind(claimedAt,wallet.id).run();
+    if(!claim.success||(claim.meta?.changes??0)!==1)continue;
     try{await runWallet(env,wallet);processed++;}
     catch(error){
       failed++;const at=new Date().toISOString(),code=error instanceof Error?error.message.slice(0,120):"MONITORING_FAILED";
@@ -247,7 +250,7 @@ export async function monitoringDashboardData(env:MonitoringEnv):Promise<Record<
     env.DB.prepare("SELECT j.id,j.execution_mode,j.status,j.asset_id,j.created_at,j.updated_at,j.last_error_code,w.owner_address,g.network FROM recovery_jobs j JOIN recovery_grants g ON g.grant_id=j.grant_id JOIN recovery_wallets w ON w.owner_address=g.owner_wallet AND w.network=g.network ORDER BY j.created_at DESC LIMIT 20").all(),
     env.DB.prepare("SELECT t.id,t.network,t.transaction_hash,t.status,t.amount_raw,t.destination_address,t.created_at,j.asset_id FROM recovery_transactions t JOIN recovery_jobs j ON j.id=t.job_id ORDER BY t.created_at DESC LIMIT 20").all()
   ]);
-  return {wallets:wallets.results,assets:assets.results,permissions:permissions.results,runs:runs.results,jobs:jobs.results,transactions:transactions.results,providerConfigured:Boolean(env.ALCHEMY_API_KEY),generatedAt:new Date().toISOString()};
+  return {wallets:wallets.results,assets:assets.results,permissions:permissions.results,runs:runs.results,jobs:jobs.results,transactions:transactions.results,providerConfigured:Boolean(env.ALCHEMY_API_KEY),allowanceCoverageConfigured:Object.keys(CHAINS).some(network=>configuredSpenders(env.MAINWELL_EVM_ASSETS,network).length>0),generatedAt:new Date().toISOString()};
 }
 export function monitoringDashboardResponse():Response{
  const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mainwell · Monitoring</title><style>
