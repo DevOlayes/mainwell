@@ -30,7 +30,7 @@ Manual owner refresh uses the same Alchemy-backed scanner as scheduled refresh.
 
 - Discovery is read-only. Discovered tokens are stored as unverified and are **not** inserted into the administrator-controlled recovery-supported-asset registry or treated as owner authorization.
 - Missing or stale prices remain null; the monitor does not invent a USD value.
-- Alchemy's allowance method checks a specified token/owner/spender tuple; it does not enumerate every historical spender. Mainwell therefore checks only spender addresses explicitly configured under `knownSpenders` in the per-network `MAINWELL_EVM_ASSETS` Worker variable. Existing permissions outside that configured set are marked `unknown`, never automatically declared revoked. Exhaustive historical spender discovery remains a separate capability gap.
+- ERC-20 `allowance(owner,spender)` is queried only for explicitly configured token/spender pairs; it does not enumerate every historical spender. Mainwell therefore checks only spender addresses configured under `knownSpenders` in the per-network `MAINWELL_EVM_ASSETS` Worker variable. Existing permissions outside that configured set are marked `unknown`, never automatically declared revoked. Exhaustive historical spender discovery remains a separate capability gap.
 - Monitoring never enables recovery automation or transaction execution. Those persistent switches remain independent and must stay disabled during provider validation.
 
 ## Secret handling
