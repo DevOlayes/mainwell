@@ -123,6 +123,27 @@ async function loadMetadataBatch(network:typeof CHAINS[string],key:string,addres
   }
   return out;
 }
+async function loadPrices(key:string,slug:string,addresses:string[]):Promise<Map<string,{value:number;observedAt:string}>>{
+  const result=new Map<string,{value:number;observedAt:string}>();
+  for(let offset=0;offset<addresses.length;offset+=25){
+    const batch=addresses.slice(offset,offset+25);
+    const response=await timedFetch("https://api.g.alchemy.com/prices/v1/"+encodeURIComponent(key)+"/tokens/by-address",{
+      method:"POST",headers:{"content-type":"application/json","authorization":"Bearer "+key},
+      body:JSON.stringify({addresses:batch.map(address=>({network:slug,address}))})
+    });
+    const payload=await response.json() as {data?:PriceRow[]};
+    if(!Array.isArray(payload.data))throw new Error("ALCHEMY_PRICE_RESPONSE_MALFORMED");
+    for(const row of payload.data){
+      if(!validAddress(row.address))continue;
+      const price=row.prices?.find(p=>p.currency?.toUpperCase()==="USD");
+      const value=Number(price?.value),observedAt=price?.lastUpdatedAt??"";
+      const age=Date.now()-Date.parse(observedAt);
+      if(Number.isFinite(value)&&value>0&&Number.isFinite(age)&&age>=-60_000&&age<=300_000)
+        result.set(row.address.toLowerCase(),{value,observedAt});
+    }
+  }
+  return result;
+}
 async function loadAllowancesBatch(network:typeof CHAINS[string],key:string,owner:string,pairs:Array<{token:string;spender:string}>):Promise<Array<{token:string;spender:string;allowance:string|null}>>{
   const out:Array<{token:string;spender:string;allowance:string|null}>=[];
   // ERC-20 allowance(address,address) is a standard eth_call, so pairs can be
