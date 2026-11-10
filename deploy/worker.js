@@ -10950,292 +10950,311 @@ function recoverPersonalSignAddress(message, signature) {
 }
 __name(recoverPersonalSignAddress, "recoverPersonalSignAddress");
 
-// src/adapters/evm-read-only.ts
+// src/application/monitoring-service.ts
+var CHAINS = {
+  ethereum: { chainId: 1, slug: "eth-mainnet", host: "eth-mainnet", nativeSymbol: "ETH", nativeName: "Ether", wrappedNative: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", rpc: "EVM_RPC_ETHEREUM" },
+  polygon: { chainId: 137, slug: "polygon-mainnet", host: "polygon-mainnet", nativeSymbol: "POL", nativeName: "Polygon Ecosystem Token", wrappedNative: "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270", rpc: "EVM_RPC_POLYGON" },
+  bsc: { chainId: 56, slug: "bnb-mainnet", host: "bnb-mainnet", nativeSymbol: "BNB", nativeName: "BNB", wrappedNative: "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c", rpc: "EVM_RPC_BSC" },
+  avalanche: { chainId: 43114, slug: "avax-mainnet", host: "avax-mainnet", nativeSymbol: "AVAX", nativeName: "Avalanche", wrappedNative: "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7", rpc: "EVM_RPC_AVALANCHE" },
+  arbitrum: { chainId: 42161, slug: "arb-mainnet", host: "arb-mainnet", nativeSymbol: "ETH", nativeName: "Ether", wrappedNative: "0x82af49447d8a07e3bd95bd0d56f35241523fbab1", rpc: "EVM_RPC_ARBITRUM" },
+  optimism: { chainId: 10, slug: "opt-mainnet", host: "opt-mainnet", nativeSymbol: "ETH", nativeName: "Ether", wrappedNative: "0x4200000000000000000000000000000000000006", rpc: "EVM_RPC_OPTIMISM" },
+  base: { chainId: 8453, slug: "base-mainnet", host: "base-mainnet", nativeSymbol: "ETH", nativeName: "Ether", wrappedNative: "0x4200000000000000000000000000000000000006", rpc: "EVM_RPC_BASE" }
+};
 var ADDRESS = /^0x[0-9a-fA-F]{40}$/;
-var UINT256 = /^0x[0-9a-fA-F]+$/;
-var SELECTOR = {
-  balanceOf: "70a08231",
-  allowance: "dd62ed3e",
-  symbol: "95d89b41",
-  decimals: "313ce567"
-};
-function assertAddress(address, label) {
-  if (!ADDRESS.test(address)) throw new Error(`${label} must be a valid EVM address.`);
+function validAddress(v) {
+  return typeof v === "string" && ADDRESS.test(v);
 }
-__name(assertAddress, "assertAddress");
-function addressWord(address) {
-  assertAddress(address, "Address");
-  return address.slice(2).toLowerCase().padStart(64, "0");
+__name(validAddress, "validAddress");
+function safeDecimals(v) {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 && n <= 36 ? n : null;
 }
-__name(addressWord, "addressWord");
-function decodeUint(value) {
-  if (!UINT256.test(value)) throw new Error("RPC returned an invalid uint256 value.");
-  return BigInt(value);
+__name(safeDecimals, "safeDecimals");
+function amountDisplay(raw, decimals) {
+  const n = BigInt(raw), base = 10n ** BigInt(decimals), whole = n / base, frac = (n % base).toString().padStart(decimals, "0").replace(/0+$/, "");
+  return frac ? whole + "." + frac : whole.toString();
 }
-__name(decodeUint, "decodeUint");
-function units(value, decimals) {
-  const base = 10n ** BigInt(decimals);
-  const whole = value / base;
-  const fraction = (value % base).toString().padStart(decimals, "0").replace(/0+$/, "");
-  return fraction ? `${whole}.${fraction}` : whole.toString();
+__name(amountDisplay, "amountDisplay");
+function usdAmount(raw, decimals, price) {
+  const n = Number(amountDisplay(raw, decimals)) * price;
+  return Number.isFinite(n) && n >= 0 ? n : 0;
 }
-__name(units, "units");
-function usdValue(amount, price) {
-  const result = Number(amount) * price;
-  return Number.isFinite(result) ? result : 0;
-}
-__name(usdValue, "usdValue");
-function validatePrice(price, observedAt, confidence) {
-  if (!Number.isFinite(price) || price < 0) throw new Error("Token price must be a finite non-negative number.");
-  const age = Date.now() - Date.parse(observedAt);
-  if (!Number.isFinite(age) || age < 0 || age > 5 * 6e4) throw new Error("Token price is stale or has an invalid timestamp.");
-  if (!Number.isFinite(confidence) || confidence < 0.5 || confidence > 1) throw new Error("Token price confidence must be between 0.5 and 1.");
-}
-__name(validatePrice, "validatePrice");
-var EvmReadOnlyAdapter = class {
-  constructor(config) {
-    this.config = config;
-    this.network = config.network;
-    this.fetcher = config.fetcher ?? fetch;
-    this.timeoutMs = config.requestTimeoutMs ?? 12e3;
-    if (!Number.isSafeInteger(config.chainId) || config.chainId <= 0) throw new Error("A valid EVM chain ID is required.");
-    if (!config.rpcUrl.startsWith("https://")) throw new Error("RPC endpoint must use HTTPS.");
-    if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs < 1e3 || this.timeoutMs > 6e4) throw new Error("RPC timeout is outside the allowed range.");
-    for (const token of config.tokens) {
-      assertAddress(token.address, "Token contract");
-      if (!Number.isInteger(token.decimals) || token.decimals < 0 || token.decimals > 36) throw new Error("Token decimals are invalid.");
-    }
-    for (const spender of config.knownSpenders ?? []) assertAddress(spender.address, "Known spender");
-  }
-  config;
-  static {
-    __name(this, "EvmReadOnlyAdapter");
-  }
-  network;
-  fetcher;
-  timeoutMs;
-  requestId = 0;
-  async rpc(method, params) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+__name(usdAmount, "usdAmount");
+async function timedFetch(url, init = {}, timeoutMs = 9e3) {
+  let last;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response2 = await this.fetcher(this.config.rpcUrl, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: ++this.requestId, method, params }),
-        signal: controller.signal
-      });
-      if (!response2.ok) throw new Error(`EVM RPC HTTP error: ${response2.status}`);
-      const payload = await response2.json();
-      if (payload.error) throw new Error(`EVM RPC error ${payload.error.code}: ${payload.error.message}`);
-      if (payload.result === void 0) throw new Error("EVM RPC response did not contain a result.");
-      return payload.result;
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-  async assertChain() {
-    const chainHex = await this.rpc("eth_chainId", []);
-    if (decodeUint(chainHex) !== BigInt(this.config.chainId)) throw new Error("RPC endpoint chain ID does not match the configured network.");
-  }
-  async call(contract, data) {
-    assertAddress(contract, "Contract");
-    return this.rpc("eth_call", [{ to: contract, data: `0x${data}` }, "latest"]);
-  }
-  async getNativeBalanceAmount(wallet) {
-    this.assertWallet(wallet);
-    const raw = await this.rpc("eth_getBalance", [wallet.address, "latest"]);
-    return units(decodeUint(raw), this.config.nativeDecimals ?? 18);
-  }
-  async getNativeBalance(wallet) {
-    const amount = Number(await this.getNativeBalanceAmount(wallet));
-    if (!Number.isFinite(amount)) throw new Error("Native balance exceeds supported numeric precision.");
-    return amount;
-  }
-  async getAssets(wallet) {
-    this.assertWallet(wallet);
-    validatePrice(this.config.nativePriceUsd, this.config.nativePriceObservedAt, this.config.nativePriceConfidence);
-    const nativeString = await this.getNativeBalanceAmount(wallet);
-    const assets = [{
-      id: `${this.network}:native`,
-      network: this.network,
-      symbol: this.config.nativeSymbol,
-      name: this.config.nativeName,
-      amount: nativeString,
-      decimals: this.config.nativeDecimals ?? 18,
-      estimatedValueUsd: usdValue(nativeString, this.config.nativePriceUsd),
-      isNative: true,
-      urgencyScore: 50,
-      confidence: this.config.nativePriceConfidence
-    }];
-    for (const token of this.config.tokens) {
-      validatePrice(token.priceUsd, token.priceObservedAt, token.priceConfidence);
-      const raw = await this.call(token.address, SELECTOR.balanceOf + addressWord(wallet.address));
-      const amount = units(decodeUint(raw), token.decimals);
-      assets.push({
-        id: `${this.network}:erc20:${token.address.toLowerCase()}`,
-        network: this.network,
-        symbol: token.symbol,
-        name: token.name,
-        contractAddress: token.address,
-        amount,
-        decimals: token.decimals,
-        estimatedValueUsd: usdValue(amount, token.priceUsd),
-        isNative: false,
-        urgencyScore: token.urgencyScore ?? 50,
-        confidence: token.priceConfidence
-      });
-    }
-    return assets;
-  }
-  async getPermissions(wallet) {
-    this.assertWallet(wallet);
-    const records = [];
-    for (const token of this.config.tokens) {
-      for (const spender of this.config.knownSpenders ?? []) {
-        const raw = await this.call(token.address, SELECTOR.allowance + addressWord(wallet.address) + addressWord(spender.address));
-        const allowance = decodeUint(raw);
-        if (allowance === 0n) continue;
-        records.push({
-          id: `${this.network}:${token.address.toLowerCase()}:${spender.address.toLowerCase()}`,
-          network: this.network,
-          assetId: `${this.network}:erc20:${token.address.toLowerCase()}`,
-          spender: spender.address,
-          permissionType: "allowance",
-          scopeDescription: `ERC-20 allowance for ${spender.label}: ${allowance === 2n ** 256n - 1n ? "unlimited" : "non-zero"}`,
-          risk: allowance === 2n ** 256n - 1n ? "high" : "medium",
-          revocable: true,
-          observedAt: (/* @__PURE__ */ new Date()).toISOString()
-        });
+      const response2 = await fetch(url, { ...init, signal: controller.signal });
+      if ((response2.status === 429 || response2.status >= 500) && attempt < 2) {
+        await response2.body?.cancel();
+        await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
+        continue;
       }
+      if (!response2.ok) throw new Error("ALCHEMY_HTTP_" + response2.status);
+      return response2;
+    } catch (error) {
+      last = error;
+      if (attempt === 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
+    } finally {
+      clearTimeout(timer);
     }
-    return records;
   }
-  assertWallet(wallet) {
-    if (wallet.network !== this.network) throw new Error("Wallet network does not match this EVM adapter.");
-    assertAddress(wallet.address, "Wallet address");
+  throw last instanceof Error ? last : new Error("ALCHEMY_REQUEST_FAILED");
+}
+__name(timedFetch, "timedFetch");
+async function alchemyRpc(network, key, method, params) {
+  const response2 = await timedFetch("https://" + network.host + ".g.alchemy.com/v2/" + encodeURIComponent(key), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params })
+  });
+  const payload = await response2.json();
+  if (payload.error) throw new Error("ALCHEMY_RPC_" + String(payload.error.code ?? "ERROR") + ":" + String(payload.error.message ?? "request failed").slice(0, 100));
+  if (payload.result === void 0) throw new Error("ALCHEMY_RPC_EMPTY_RESULT");
+  return payload.result;
+}
+__name(alchemyRpc, "alchemyRpc");
+async function discoverTokenBalances(network, key, owner) {
+  const all = [];
+  let pageKey;
+  for (let page2 = 0; page2 < 5; page2++) {
+    const options = { maxCount: 100 };
+    if (pageKey) options.pageKey = pageKey;
+    const result = await alchemyRpc(network, key, "alchemy_getTokenBalances", [owner, "erc20", options]);
+    if (!Array.isArray(result.tokenBalances)) throw new Error("ALCHEMY_TOKEN_BALANCES_MALFORMED");
+    for (const row of result.tokenBalances) if (validAddress(row.contractAddress) && typeof row.tokenBalance === "string" && /^0x[0-9a-f]+$/i.test(row.tokenBalance)) all.push(row);
+    pageKey = typeof result.pageKey === "string" && result.pageKey ? result.pageKey : void 0;
+    if (!pageKey) return all;
   }
-};
-
-// src/application/evm-monitor.ts
-var EVM_NETWORKS = {
-  ethereum: { chainId: 1, nativeSymbol: "ETH", nativeName: "Ether" },
-  polygon: { chainId: 137, nativeSymbol: "POL", nativeName: "Polygon Ecosystem Token" },
-  bsc: { chainId: 56, nativeSymbol: "BNB", nativeName: "BNB" },
-  avalanche: { chainId: 43114, nativeSymbol: "AVAX", nativeName: "Avalanche" },
-  arbitrum: { chainId: 42161, nativeSymbol: "ETH", nativeName: "Ether" },
-  optimism: { chainId: 10, nativeSymbol: "ETH", nativeName: "Ether" },
-  base: { chainId: 8453, nativeSymbol: "ETH", nativeName: "Ether" }
-};
-var RPC_ENV = {
-  ethereum: "EVM_RPC_ETHEREUM",
-  polygon: "EVM_RPC_POLYGON",
-  bsc: "EVM_RPC_BSC",
-  avalanche: "EVM_RPC_AVALANCHE",
-  arbitrum: "EVM_RPC_ARBITRUM",
-  optimism: "EVM_RPC_OPTIMISM",
-  base: "EVM_RPC_BASE"
-};
-function parseAssetConfig(raw) {
-  if (!raw) return {};
-  const value = JSON.parse(raw);
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("MAINWELL_EVM_ASSETS must be a JSON object keyed by network.");
-  return value;
+  throw new Error("ALCHEMY_TOKEN_DISCOVERY_PAGE_LIMIT");
 }
-__name(parseAssetConfig, "parseAssetConfig");
-function rawAmount(amount, decimals) {
-  const [whole, fraction = ""] = amount.split(".");
-  if (!/^\d+$/.test(whole) || !/^\d*$/.test(fraction) || fraction.length > decimals) throw new Error("Adapter returned an invalid decimal asset amount.");
-  return (BigInt(whole) * 10n ** BigInt(decimals) + BigInt((fraction + "0".repeat(decimals)).slice(0, decimals) || "0")).toString();
+__name(discoverTokenBalances, "discoverTokenBalances");
+async function mapLimited(items, limit, fn) {
+  const out = [];
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const i = next++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return out;
 }
-__name(rawAmount, "rawAmount");
-async function toAssetConfig(env, network, observedAt) {
-  const configs = parseAssetConfig(env.MAINWELL_EVM_ASSETS);
-  const item = configs[network] ?? {};
-  if (item.tokens !== void 0 && !Array.isArray(item.tokens)) throw new Error("Configured token list must be an array.");
-  if (item.knownSpenders !== void 0 && !Array.isArray(item.knownSpenders)) throw new Error("Configured spender list must be an array.");
-  const registered = await env.DB.prepare(
-    "SELECT token_address AS address,symbol,name,decimals FROM recovery_supported_assets WHERE network=? AND is_active=1 ORDER BY symbol"
-  ).bind(network).all();
-  if (!registered.success) throw new Error("Unable to load the administrator-managed supported asset registry.");
-  const tokens = /* @__PURE__ */ new Map();
-  for (const token of registered.results) {
-    tokens.set(token.address.toLowerCase(), {
-      address: token.address,
-      symbol: token.symbol,
-      name: token.name,
-      decimals: token.decimals,
-      priceUsd: 0,
-      priceObservedAt: observedAt,
-      priceConfidence: 0.5
+__name(mapLimited, "mapLimited");
+async function loadMetadata(network, key, address) {
+  try {
+    return await alchemyRpc(network, key, "alchemy_getTokenMetadata", [address]);
+  } catch {
+    return null;
+  }
+}
+__name(loadMetadata, "loadMetadata");
+async function loadPrices(key, slug, addresses) {
+  const result = /* @__PURE__ */ new Map();
+  for (let offset = 0; offset < addresses.length; offset += 25) {
+    const batch = addresses.slice(offset, offset + 25);
+    const response2 = await timedFetch("https://api.g.alchemy.com/prices/v1/" + encodeURIComponent(key) + "/tokens/by-address", {
+      method: "POST",
+      headers: { "content-type": "application/json", "authorization": "Bearer " + key },
+      body: JSON.stringify({ addresses: batch.map((address) => ({ network: slug, address })) })
+    });
+    const payload = await response2.json();
+    if (!Array.isArray(payload.data)) throw new Error("ALCHEMY_PRICE_RESPONSE_MALFORMED");
+    for (const row of payload.data) {
+      if (!validAddress(row.address)) continue;
+      const price = row.prices?.find((p) => p.currency?.toUpperCase() === "USD");
+      const value = Number(price?.value), observedAt = price?.lastUpdatedAt ?? "";
+      const age = Date.now() - Date.parse(observedAt);
+      if (Number.isFinite(value) && value > 0 && Number.isFinite(age) && age >= -6e4 && age <= 3e5) result.set(row.address.toLowerCase(), { value, observedAt });
+    }
+  }
+  return result;
+}
+__name(loadPrices, "loadPrices");
+function configuredSpenders(raw, network) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    const values = parsed?.[network]?.knownSpenders ?? [];
+    return [...new Set(values.map((x) => x?.address).filter(validAddress).map((x) => x.toLowerCase()))];
+  } catch {
+    return [];
+  }
+}
+__name(configuredSpenders, "configuredSpenders");
+async function persistPermission(env, wallet, token, spender, allowance, now) {
+  const previous = await env.DB.prepare("SELECT allowance_raw,status,first_seen_at FROM wallet_permissions WHERE wallet_id=? AND network=? AND token_address=? AND spender_address=?").bind(wallet.id, wallet.network, token, spender).first();
+  const status = BigInt(allowance) > 0n ? "active" : "revoked";
+  const change = !previous ? "discovered" : previous.allowance_raw !== allowance ? status === "revoked" ? "revoked" : "allowance_changed" : previous.status !== status ? status === "revoked" ? "revoked" : "reapproved" : null;
+  await env.DB.prepare(`
+    INSERT INTO wallet_permissions(id,wallet_id,network,token_address,spender_address,allowance_raw,status,first_seen_at,last_seen_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(wallet_id,network,token_address,spender_address) DO UPDATE SET
+      allowance_raw=excluded.allowance_raw,status=excluded.status,last_seen_at=excluded.last_seen_at,updated_at=excluded.updated_at
+  `).bind(crypto.randomUUID(), wallet.id, wallet.network, token, spender, allowance, status, previous?.first_seen_at ?? now, now, now).run();
+  if (change) await env.DB.prepare("INSERT INTO wallet_permission_history(id,wallet_id,network,token_address,spender_address,allowance_raw,status,change_kind,observed_at) VALUES(?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), wallet.id, wallet.network, token, spender, allowance, status, change, now).run();
+}
+__name(persistPermission, "persistPermission");
+async function rpcNativeBalance(url, address) {
+  const response2 = await timedFetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [address, "latest"] }) });
+  const data = await response2.json();
+  if (data.error || !data.result || !/^0x[0-9a-f]+$/i.test(data.result)) throw new Error("RPC_NATIVE_BALANCE_FAILED");
+  return BigInt(data.result).toString();
+}
+__name(rpcNativeBalance, "rpcNativeBalance");
+async function runWallet(env, wallet) {
+  const started = (/* @__PURE__ */ new Date()).toISOString(), cfg = CHAINS[wallet.network], now = /* @__PURE__ */ __name(() => (/* @__PURE__ */ new Date()).toISOString(), "now");
+  if (!cfg || wallet.chain_id !== cfg.chainId) throw new Error("WALLET_NETWORK_CHAIN_MISMATCH");
+  const rpc = env[cfg.rpc];
+  if (typeof rpc !== "string" || !rpc.startsWith("https://")) throw new Error("RPC_NOT_CONFIGURED");
+  if (!env.ALCHEMY_API_KEY) throw new Error("ALCHEMY_API_KEY_NOT_CONFIGURED");
+  const key = env.ALCHEMY_API_KEY;
+  const [nativeRaw, balances] = await Promise.all([rpcNativeBalance(rpc, wallet.address), discoverTokenBalances(cfg, key, wallet.address)]);
+  if (balances.length > 500) throw new Error("ALCHEMY_TOKEN_DISCOVERY_RESULT_LIMIT_EXCEEDED");
+  const deduped = [...new Map(balances.map((item) => [item.contractAddress.toLowerCase(), item])).values()];
+  const metadata = await mapLimited(deduped, 4, async (item) => ({ address: item.contractAddress.toLowerCase(), balance: BigInt(item.tokenBalance).toString(), metadata: await loadMetadata(cfg, key, item.contractAddress) }));
+  const priceAddresses = [cfg.wrappedNative, ...metadata.filter((x) => BigInt(x.balance) > 0n).map((x) => x.address)];
+  let prices = /* @__PURE__ */ new Map(), priceError = false;
+  try {
+    prices = await loadPrices(key, cfg.slug, [...new Set(priceAddresses.map((x) => x.toLowerCase()))]);
+  } catch {
+    priceError = true;
+  }
+  const observedAt = now();
+  const nativePrice = prices.get(cfg.wrappedNative.toLowerCase());
+  const assets = [];
+  assets.push({ ref: wallet.network + ":native", address: null, symbol: cfg.nativeSymbol, name: cfg.nativeName, raw: nativeRaw, decimals: 18, price: nativePrice?.value ?? null, priceAt: nativePrice?.observedAt ?? null, confidence: nativePrice ? 0.8 : 0, source: "rpc", verified: 1 });
+  for (const item of metadata) {
+    const decimals = safeDecimals(item.metadata?.decimals);
+    const price = prices.get(item.address);
+    assets.push({
+      ref: wallet.network + ":erc20:" + item.address,
+      address: item.address,
+      symbol: String(item.metadata?.symbol ?? "").slice(0, 32) || "UNKNOWN",
+      name: String(item.metadata?.name ?? "").slice(0, 100) || "Unknown token",
+      raw: item.balance,
+      decimals: decimals ?? 0,
+      price: decimals === null ? null : price?.value ?? null,
+      priceAt: decimals === null ? null : price?.observedAt ?? null,
+      confidence: decimals !== null && price ? 0.8 : 0,
+      source: "alchemy-token-api",
+      verified: 0
     });
   }
-  for (const token of item.tokens ?? []) tokens.set(token.address.toLowerCase(), token);
-  return { ...item, tokens: [...tokens.values()] };
-}
-__name(toAssetConfig, "toAssetConfig");
-async function refreshEvmWallet(env, wallet) {
-  const networkName = wallet.network;
-  const network = EVM_NETWORKS[networkName];
-  if (!network || wallet.chain_id !== network.chainId) throw new Error("Wallet network and chain ID are inconsistent.");
-  const rpcName = RPC_ENV[networkName];
-  const rpcUrl = rpcName ? env[rpcName] : void 0;
-  if (!rpcUrl) throw new Error("RPC_NOT_CONFIGURED");
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  const config = await toAssetConfig(env, networkName, now);
-  const adapter = new EvmReadOnlyAdapter({
-    network: networkName,
-    chainId: network.chainId,
-    rpcUrl,
-    nativeSymbol: network.nativeSymbol,
-    nativeName: network.nativeName,
-    nativePriceUsd: 0,
-    nativePriceObservedAt: now,
-    nativePriceConfidence: 0.5,
-    tokens: config.tokens ?? [],
-    knownSpenders: config.knownSpenders ?? []
-  });
-  const reference = { network: wallet.network, address: wallet.address };
-  await adapter.assertChain();
-  const [assets, permissions] = await Promise.all([adapter.getAssets(reference), adapter.getPermissions(reference)]);
   for (const asset of assets) {
-    const amountRaw = rawAmount(asset.amount, asset.decimals);
-    const priceObservedAt = asset.estimatedValueUsd > 0 ? now : null;
+    const value = asset.price !== null ? usdAmount(asset.raw, asset.decimals, asset.price) : null;
     await env.DB.prepare(`
-      INSERT INTO wallet_assets
-        (id,wallet_id,network,asset_ref,token_address,symbol,name,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,observed_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+      INSERT INTO wallet_assets(id,wallet_id,network,asset_ref,token_address,symbol,name,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,observed_at,first_seen_at,last_seen_at,lifecycle_status,missing_since,discovery_source,token_verified)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'active',NULL,?,?)
       ON CONFLICT(wallet_id,network,asset_ref) DO UPDATE SET
-        token_address=excluded.token_address,symbol=excluded.symbol,name=excluded.name,
-        amount_raw=excluded.amount_raw,decimals=excluded.decimals,
-        estimated_value_usd=excluded.estimated_value_usd,price_observed_at=excluded.price_observed_at,
-        valuation_confidence=excluded.valuation_confidence,observed_at=excluded.observed_at
-    `).bind(
-      crypto.randomUUID(),
-      wallet.id,
-      wallet.network,
-      asset.id,
-      asset.contractAddress ?? null,
-      asset.symbol,
-      asset.name,
-      amountRaw,
-      asset.decimals,
-      asset.estimatedValueUsd > 0 ? asset.estimatedValueUsd : null,
-      priceObservedAt,
-      asset.estimatedValueUsd > 0 ? asset.confidence : null,
-      now
-    ).run();
+        token_address=excluded.token_address,symbol=excluded.symbol,name=excluded.name,amount_raw=excluded.amount_raw,
+        decimals=excluded.decimals,estimated_value_usd=excluded.estimated_value_usd,
+        price_observed_at=excluded.price_observed_at,valuation_confidence=excluded.valuation_confidence,
+        observed_at=excluded.observed_at,last_seen_at=excluded.last_seen_at,lifecycle_status='active',missing_since=NULL,
+        discovery_source=excluded.discovery_source,token_verified=excluded.token_verified
+    `).bind(crypto.randomUUID(), wallet.id, wallet.network, asset.ref, asset.address, asset.symbol, asset.name, asset.raw, asset.decimals, value, asset.priceAt, asset.confidence || null, observedAt, observedAt, observedAt, asset.source, asset.verified).run();
+    await env.DB.prepare("INSERT INTO wallet_asset_history(id,wallet_id,network,asset_ref,token_address,symbol,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,lifecycle_status,observed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), wallet.id, wallet.network, asset.ref, asset.address, asset.symbol, asset.raw, asset.decimals, value, asset.priceAt, asset.confidence || null, "active", observedAt).run();
   }
-  await env.DB.prepare(`
-    INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at)
-    VALUES('owner',?,'wallet.monitoring.refresh','recovery_wallet',?,?,?)
-  `).bind(wallet.address.toLowerCase(), wallet.id, JSON.stringify({ network: wallet.network, assetCount: assets.length, permissionCount: permissions.length }), now).run();
-  return { assets, permissions, observedAt: now };
+  const currentRefs = assets.map((a) => a.ref);
+  const old = await env.DB.prepare("SELECT asset_ref,token_address,symbol,name,amount_raw,decimals FROM wallet_assets WHERE wallet_id=? AND network=? AND lifecycle_status='active'").bind(wallet.id, wallet.network).all();
+  for (const item of old.results) {
+    if (currentRefs.includes(item.asset_ref)) continue;
+    await env.DB.prepare("UPDATE wallet_assets SET lifecycle_status='missing',missing_since=?,last_seen_at=? WHERE wallet_id=? AND network=? AND asset_ref=?").bind(observedAt, observedAt, wallet.id, wallet.network, item.asset_ref).run();
+    await env.DB.prepare("INSERT INTO wallet_asset_history(id,wallet_id,network,asset_ref,token_address,symbol,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,lifecycle_status,observed_at) SELECT ?,wallet_id,network,asset_ref,token_address,symbol,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,'missing',? FROM wallet_assets WHERE wallet_id=? AND network=? AND asset_ref=?").bind(crypto.randomUUID(), observedAt, wallet.id, wallet.network, item.asset_ref).run();
+  }
+  const spenders = configuredSpenders(env.MAINWELL_EVM_ASSETS, wallet.network);
+  const previous = await env.DB.prepare("SELECT token_address,spender_address FROM wallet_permissions WHERE wallet_id=? AND network=?").bind(wallet.id, wallet.network).all();
+  const tokenAddresses = [.../* @__PURE__ */ new Set([...metadata.map((x) => x.address), ...previous.results.map((x) => x.token_address.toLowerCase())])];
+  let permissionCount = 0, permissionPartial = false;
+  if (spenders.length && tokenAddresses.length * spenders.length <= 500) {
+    try {
+      const pairs = tokenAddresses.flatMap((token) => spenders.map((spender) => ({ token, spender })));
+      await mapLimited(pairs, 4, async (pair) => {
+        const allowance = await alchemyRpc(cfg, key, "alchemy_getTokenAllowance", [{ contract: pair.token, owner: wallet.address, spender: pair.spender }]);
+        const raw = /^0x[0-9a-f]+$/i.test(allowance) ? BigInt(allowance).toString() : String(allowance);
+        if (!/^\d+$/.test(raw)) throw new Error("ALCHEMY_ALLOWANCE_MALFORMED");
+        await persistPermission(env, wallet, pair.token, pair.spender, raw, observedAt);
+      });
+      permissionCount = pairs.length;
+      const allowed = new Set(pairs.map((p) => p.token + ":" + p.spender));
+      for (const p of previous.results) {
+        if (allowed.has(p.token_address.toLowerCase() + ":" + p.spender_address.toLowerCase())) continue;
+        await env.DB.prepare("UPDATE wallet_permissions SET status='unknown',updated_at=? WHERE wallet_id=? AND network=? AND token_address=? AND spender_address=? AND status='active'").bind(observedAt, wallet.id, wallet.network, p.token_address, p.spender_address).run();
+      }
+    } catch {
+      permissionPartial = true;
+    }
+  } else {
+    permissionPartial = true;
+    await env.DB.prepare("UPDATE wallet_permissions SET status='unknown',updated_at=? WHERE wallet_id=? AND network=? AND status='active'").bind(observedAt, wallet.id, wallet.network).run();
+  }
+  const partial = permissionPartial || priceError || metadata.some((x) => !x.metadata);
+  const errorCode = permissionPartial ? "ALLOWANCE_COVERAGE_PARTIAL" : priceError ? "ALCHEMY_PRICES_UNAVAILABLE" : metadata.some((x) => !x.metadata) ? "ALCHEMY_METADATA_PARTIAL" : null;
+  await env.DB.prepare("UPDATE recovery_wallets SET last_monitor_at=?,monitoring_status=?,monitoring_error=? WHERE id=?").bind(observedAt, partial ? "partial" : "healthy", errorCode, wallet.id).run();
+  await env.DB.prepare("INSERT INTO wallet_monitoring_runs(id,wallet_id,network,status,discovered_assets,priced_assets,permission_count,error_code,started_at,completed_at) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), wallet.id, wallet.network, partial ? "partial" : "success", assets.length, assets.filter((a) => a.price !== null).length, permissionCount, errorCode, started, observedAt).run();
+  await env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES(?,'system','scheduled-monitor','wallet.monitoring.completed','recovery_wallet',?,?,?)").bind(crypto.randomUUID(), wallet.id, JSON.stringify({ network: wallet.network, assets: assets.length, priced: assets.filter((a) => a.price !== null).length, permissions: permissionCount, permissionPartial, priceError }), observedAt).run();
 }
-__name(refreshEvmWallet, "refreshEvmWallet");
+__name(runWallet, "runWallet");
+async function refreshWalletWithAlchemy(env, wallet) {
+  await runWallet(env, wallet);
+  const [assets, permissions] = await Promise.all([
+    env.DB.prepare("SELECT asset_ref AS id,symbol,name,amount_raw,decimals,token_address AS contractAddress,estimated_value_usd AS estimatedValueUsd,price_observed_at AS priceObservedAt,valuation_confidence AS confidence,lifecycle_status AS lifecycleStatus FROM wallet_assets WHERE wallet_id=? AND network=? AND lifecycle_status='active' ORDER BY symbol").bind(wallet.id, wallet.network).all(),
+    env.DB.prepare("SELECT id,token_address AS tokenAddress,spender_address AS spender,allowance_raw AS allowanceRaw,status,updated_at AS observedAt FROM wallet_permissions WHERE wallet_id=? AND network=? ORDER BY updated_at DESC").bind(wallet.id, wallet.network).all()
+  ]);
+  return { observedAt: (/* @__PURE__ */ new Date()).toISOString(), assets: assets.results.map((a) => ({ ...a, amount: amountDisplay(String(a.amount_raw), Number(a.decimals)), estimatedValueUsd: a.estimatedValueUsd === null ? null : Number(a.estimatedValueUsd) })), permissions: permissions.results };
+}
+__name(refreshWalletWithAlchemy, "refreshWalletWithAlchemy");
+async function runScheduledWalletMonitoring(env, limit = 5) {
+  if (!env.ALCHEMY_API_KEY) return { processed: 0, failed: 0, skipped: true };
+  const due = await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id FROM recovery_wallets WHERE status='monitoring' AND (last_monitor_at IS NULL OR last_monitor_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now','-5 minutes')) ORDER BY CASE WHEN last_monitor_at IS NULL THEN 0 ELSE 1 END,last_monitor_at ASC,first_seen_at ASC LIMIT ?").bind(Math.max(1, Math.min(10, limit))).all();
+  let processed = 0, failed = 0;
+  for (const wallet of due.results) {
+    const claimedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const claim = await env.DB.prepare("UPDATE recovery_wallets SET last_monitor_at=?,monitoring_status='running',monitoring_error=NULL WHERE id=? AND status='monitoring' AND (last_monitor_at IS NULL OR last_monitor_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now','-5 minutes'))").bind(claimedAt, wallet.id).run();
+    if (!claim.success || (claim.meta?.changes ?? 0) !== 1) continue;
+    try {
+      await runWallet(env, wallet);
+      processed++;
+    } catch (error) {
+      failed++;
+      const at = (/* @__PURE__ */ new Date()).toISOString(), code = error instanceof Error ? error.message.slice(0, 120) : "MONITORING_FAILED";
+      await env.DB.prepare("UPDATE recovery_wallets SET last_monitor_at=?,monitoring_status='error',monitoring_error=? WHERE id=?").bind(at, code, wallet.id).run();
+      await env.DB.prepare("INSERT INTO wallet_monitoring_runs(id,wallet_id,network,status,error_code,started_at,completed_at) VALUES(?,?,?,'failed',?,?,?)").bind(crypto.randomUUID(), wallet.id, wallet.network, code, at, at).run();
+    }
+  }
+  return { processed, failed, skipped: false };
+}
+__name(runScheduledWalletMonitoring, "runScheduledWalletMonitoring");
+async function monitoringDashboardData(env) {
+  const [wallets, assets, permissions, runs, jobs, transactions] = await Promise.all([
+    env.DB.prepare("SELECT id,owner_address,network,status,monitoring_status,monitoring_error,last_monitor_at,first_seen_at FROM recovery_wallets ORDER BY network,owner_address").all(),
+    env.DB.prepare("SELECT network,lifecycle_status,COUNT(*) AS count,COALESCE(SUM(estimated_value_usd),0) AS value_usd,COUNT(CASE WHEN price_observed_at IS NOT NULL THEN 1 END) AS priced FROM wallet_assets GROUP BY network,lifecycle_status ORDER BY network").all(),
+    env.DB.prepare("SELECT network,status,COUNT(*) AS count FROM wallet_permissions GROUP BY network,status ORDER BY network,status").all(),
+    env.DB.prepare("SELECT r.id,r.wallet_id,w.owner_address,r.network,r.status,r.discovered_assets,r.priced_assets,r.permission_count,r.error_code,r.started_at,r.completed_at FROM wallet_monitoring_runs r JOIN recovery_wallets w ON w.id=r.wallet_id ORDER BY r.completed_at DESC LIMIT 30").all(),
+    env.DB.prepare("SELECT j.id,j.execution_mode,j.status,j.asset_id,j.created_at,j.updated_at,j.last_error_code,w.owner_address,g.network FROM recovery_jobs j JOIN recovery_grants g ON g.grant_id=j.grant_id JOIN recovery_wallets w ON w.owner_address=g.owner_wallet AND w.network=g.network ORDER BY j.created_at DESC LIMIT 20").all(),
+    env.DB.prepare("SELECT t.id,t.network,t.transaction_hash,t.status,t.amount_raw,t.destination_address,t.created_at,j.asset_id FROM recovery_transactions t JOIN recovery_jobs j ON j.id=t.job_id ORDER BY t.created_at DESC LIMIT 20").all()
+  ]);
+  return { wallets: wallets.results, assets: assets.results, permissions: permissions.results, runs: runs.results, jobs: jobs.results, transactions: transactions.results, providerConfigured: Boolean(env.ALCHEMY_API_KEY), allowanceCoverageConfigured: Object.keys(CHAINS).some((network) => configuredSpenders(env.MAINWELL_EVM_ASSETS, network).length > 0), generatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+}
+__name(monitoringDashboardData, "monitoringDashboardData");
+function monitoringDashboardResponse() {
+  const html2 = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mainwell \xB7 Monitoring</title><style>
+ :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#0b1220;color:#e8edf5}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#203b48 0,transparent 42%),#0b1220}.shell{max-width:1200px;margin:auto;padding:24px}.head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.muted{color:#91a4b1;font-size:13px}.link,button{border:1px solid #3b5661;background:#1b303b;color:#d9e6e8;border-radius:9px;padding:9px 13px;text-decoration:none;font:inherit;cursor:pointer}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}.card{background:#14222e;border:1px solid #2b414c;border-radius:13px;padding:15px;min-width:0}.card small{color:#91a4af}.card strong{display:block;font-size:24px;margin-top:8px}.section{margin-top:16px}.section h2{font-size:16px}.tablewrap{overflow:auto;border:1px solid #2b414c;border-radius:12px;background:#111e29}table{width:100%;border-collapse:collapse;font-size:12px;min-width:700px}td,th{text-align:left;padding:11px;border-bottom:1px solid #263b47;overflow-wrap:anywhere}th{color:#9bcfbe;background:#152832}td{color:#d0dbe2}.status{color:#9ed8c4}.warn{color:#e7c58b}.error{color:#eea5a5}.foot{margin:16px 0;color:#8295a2;font-size:12px;line-height:1.6}@media(max-width:700px){.shell{padding:15px}.grid{grid-template-columns:repeat(2,1fr)}.card strong{font-size:20px}}
+ </style></head><body><main class="shell"><header class="head"><div><div class="muted">MAINWELL / ADMINISTRATION</div><h1>Wallet monitoring</h1><p class="muted">Asset discovery, live valuations, allowance changes and recovery history.</p></div><div><a class="link" href="/admin">\u2190 Admin console</a> <button id="refresh">Refresh</button></div></header><div id="provider" class="foot">Loading provider status\u2026</div><div class="grid" id="metrics"></div><section class="section"><h2>Registered source wallets</h2><div class="tablewrap"><table><thead><tr><th>Wallet</th><th>Network</th><th>Status</th><th>Last scan</th><th>Last error</th></tr></thead><tbody id="wallets"></tbody></table></div></section><section class="section"><h2>Asset lifecycle and valuation</h2><div class="tablewrap"><table><thead><tr><th>Network</th><th>Lifecycle</th><th>Assets</th><th>Priced</th><th>Estimated USD</th></tr></thead><tbody id="assets"></tbody></table></div></section><section class="section"><h2>Allowance and permission status</h2><div class="tablewrap"><table><thead><tr><th>Network</th><th>Status</th><th>Count</th></tr></thead><tbody id="permissions"></tbody></table></div></section><section class="section"><h2>Recent monitoring runs</h2><div class="tablewrap"><table><thead><tr><th>Completed</th><th>Wallet</th><th>Network</th><th>Status</th><th>Assets</th><th>Priced</th><th>Allowances</th><th>Error</th></tr></thead><tbody id="runs"></tbody></table></div></section><section class="section"><h2>Recovery job history</h2><div class="tablewrap"><table><thead><tr><th>Created</th><th>Wallet</th><th>Network</th><th>Mode</th><th>Status</th><th>Asset</th><th>Error</th></tr></thead><tbody id="jobs"></tbody></table></div></section><section class="section"><h2>Recovery transaction history</h2><div class="tablewrap"><table><thead><tr><th>Created</th><th>Network</th><th>Status</th><th>Transaction</th><th>Asset</th><th>Amount raw</th><th>Destination</th></tr></thead><tbody id="transactions"></tbody></table></div></section><p class="foot">Discovery and monitoring are read-only. A discovered token is not eligible for recovery until it is separately registered, policy-configured and explicitly authorized by its owner. Price data is indicative and must pass freshness/confidence checks before recovery preflight.</p></main><script>
+ const $=id=>document.getElementById(id),esc=v=>String(v??"\u2014").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),rows=(id,data,cols)=>$(id).innerHTML=(data||[]).map(x=>"<tr>"+cols.map(c=>"<td>"+esc(c(x))+"</td>").join("")+"</tr>").join("")||"<tr><td colspan="12">No records yet</td></tr>";
+ async function load(){const r=await fetch("/api/admin/monitoring",{credentials:"same-origin",cache:"no-store"});if(!r.ok)throw new Error(r.status===401?"Administrator session expired. Sign in again.":"Unable to load monitoring records.");const d=await r.json();$("provider").innerHTML="Alchemy provider: <b class='"+(d.providerConfigured?"status":"warn")+"'>"+(d.providerConfigured?"configured":"ALCHEMY_API_KEY required")+"</b> \xB7 Generated "+esc(d.generatedAt);const w=d.wallets||[],a=d.assets||[],p=d.permissions||[];$("metrics").innerHTML=[["Registered wallets",w.length],["Active assets",a.filter(x=>x.lifecycle_status==="active").reduce((n,x)=>n+Number(x.count),0)],["Priced assets",a.reduce((n,x)=>n+Number(x.priced),0)],["Active allowances",p.filter(x=>x.status==="active").reduce((n,x)=>n+Number(x.count),0)]].map(x=>"<article class='card'><small>"+esc(x[0])+"</small><strong>"+esc(x[1])+"</strong></article>").join("");rows("wallets",w,x=>[x.owner_address,x.network,x.monitoring_status||x.status,x.last_monitor_at,x.monitoring_error]);rows("assets",a,x=>[x.network,x.lifecycle_status,x.count,x.priced,Number(x.value_usd||0).toFixed(2)]);rows("permissions",p,x=>[x.network,x.status,x.count]);rows("runs",d.runs,x=>[x.completed_at,x.owner_address,x.network,x.status,x.discovered_assets,x.priced_assets,x.permission_count,x.error_code]);rows("jobs",d.jobs,x=>[x.created_at,x.owner_address,x.network,x.execution_mode,x.status,x.asset_id,x.last_error_code]);rows("transactions",d.transactions,x=>[x.created_at,x.network,x.status,x.transaction_hash,x.asset_id,x.amount_raw,x.destination_address]);}
+ $("refresh").addEventListener("click",()=>load().catch(e=>alert(e.message)));load().catch(e=>{$("provider").textContent=e.message});
+ <\/script></body></html>`;
+  return new Response(html2, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'" } });
+}
+__name(monitoringDashboardResponse, "monitoringDashboardResponse");
 
 // src/policy/recovery-grant.ts
-var EVM_NETWORKS2 = /* @__PURE__ */ new Set([
+var EVM_NETWORKS = /* @__PURE__ */ new Set([
   "ethereum",
   "polygon",
   "bsc",
@@ -11254,7 +11273,7 @@ function validateRecoveryGrant(grant, expectedWallet, expectedNetwork, now = Dat
     throw new Error("Grant owner does not match the connected wallet.");
   }
   if (grant.network !== expectedNetwork) throw new Error("Grant network mismatch.");
-  if (EVM_NETWORKS2.has(grant.network)) {
+  if (EVM_NETWORKS.has(grant.network)) {
     if (!Number.isSafeInteger(grant.chainId) || (grant.chainId ?? 0) <= 0) {
       throw new Error("A valid EVM chain ID is required.");
     }
@@ -11298,7 +11317,7 @@ function validateRecoveryGrant(grant, expectedWallet, expectedNetwork, now = Dat
   for (const asset of grant.assets) {
     if (!asset.assetId.trim() || seen.has(asset.assetId)) throw new Error("Asset IDs must be non-empty and unique.");
     seen.add(asset.assetId);
-    if (EVM_NETWORKS2.has(grant.network) && !EVM_ADDRESS.test(asset.destinationAddress)) {
+    if (EVM_NETWORKS.has(grant.network) && !EVM_ADDRESS.test(asset.destinationAddress)) {
       throw new Error("Every EVM asset must have its own valid owner-approved destination address.");
     }
     if (asset.amount.kind === "capped") {
@@ -11307,17 +11326,17 @@ function validateRecoveryGrant(grant, expectedWallet, expectedNetwork, now = Dat
       }
     } else if (asset.amount.kind === "unlimited-allowance") {
       if (asset.amount.ownerAcknowledged !== true) throw new Error("Unlimited allowance requires explicit owner acknowledgement.");
-      if (!EVM_NETWORKS2.has(grant.network) || !asset.tokenAddress || !EVM_ADDRESS.test(asset.tokenAddress)) {
+      if (!EVM_NETWORKS.has(grant.network) || !asset.tokenAddress || !EVM_ADDRESS.test(asset.tokenAddress)) {
         throw new Error("Unlimited allowance is supported only for a configured EVM token and reviewed executor.");
       }
     } else {
       throw new Error("Unsupported asset authorization amount.");
     }
-    if (asset.tokenAddress && EVM_NETWORKS2.has(grant.network) && !EVM_ADDRESS.test(asset.tokenAddress)) {
+    if (asset.tokenAddress && EVM_NETWORKS.has(grant.network) && !EVM_ADDRESS.test(asset.tokenAddress)) {
       throw new Error("Token contract address is invalid.");
     }
   }
-  if (EVM_NETWORKS2.has(grant.network) && grant.assets[0].destinationAddress.toLowerCase() !== grant.destinationAddress.toLowerCase()) {
+  if (EVM_NETWORKS.has(grant.network) && grant.assets[0].destinationAddress.toLowerCase() !== grant.destinationAddress.toLowerCase()) {
     throw new Error("The grant default destination must match the first asset's immutable destination.");
   }
 }
@@ -11327,7 +11346,7 @@ __name(validateRecoveryGrant, "validateRecoveryGrant");
 var EXECUTOR_CREATION_BYTECODE = "0x60c0604052600160035534801562000015575f80fd5b506040516200100e3803806200100e8339810160408190526200003891620004fe565b42886001600160401b031611620000615760405162d36c8560e81b815260040160405180910390fd5b831580156200006e575082155b156200008d5760405163c522a9e160e01b815260040160405180910390fd5b838015620000a257506001600160a01b038216155b80620000be5750828015620000be57506001600160a01b038116155b15620000dd5760405163c522a9e160e01b815260040160405180910390fd5b86511580620000ee57508451875114155b80620000fc57508551875114155b156200011b5760405163c522a9e160e01b815260040160405180910390fd5b5f8054336001600160a01b03199091161781556001600160a01b03838116608052821660a05260018054600160a01b61ff0160e01b031916600160a01b6001600160401b038c160260ff60e81b191617600160e81b871515021760ff60f01b1916600160f01b861515021790555b87518110156200031e575f888281518110620001a957620001a9620005e6565b602002602001015190505f888381518110620001c957620001c9620005e6565b602002602001015190505f888481518110620001e957620001e9620005e6565b602002602001015190505f6001600160a01b0316836001600160a01b031614806200021c57506001600160a01b0383163b155b806200022f57506001600160a01b038216155b8062000239575080155b15620002585760405163c522a9e160e01b815260040160405180910390fd5b6001600160a01b0383165f90815260046020526040902054156200029e5760405163437a40b160e01b81526001600160a01b038416600482015260240160405180910390fd5b6001600160a01b039283165f81815260046020908152604080832094909455600690529182208054939094166001600160a01b0319938416179093556002805460018181018355919092527f405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace909101805490921690921790550162000189565b50855f81518110620003345762000334620005e6565b602002602001015160015f6101000a8154816001600160a01b0302191690836001600160a01b031602179055505050505050505050620005fa565b80516001600160401b038116811462000386575f80fd5b919050565b634e487b7160e01b5f52604160045260245ffd5b604051601f8201601f191681016001600160401b0381118282101715620003ca57620003ca6200038b565b604052919050565b5f6001600160401b03821115620003ed57620003ed6200038b565b5060051b60200190565b80516001600160a01b038116811462000386575f80fd5b5f82601f8301126200041e575f80fd5b81516020620004376200043183620003d2565b6200039f565b8083825260208201915060208460051b87010193508684111562000459575f80fd5b602086015b8481101562000480576200047281620003f7565b83529183019183016200045e565b509695505050505050565b5f82601f8301126200049b575f80fd5b81516020620004ae6200043183620003d2565b8083825260208201915060208460051b870101935086841115620004d0575f80fd5b602086015b84811015620004805780518352918301918301620004d5565b8051801515811462000386575f80fd5b5f805f805f805f80610100898b03121562000517575f80fd5b62000522896200036f565b60208a01519098506001600160401b03808211156200053f575f80fd5b6200054d8c838d016200040e565b985060408b015191508082111562000563575f80fd5b620005718c838d016200040e565b975060608b015191508082111562000587575f80fd5b50620005968b828c016200048b565b955050620005a760808a01620004ee565b9350620005b760a08a01620004ee565b9250620005c760c08a01620003f7565b9150620005d760e08a01620003f7565b90509295985092959890939650565b634e487b7160e01b5f52603260045260245ffd5b60805160a0516109e46200062a5f395f81816102e801526104f701525f81816101ac015261044901526109e45ff3fe608060405234801561000f575f80fd5b5060043610610111575f3560e01c8063b6549f751161009e578063d0e043de1161006e578063d0e043de14610295578063e5b07f0b146102b4578063e728c0ef146102c8578063e7f36c63146102db578063e900a491146102e3575f80fd5b8063b6549f7514610254578063bd3def631461025c578063c23ab1b91461026f578063c6d51a8414610282575f80fd5b8063655fb24a116100e4578063655fb24a146101a757806385a708a8146101ce5780638622a689146101fb5780638da5cb5b1461022f578063b269681d14610241575f80fd5b80630b81c9a7146101155780630f3bdd5f1461013e57806313bb4f961461015357806363d256ce14610193575b5f80fd5b60015461012990600160f01b900460ff1681565b60405190151581526020015b60405180910390f35b61015161014c3660046108b0565b61030a565b005b61017b6101613660046108b0565b60066020525f90815260409020546001600160a01b031681565b6040516001600160a01b039091168152602001610135565b60015461012990600160e01b900460ff1681565b61017b7f000000000000000000000000000000000000000000000000000000000000000081565b6101ed6101dc3660046108b0565b60056020525f908152604090205481565b604051908152602001610135565b60015461021690600160a01b900467ffffffffffffffff1681565b60405167ffffffffffffffff9091168152602001610135565b5f5461017b906001600160a01b031681565b60015461017b906001600160a01b031681565b6101516103ca565b61015161026a3660046108d0565b61043e565b61015161027d3660046108d0565b6104ec565b61017b6102903660046108f8565b610587565b6101ed6102a33660046108b0565b60046020525f908152604090205481565b60015461012990600160e81b900460ff1681565b61017b6102d63660046108f8565b6105ce565b6002546101ed565b61017b7f000000000000000000000000000000000000000000000000000000000000000081565b5f546001600160a01b0316331461033457604051630b2db9b760e31b815260040160405180910390fd5b6001600160a01b0381165f90815260046020526040812054900361037b57604051630a23366560e41b81526001600160a01b03821660048201526024015b60405180910390fd5b6001600160a01b0381165f81815260056020908152604080832054600490925280832091909155517fba5ecd908aab4d79cf7e9fc9d22735958a8f4befc4ac4c9f1fb7f2297797dbbd9190a250565b5f546001600160a01b031633146103f457604051630b2db9b760e31b815260040160405180910390fd5b6001805460ff60e01b1916600160e01b1790555f80546040516001600160a01b03909116917fbadc5b2ca6241beb42d4f1c0481f982a91e7aceaca195b8825f6187ad50018e591a2565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146104875760405163031142d360e11b815260040160405180910390fd5b6003546001146104aa576040516306fda65d60e31b815260040160405180910390fd5b6002600355600154600160e81b900460ff166104d95760405163031142d360e11b815260040160405180910390fd5b6104e382826105fc565b50506001600355565b336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146105355760405163143ee67560e21b815260040160405180910390fd5b600354600114610558576040516306fda65d60e31b815260040160405180910390fd5b6002600355600154600160f01b900460ff166104d95760405163143ee67560e21b815260040160405180910390fd5b5f60065f6002848154811061059e5761059e61090f565b5f9182526020808320909101546001600160a01b0390811684529083019390935260409091019020541692915050565b5f600282815481106105e2576105e261090f565b5f918252602090912001546001600160a01b031692915050565b600154600160e01b900460ff16156106275760405163a0c81e5f60e01b815260040160405180910390fd5b600154600160a01b900467ffffffffffffffff16421061065a5760405163075ff6cf60e11b815260040160405180910390fd5b6001600160a01b0382165f908152600460205260408120549081900361069e57604051630a23366560e41b81526001600160a01b0384166004820152602401610372565b6001600160a01b0383165f90815260056020526040812054906106c18284610937565b90508315806106cf57508084115b156106f757604051631beda7db60e31b81526004810185905260248101829052604401610372565b6001600160a01b038086165f90815260066020526040902054168061072f5760405163c522a9e160e01b815260040160405180910390fd5b6107398584610950565b6001600160a01b038781165f81815260056020908152604080832095909555815485519085166024820152938616604485015260648085018b90528551808603909101815260849094018552830180516001600160e01b03166323b872dd60e01b179052925183926107aa91610963565b5f604051808303815f865af19150503d805f81146107e3576040519150601f19603f3d011682016040523d82523d5f602084013e6107e8565b606091505b50915091508115806108165750805115801590610816575080806020019051810190610814919061098f565b155b15610834576040516312171d8360e31b815260040160405180910390fd5b336001600160a01b0316836001600160a01b0316896001600160a01b03167ffe28fceecb7dd637d5601fefa0516fc4c3b757be702d47e296d4921d89d56c1c8a60405161088391815260200190565b60405180910390a45050505050505050565b80356001600160a01b03811681146108ab575f80fd5b919050565b5f602082840312156108c0575f80fd5b6108c982610895565b9392505050565b5f80604083850312156108e1575f80fd5b6108ea83610895565b946020939093013593505050565b5f60208284031215610908575f80fd5b5035919050565b634e487b7160e01b5f52603260045260245ffd5b634e487b7160e01b5f52601160045260245ffd5b8181038181111561094a5761094a610923565b92915050565b8082018082111561094a5761094a610923565b5f82515f5b818110156109825760208186018101518583015201610968565b505f920191825250919050565b5f6020828403121561099f575f80fd5b815180151581146108c9575f80fdfea2646970667358221220102a26af16b60f4b576ab29b4e036d6e6ed52b2f75fecb9e06bd43e657d45e4d64736f6c63430008180033";
 var EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH = "0xa7f073a21c09677f888baa49343d517f52d13383d84010a86ffff9a0d1a8117f";
 var EXECUTOR_IMMUTABLE_RANGES = [{ "start": 428, "length": 32 }, { "start": 744, "length": 32 }, { "start": 1097, "length": 32 }, { "start": 1271, "length": 32 }];
-var EXECUTOR_BUILD_SOURCE_COMMIT = "5df0c90a24ff45d6d1ff196b0599823477284ed0";
+var EXECUTOR_BUILD_SOURCE_COMMIT = "313f192dddb47c10058b4c95a83821931bda68ef";
 
 // src/adapters/evm-grant-verifier.ts
 var ADDRESS2 = /^0x[0-9a-fA-F]{40}$/;
@@ -12032,7 +12051,7 @@ async function handleOwnerApi(request, env, session2) {
     if (!wallet || wallet.status === "revoked") return reply({ error: "Wallet not found or unavailable." }, 404);
     if (wallet.status !== "monitoring") return reply({ error: "Monitoring is paused for this wallet." }, 409);
     try {
-      const result = await refreshEvmWallet(env, wallet);
+      const result = await refreshWalletWithAlchemy(env, wallet);
       return reply({
         refreshed: true,
         network: wallet.network,
@@ -12044,14 +12063,15 @@ async function handleOwnerApi(request, env, session2) {
           amount: a.amount,
           decimals: a.decimals,
           contractAddress: a.contractAddress ?? null,
-          estimatedValueUsd: a.estimatedValueUsd || null
+          estimatedValueUsd: a.estimatedValueUsd ?? null
         })),
         permissions: result.permissions
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Monitoring failed.";
       if (message === "RPC_NOT_CONFIGURED") return reply({ error: "This network's RPC endpoint is not configured on the server.", code: "rpc_not_configured" }, 503);
-      return reply({ error: "Wallet monitoring failed. Check the network RPC and configured asset list.", code: "monitoring_failed" }, 502);
+      if (message === "ALCHEMY_API_KEY_NOT_CONFIGURED") return reply({ error: "Alchemy is not configured on the server.", code: "alchemy_not_configured" }, 503);
+      return reply({ error: "Wallet monitoring failed. Check the Alchemy API key and network RPC configuration.", code: "monitoring_failed" }, 502);
     }
   }
   const walletMatch = path.match(/^\/api\/owner\/wallets\/([0-9a-fA-F-]{36})$/);
@@ -22980,11 +23000,11 @@ async function freshNativeUsdPrice(network) {
   return price;
 }
 __name(freshNativeUsdPrice, "freshNativeUsdPrice");
-function usdValue2(raw, decimals, price) {
+function usdValue(raw, decimals, price) {
   const whole = raw / 10n ** BigInt(decimals), fraction = raw % 10n ** BigInt(decimals);
   return (Number(whole) + Number(fraction) / 10 ** decimals) * price;
 }
-__name(usdValue2, "usdValue");
+__name(usdValue, "usdValue");
 function safeCode(error) {
   const message = error instanceof Error ? error.message : "";
   const known = [
@@ -23162,7 +23182,7 @@ async function processOne(env) {
     let feeToRecoveryValueRatio = null;
     if (feePolicy.enforceUsdFeeCeiling) {
       nativeUsd = await freshNativeUsdPrice(network);
-      feeUsd = usdValue2(estimatedFee, 18, nativeUsd);
+      feeUsd = usdValue(estimatedFee, 18, nativeUsd);
       if (!Number.isFinite(feeUsd)) throw new Error("recovery_economic_value_invalid");
       if (feeUsd > 500) throw new Error("recovery_usd_fee_cap_exceeded");
       const assetValuation = await env.DB.prepare("SELECT estimated_value_usd,valuation_confidence,price_observed_at FROM wallet_assets WHERE wallet_id=? AND asset_ref=? LIMIT 1").bind(scope.wallet_id, job.asset_id).first();
@@ -23446,224 +23466,6 @@ async function runtimeReadiness(env) {
   return json3({ automationEnabled, executionEnabled, networks, checkedAt: (/* @__PURE__ */ new Date()).toISOString() });
 }
 __name(runtimeReadiness, "runtimeReadiness");
-
-// src/application/monitoring-service.ts
-var CHAINS = {
-  ethereum: { chainId: 1, moralis: "0x1", nativeSymbol: "ETH", nativeName: "Ether", priceId: "ethereum", rpc: "EVM_RPC_ETHEREUM" },
-  polygon: { chainId: 137, moralis: "0x89", nativeSymbol: "POL", nativeName: "Polygon Ecosystem Token", priceId: "polygon-ecosystem-token", rpc: "EVM_RPC_POLYGON" },
-  bsc: { chainId: 56, moralis: "0x38", nativeSymbol: "BNB", nativeName: "BNB", priceId: "binancecoin", rpc: "EVM_RPC_BSC" },
-  avalanche: { chainId: 43114, moralis: "0xa86a", nativeSymbol: "AVAX", nativeName: "Avalanche", priceId: "avalanche-2", rpc: "EVM_RPC_AVALANCHE" },
-  arbitrum: { chainId: 42161, moralis: "0xa4b1", nativeSymbol: "ETH", nativeName: "Ether", priceId: "ethereum", rpc: "EVM_RPC_ARBITRUM" },
-  optimism: { chainId: 10, moralis: "0xa", nativeSymbol: "ETH", nativeName: "Ether", priceId: "ethereum", rpc: "EVM_RPC_OPTIMISM" },
-  base: { chainId: 8453, moralis: "0x2105", nativeSymbol: "ETH", nativeName: "Ether", priceId: "ethereum", rpc: "EVM_RPC_BASE" }
-};
-function validAddress(v) {
-  return typeof v === "string" && /^0x[0-9a-fA-F]{40}$/.test(v);
-}
-__name(validAddress, "validAddress");
-function safeDecimals(v) {
-  const n = Number(v);
-  return Number.isInteger(n) && n >= 0 && n <= 36 ? n : 18;
-}
-__name(safeDecimals, "safeDecimals");
-function amountDisplay(raw, decimals) {
-  const n = BigInt(raw), base = 10n ** BigInt(decimals), whole = n / base, frac = (n % base).toString().padStart(decimals, "0").replace(/0+$/, "");
-  return frac ? whole + "." + frac : whole.toString();
-}
-__name(amountDisplay, "amountDisplay");
-function usdAmount(raw, decimals, price) {
-  const n = Number(amountDisplay(raw, decimals)) * price;
-  return Number.isFinite(n) && n >= 0 ? n : 0;
-}
-__name(usdAmount, "usdAmount");
-async function timedFetch(url, init = {}, timeoutMs = 9e3) {
-  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-__name(timedFetch, "timedFetch");
-async function moralis(path, key) {
-  const response2 = await timedFetch("https://deep-index.moralis.io/api/v2.2" + path, { headers: { "X-API-Key": key, "accept": "application/json" } });
-  if (!response2.ok) throw new Error("MORALIS_HTTP_" + response2.status);
-  return await response2.json();
-}
-__name(moralis, "moralis");
-async function nativePriceUsd(id) {
-  try {
-    const response2 = await timedFetch("https://api.coingecko.com/api/v3/simple/price?ids=" + encodeURIComponent(id) + "&vs_currencies=usd&include_last_updated_at=true");
-    if (!response2.ok) return null;
-    const data = await response2.json();
-    const item = data[id], now = Math.floor(Date.now() / 1e3);
-    return item && Number.isFinite(item.usd) && Number(item.usd) > 0 && Number.isFinite(item.last_updated_at) && now - Number(item.last_updated_at) <= 300 && now >= Number(item.last_updated_at) - 60 ? Number(item.usd) : null;
-  } catch {
-    return null;
-  }
-}
-__name(nativePriceUsd, "nativePriceUsd");
-async function tokenPrice(chain, address, key) {
-  try {
-    const data = await moralis("/erc20/" + address + "/price?chain=" + chain, key);
-    const price = Number(data.usdPrice ?? data.usd_price ?? data.usdPriceFormatted);
-    return Number.isFinite(price) && price > 0 ? price : null;
-  } catch {
-    return null;
-  }
-}
-__name(tokenPrice, "tokenPrice");
-async function rpcNativeBalance(url, address) {
-  const response2 = await timedFetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [address, "latest"] }) });
-  if (!response2.ok) throw new Error("RPC_HTTP_" + response2.status);
-  const data = await response2.json();
-  if (data.error || !data.result || !/^0x[0-9a-fA-F]+$/.test(data.result)) throw new Error("RPC_NATIVE_BALANCE_FAILED");
-  return BigInt(data.result).toString();
-}
-__name(rpcNativeBalance, "rpcNativeBalance");
-async function discoverApprovals(address, chain, key) {
-  const data = await moralis("/wallets/" + address + "/approvals?chain=" + chain, key);
-  return Array.isArray(data) ? data : Array.isArray(data.result) ? data.result : [];
-}
-__name(discoverApprovals, "discoverApprovals");
-async function persistPermission(env, wallet, approval, now) {
-  const token = approval.token_address ?? approval.tokenAddress, spender = approval.spender_address ?? approval.spender;
-  if (!validAddress(token) || !validAddress(spender)) return;
-  const rawAllowance = String(approval.allowance ?? approval.value ?? "0");
-  const allowance = /^0x[0-9a-f]+$/i.test(rawAllowance) ? BigInt(rawAllowance).toString() : rawAllowance;
-  if (!/^\d+$/.test(allowance)) return;
-  const previous = await env.DB.prepare("SELECT allowance_raw,status,first_seen_at FROM wallet_permissions WHERE wallet_id=? AND network=? AND token_address=? AND spender_address=?").bind(wallet.id, wallet.network, token.toLowerCase(), spender.toLowerCase()).first();
-  const status = BigInt(allowance) > 0n ? "active" : "revoked";
-  const change = !previous ? "discovered" : previous.allowance_raw !== allowance ? status === "revoked" ? "revoked" : "allowance_changed" : previous.status !== status ? status === "revoked" ? "revoked" : "reapproved" : null;
-  await env.DB.prepare(`
-    INSERT INTO wallet_permissions(id,wallet_id,network,token_address,spender_address,allowance_raw,status,first_seen_at,last_seen_at,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?)
-    ON CONFLICT(wallet_id,network,token_address,spender_address) DO UPDATE SET
-      allowance_raw=excluded.allowance_raw,status=excluded.status,last_seen_at=excluded.last_seen_at,updated_at=excluded.updated_at
-  `).bind(crypto.randomUUID(), wallet.id, wallet.network, token.toLowerCase(), spender.toLowerCase(), allowance, status, previous?.first_seen_at ?? now, now, now).run();
-  if (change) await env.DB.prepare("INSERT INTO wallet_permission_history(id,wallet_id,network,token_address,spender_address,allowance_raw,status,change_kind,observed_at) VALUES(?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), wallet.id, wallet.network, token.toLowerCase(), spender.toLowerCase(), allowance, status, change, now).run();
-}
-__name(persistPermission, "persistPermission");
-async function runWallet(env, wallet) {
-  const started = (/* @__PURE__ */ new Date()).toISOString(), cfg = CHAINS[wallet.network], now = /* @__PURE__ */ __name(() => (/* @__PURE__ */ new Date()).toISOString(), "now");
-  if (!cfg || wallet.chain_id !== cfg.chainId) throw new Error("WALLET_NETWORK_CHAIN_MISMATCH");
-  const rpc = env[cfg.rpc];
-  if (typeof rpc !== "string" || !rpc.startsWith("https://")) throw new Error("RPC_NOT_CONFIGURED");
-  if (!env.MORALIS_API_KEY) throw new Error("MORALIS_API_KEY_NOT_CONFIGURED");
-  const key = env.MORALIS_API_KEY;
-  const [nativeRaw, tokenPayload, nativeUsd] = await Promise.all([
-    rpcNativeBalance(rpc, wallet.address),
-    moralis("/wallets/" + wallet.address + "/tokens?chain=" + cfg.moralis + "&exclude_spam=true", key),
-    nativePriceUsd(cfg.priceId)
-  ]);
-  const tokens = Array.isArray(tokenPayload) ? tokenPayload : tokenPayload.result ?? [];
-  if (tokens.length > 150) throw new Error("TOKEN_DISCOVERY_RESULT_LIMIT_EXCEEDED");
-  const observedAt = now();
-  const assets = [];
-  assets.push({ ref: wallet.network + ":native", address: null, symbol: cfg.nativeSymbol, name: cfg.nativeName, raw: nativeRaw, decimals: 18, price: nativeUsd, confidence: nativeUsd ? 0.8 : 0, source: "rpc", verified: 1 });
-  const seen = /* @__PURE__ */ new Set();
-  for (const token of tokens) {
-    const address = token.token_address ?? token.address;
-    if (!validAddress(address)) continue;
-    const lower = address.toLowerCase();
-    if (seen.has(lower)) continue;
-    seen.add(lower);
-    const decimals = safeDecimals(token.decimals), raw = String(token.balance ?? "");
-    if (!/^\d+$/.test(raw)) continue;
-    const price = Number.isFinite(Number(token.usd_price ?? token.usdPrice)) && Number(token.usd_price ?? token.usdPrice) > 0 ? Number(token.usd_price ?? token.usdPrice) : await tokenPrice(cfg.moralis, lower, key);
-    const symbol = String(token.symbol ?? "").slice(0, 32) || "UNKNOWN", name = String(token.name ?? "").slice(0, 100) || "Unknown token";
-    assets.push({ ref: wallet.network + ":erc20:" + lower, address: lower, symbol, name, raw, decimals, price, confidence: price ? 0.8 : 0, source: "moralis-indexer", verified: 0 });
-  }
-  const batchSize = 40;
-  for (let offset = 0; offset < assets.length; offset += batchSize) {
-    const batch = assets.slice(offset, offset + batchSize);
-    for (const asset of batch) {
-      const value = asset.price && asset.price > 0 ? usdAmount(asset.raw, asset.decimals, asset.price) : null;
-      await env.DB.prepare(`
-        INSERT INTO wallet_assets(id,wallet_id,network,asset_ref,token_address,symbol,name,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,observed_at,first_seen_at,last_seen_at,lifecycle_status,missing_since,discovery_source,token_verified)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'active',NULL,?,?)
-        ON CONFLICT(wallet_id,network,asset_ref) DO UPDATE SET
-          token_address=excluded.token_address,symbol=excluded.symbol,name=excluded.name,amount_raw=excluded.amount_raw,
-          decimals=excluded.decimals,estimated_value_usd=excluded.estimated_value_usd,
-          price_observed_at=excluded.price_observed_at,valuation_confidence=excluded.valuation_confidence,
-          observed_at=excluded.observed_at,last_seen_at=excluded.last_seen_at,lifecycle_status='active',missing_since=NULL,
-          discovery_source=excluded.discovery_source,token_verified=excluded.token_verified
-      `).bind(crypto.randomUUID(), wallet.id, wallet.network, asset.ref, asset.address, asset.symbol, asset.name, asset.raw, asset.decimals, value, asset.price ? observedAt : null, asset.confidence || null, observedAt, observedAt, observedAt, asset.source, asset.verified).run();
-      await env.DB.prepare("INSERT INTO wallet_asset_history(id,wallet_id,network,asset_ref,token_address,symbol,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,lifecycle_status,observed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), wallet.id, wallet.network, asset.ref, asset.address, asset.symbol, asset.raw, asset.decimals, value, asset.price ? observedAt : null, asset.confidence || null, "active", observedAt).run();
-    }
-  }
-  const currentRefs = assets.map((a) => a.ref);
-  const old = await env.DB.prepare("SELECT asset_ref,token_address,symbol,name,amount_raw,decimals FROM wallet_assets WHERE wallet_id=? AND network=? AND lifecycle_status='active'").bind(wallet.id, wallet.network).all();
-  for (const item of old.results) {
-    if (currentRefs.includes(item.asset_ref)) continue;
-    await env.DB.prepare("UPDATE wallet_assets SET lifecycle_status='missing',missing_since=?,last_seen_at=? WHERE wallet_id=? AND network=? AND asset_ref=?").bind(observedAt, observedAt, wallet.id, wallet.network, item.asset_ref).run();
-    await env.DB.prepare("INSERT INTO wallet_asset_history(id,wallet_id,network,asset_ref,token_address,symbol,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,lifecycle_status,observed_at) SELECT ?,wallet_id,network,asset_ref,token_address,symbol,amount_raw,decimals,estimated_value_usd,price_observed_at,valuation_confidence,'missing',? FROM wallet_assets WHERE wallet_id=? AND network=? AND asset_ref=?").bind(crypto.randomUUID(), observedAt, wallet.id, wallet.network, item.asset_ref).run();
-  }
-  let permissions = [];
-  let permissionPartial = false;
-  try {
-    permissions = await discoverApprovals(wallet.address, cfg.moralis, key);
-    const seenPermissions = /* @__PURE__ */ new Set();
-    for (const approval of permissions) {
-      const token = approval.token_address ?? approval.tokenAddress, spender = approval.spender_address ?? approval.spender;
-      if (validAddress(token) && validAddress(spender)) seenPermissions.add(token.toLowerCase() + ":" + spender.toLowerCase());
-      await persistPermission(env, wallet, approval, observedAt);
-    }
-    const active = await env.DB.prepare("SELECT token_address,spender_address FROM wallet_permissions WHERE wallet_id=? AND network=? AND status='active'").bind(wallet.id, wallet.network).all();
-    for (const previous of active.results) {
-      if (seenPermissions.has(previous.token_address.toLowerCase() + ":" + previous.spender_address.toLowerCase())) continue;
-      await env.DB.prepare("UPDATE wallet_permissions SET allowance_raw='0',status='revoked',last_seen_at=?,updated_at=? WHERE wallet_id=? AND network=? AND token_address=? AND spender_address=? AND status='active'").bind(observedAt, observedAt, wallet.id, wallet.network, previous.token_address, previous.spender_address).run();
-      await env.DB.prepare("INSERT INTO wallet_permission_history(id,wallet_id,network,token_address,spender_address,allowance_raw,status,change_kind,observed_at) VALUES(?,?,?,?,?,'0','revoked','no_longer_reported',?)").bind(crypto.randomUUID(), wallet.id, wallet.network, previous.token_address, previous.spender_address, observedAt).run();
-    }
-  } catch {
-    permissionPartial = true;
-  }
-  await env.DB.prepare("UPDATE recovery_wallets SET last_monitor_at=?,monitoring_status=?,monitoring_error=? WHERE id=?").bind(observedAt, permissionPartial ? "partial" : "healthy", permissionPartial ? "ALLOWANCE_PROVIDER_UNAVAILABLE" : null, wallet.id).run();
-  await env.DB.prepare("INSERT INTO wallet_monitoring_runs(id,wallet_id,network,status,discovered_assets,priced_assets,permission_count,error_code,started_at,completed_at) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), wallet.id, wallet.network, permissionPartial ? "partial" : "success", assets.length, assets.filter((a) => a.price !== null).length, permissions.length, permissionPartial ? "ALLOWANCE_PROVIDER_UNAVAILABLE" : null, started, observedAt).run();
-  await env.DB.prepare("INSERT INTO audit_events(id,actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES(?,'system','scheduled-monitor','wallet.monitoring.completed','recovery_wallet',?,?,?)").bind(crypto.randomUUID(), wallet.id, JSON.stringify({ network: wallet.network, assets: assets.length, priced: assets.filter((a) => a.price !== null).length, permissions: permissions.length, permissionPartial }), observedAt).run();
-}
-__name(runWallet, "runWallet");
-async function runScheduledWalletMonitoring(env, limit = 5) {
-  if (!env.MORALIS_API_KEY) return { processed: 0, failed: 0, skipped: true };
-  const due = await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id FROM recovery_wallets WHERE status='monitoring' AND (last_monitor_at IS NULL OR last_monitor_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now','-5 minutes')) ORDER BY CASE WHEN last_monitor_at IS NULL THEN 0 ELSE 1 END,last_monitor_at ASC,first_seen_at ASC LIMIT ?").bind(Math.max(1, Math.min(10, limit))).all();
-  let processed = 0, failed = 0;
-  for (const wallet of due.results) {
-    try {
-      await runWallet(env, wallet);
-      processed++;
-    } catch (error) {
-      failed++;
-      const at = (/* @__PURE__ */ new Date()).toISOString(), code = error instanceof Error ? error.message.slice(0, 120) : "MONITORING_FAILED";
-      await env.DB.prepare("UPDATE recovery_wallets SET last_monitor_at=?,monitoring_status='error',monitoring_error=? WHERE id=?").bind(at, code, wallet.id).run();
-      await env.DB.prepare("INSERT INTO wallet_monitoring_runs(id,wallet_id,network,status,error_code,started_at,completed_at) VALUES(?,?,?,'failed',?,?,?)").bind(crypto.randomUUID(), wallet.id, wallet.network, code, at, at).run();
-    }
-  }
-  return { processed, failed, skipped: false };
-}
-__name(runScheduledWalletMonitoring, "runScheduledWalletMonitoring");
-async function monitoringDashboardData(env) {
-  const [wallets, assets, permissions, runs, jobs, transactions] = await Promise.all([
-    env.DB.prepare("SELECT id,owner_address,network,status,monitoring_status,monitoring_error,last_monitor_at,first_seen_at FROM recovery_wallets ORDER BY network,owner_address").all(),
-    env.DB.prepare("SELECT network,lifecycle_status,COUNT(*) AS count,COALESCE(SUM(estimated_value_usd),0) AS value_usd,COUNT(CASE WHEN price_observed_at IS NOT NULL THEN 1 END) AS priced FROM wallet_assets GROUP BY network,lifecycle_status ORDER BY network").all(),
-    env.DB.prepare("SELECT network,status,COUNT(*) AS count FROM wallet_permissions GROUP BY network,status ORDER BY network,status").all(),
-    env.DB.prepare("SELECT r.id,r.wallet_id,w.owner_address,r.network,r.status,r.discovered_assets,r.priced_assets,r.permission_count,r.error_code,r.started_at,r.completed_at FROM wallet_monitoring_runs r JOIN recovery_wallets w ON w.id=r.wallet_id ORDER BY r.completed_at DESC LIMIT 30").all(),
-    env.DB.prepare("SELECT j.id,j.execution_mode,j.status,j.asset_id,j.created_at,j.updated_at,j.last_error_code,w.owner_address,g.network FROM recovery_jobs j JOIN recovery_grants g ON g.grant_id=j.grant_id JOIN recovery_wallets w ON w.owner_address=g.owner_wallet AND w.network=g.network ORDER BY j.created_at DESC LIMIT 20").all(),
-    env.DB.prepare("SELECT t.id,t.network,t.transaction_hash,t.status,t.amount_raw,t.destination_address,t.created_at,j.asset_id FROM recovery_transactions t JOIN recovery_jobs j ON j.id=t.job_id ORDER BY t.created_at DESC LIMIT 20").all()
-  ]);
-  return { wallets: wallets.results, assets: assets.results, permissions: permissions.results, runs: runs.results, jobs: jobs.results, transactions: transactions.results, providerConfigured: Boolean(env.MORALIS_API_KEY), generatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-}
-__name(monitoringDashboardData, "monitoringDashboardData");
-function monitoringDashboardResponse() {
-  const html2 = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mainwell \xB7 Monitoring</title><style>
- :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#0b1220;color:#e8edf5}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#203b48 0,transparent 42%),#0b1220}.shell{max-width:1200px;margin:auto;padding:24px}.head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.muted{color:#91a4b1;font-size:13px}.link,button{border:1px solid #3b5661;background:#1b303b;color:#d9e6e8;border-radius:9px;padding:9px 13px;text-decoration:none;font:inherit;cursor:pointer}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}.card{background:#14222e;border:1px solid #2b414c;border-radius:13px;padding:15px;min-width:0}.card small{color:#91a4af}.card strong{display:block;font-size:24px;margin-top:8px}.section{margin-top:16px}.section h2{font-size:16px}.tablewrap{overflow:auto;border:1px solid #2b414c;border-radius:12px;background:#111e29}table{width:100%;border-collapse:collapse;font-size:12px;min-width:700px}td,th{text-align:left;padding:11px;border-bottom:1px solid #263b47;overflow-wrap:anywhere}th{color:#9bcfbe;background:#152832}td{color:#d0dbe2}.status{color:#9ed8c4}.warn{color:#e7c58b}.error{color:#eea5a5}.foot{margin:16px 0;color:#8295a2;font-size:12px;line-height:1.6}@media(max-width:700px){.shell{padding:15px}.grid{grid-template-columns:repeat(2,1fr)}.card strong{font-size:20px}}
- </style></head><body><main class="shell"><header class="head"><div><div class="muted">MAINWELL / ADMINISTRATION</div><h1>Wallet monitoring</h1><p class="muted">Asset discovery, live valuations, allowance changes and recovery history.</p></div><div><a class="link" href="/admin">\u2190 Admin console</a> <button id="refresh">Refresh</button></div></header><div id="provider" class="foot">Loading provider status\u2026</div><div class="grid" id="metrics"></div><section class="section"><h2>Registered source wallets</h2><div class="tablewrap"><table><thead><tr><th>Wallet</th><th>Network</th><th>Status</th><th>Last scan</th><th>Last error</th></tr></thead><tbody id="wallets"></tbody></table></div></section><section class="section"><h2>Asset lifecycle and valuation</h2><div class="tablewrap"><table><thead><tr><th>Network</th><th>Lifecycle</th><th>Assets</th><th>Priced</th><th>Estimated USD</th></tr></thead><tbody id="assets"></tbody></table></div></section><section class="section"><h2>Allowance and permission status</h2><div class="tablewrap"><table><thead><tr><th>Network</th><th>Status</th><th>Count</th></tr></thead><tbody id="permissions"></tbody></table></div></section><section class="section"><h2>Recent monitoring runs</h2><div class="tablewrap"><table><thead><tr><th>Completed</th><th>Wallet</th><th>Network</th><th>Status</th><th>Assets</th><th>Priced</th><th>Allowances</th><th>Error</th></tr></thead><tbody id="runs"></tbody></table></div></section><section class="section"><h2>Recovery job history</h2><div class="tablewrap"><table><thead><tr><th>Created</th><th>Wallet</th><th>Network</th><th>Mode</th><th>Status</th><th>Asset</th><th>Error</th></tr></thead><tbody id="jobs"></tbody></table></div></section><section class="section"><h2>Recovery transaction history</h2><div class="tablewrap"><table><thead><tr><th>Created</th><th>Network</th><th>Status</th><th>Transaction</th><th>Asset</th><th>Amount raw</th><th>Destination</th></tr></thead><tbody id="transactions"></tbody></table></div></section><p class="foot">Discovery and monitoring are read-only. A discovered token is not eligible for recovery until it is separately registered, policy-configured and explicitly authorized by its owner. Price data is indicative and must pass freshness/confidence checks before recovery preflight.</p></main><script>
- const $=id=>document.getElementById(id),esc=v=>String(v??"\u2014").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),rows=(id,data,cols)=>$(id).innerHTML=(data||[]).map(x=>"<tr>"+cols.map(c=>"<td>"+esc(c(x))+"</td>").join("")+"</tr>").join("")||"<tr><td colspan="12">No records yet</td></tr>";
- async function load(){const r=await fetch("/api/admin/monitoring",{credentials:"same-origin",cache:"no-store"});if(!r.ok)throw new Error(r.status===401?"Administrator session expired. Sign in again.":"Unable to load monitoring records.");const d=await r.json();$("provider").innerHTML="Indexing provider: <b class='"+(d.providerConfigured?"status":"warn")+"'>"+(d.providerConfigured?"configured":"MORALIS_API_KEY required")+"</b> \xB7 Generated "+esc(d.generatedAt);const w=d.wallets||[],a=d.assets||[],p=d.permissions||[];$("metrics").innerHTML=[["Registered wallets",w.length],["Active assets",a.filter(x=>x.lifecycle_status==="active").reduce((n,x)=>n+Number(x.count),0)],["Priced assets",a.reduce((n,x)=>n+Number(x.priced),0)],["Active allowances",p.filter(x=>x.status==="active").reduce((n,x)=>n+Number(x.count),0)]].map(x=>"<article class='card'><small>"+esc(x[0])+"</small><strong>"+esc(x[1])+"</strong></article>").join("");rows("wallets",w,x=>[x.owner_address,x.network,x.monitoring_status||x.status,x.last_monitor_at,x.monitoring_error]);rows("assets",a,x=>[x.network,x.lifecycle_status,x.count,x.priced,Number(x.value_usd||0).toFixed(2)]);rows("permissions",p,x=>[x.network,x.status,x.count]);rows("runs",d.runs,x=>[x.completed_at,x.owner_address,x.network,x.status,x.discovered_assets,x.priced_assets,x.permission_count,x.error_code]);rows("jobs",d.jobs,x=>[x.created_at,x.owner_address,x.network,x.execution_mode,x.status,x.asset_id,x.last_error_code]);rows("transactions",d.transactions,x=>[x.created_at,x.network,x.status,x.transaction_hash,x.asset_id,x.amount_raw,x.destination_address]);}
- $("refresh").addEventListener("click",()=>load().catch(e=>alert(e.message)));load().catch(e=>{$("provider").textContent=e.message});
- <\/script></body></html>`;
-  return new Response(html2, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'" } });
-}
-__name(monitoringDashboardResponse, "monitoringDashboardResponse");
 
 // src/worker.ts
 var SESSION_SECONDS2 = 604800;
