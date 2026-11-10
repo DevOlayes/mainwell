@@ -65,9 +65,9 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
   }catch{return json({service:"mainwell",database:"unavailable",error:"Database health check failed"},503);}
   if(url.pathname==="/api/auth/challenge"&&request.method==="POST"){
     if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
-    if(!(await walletAuthRateLimit(request,env)))return json({error:"Too many wallet authentication requests. Try again in ten minutes."},429,{"retry-after":"600"});
     const b=await body(request),address=typeof b?.address==="string"?b.address:"",chainId=Number(b?.chainId);
     if(!ADDRESS.test(address)||!Number.isSafeInteger(chainId)||!CHAINS.has(chainId))return json({error:"Valid EVM address and supported chain ID required."},400);
+    if(!(await walletAuthRateLimit(request,env)))return json({error:"Too many wallet authentication requests. Try again in ten minutes."},429,{"retry-after":"600"});
     const now=Date.now(),issued=new Date(now).toISOString(),expires=new Date(now+CHALLENGE_SECONDS*1000).toISOString(),nonce=randomHex(16);
     const message=[url.hostname+" wants you to sign in with your Ethereum account:",address,"","Sign in to Mainwell. This request will not trigger a blockchain transaction or grant token permissions.","","URI: "+url.origin,"Version: 1","Chain ID: "+chainId,"Nonce: "+nonce,"Issued At: "+issued,"Expiration Time: "+expires].join("\n");
     await env.DB.prepare("INSERT INTO wallet_auth_challenges(nonce,wallet_address,chain_id,message,origin,expires_at,created_at) VALUES(?,?,?,?,?,?,?)").bind(nonce,address.toLowerCase(),chainId,message,url.origin,expires,issued).run();
@@ -76,9 +76,9 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
   }
   if(url.pathname==="/api/auth/verify"&&request.method==="POST"){
     if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
-    if(!(await walletAuthRateLimit(request,env)))return json({error:"Too many wallet authentication requests. Try again in ten minutes."},429,{"retry-after":"600"});
     const b=await body(request),address=typeof b?.address==="string"?b.address:"",nonce=typeof b?.nonce==="string"?b.nonce:"",signature=typeof b?.signature==="string"?b.signature:"",chainId=Number(b?.chainId);
     if(!ADDRESS.test(address)||!/^[0-9a-f]{32}$/.test(nonce)||!Number.isSafeInteger(chainId)||!CHAINS.has(chainId)||!/^0x[0-9a-fA-F]{130}$/.test(signature))return json({error:"Malformed wallet authentication request."},400);
+    if(!(await walletAuthRateLimit(request,env)))return json({error:"Too many wallet authentication requests. Try again in ten minutes."},429,{"retry-after":"600"});
     const c=await env.DB.prepare("SELECT message,wallet_address,chain_id,origin,expires_at,consumed_at FROM wallet_auth_challenges WHERE nonce=?").bind(nonce).first<{message:string;wallet_address:string;chain_id:number;origin:string;expires_at:string;consumed_at:string|null}>();
     const now=new Date().toISOString();
     if(!c||c.consumed_at||c.expires_at<=now||c.origin!==url.origin||c.wallet_address!==address.toLowerCase()||c.chain_id!==chainId)return json({error:"Challenge invalid, expired, or already used. Request a new one."},401);
