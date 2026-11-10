@@ -168,6 +168,47 @@ contract ScopedRecoveryExecutorTest {
         require(!ok, "non-owner revoked grant");
     }
 
+
+    function testWholeGrantRevocationBlocksBothOperatorRoles() public {
+        executor.revoke();
+        vm.prank(ADMIN_OPERATOR);
+        (bool adminOk,) = address(executor).call(abi.encodeWithSelector(executor.executeAdminToken.selector, address(token), 1));
+        vm.prank(AUTOMATION_OPERATOR);
+        (bool automationOk,) = address(executor).call(abi.encodeWithSelector(executor.executeAutomaticToken.selector, address(token), 1));
+        require(!adminOk && !automationOk, "revoked grant still executable");
+    }
+
+    function testAssetRevocationStopsOnlyThatAssetAndPreservesRecoveredAccounting() public {
+        MockRecoveryToken second = new MockRecoveryToken();
+        address[] memory assets = new address[](2);
+        address[] memory destinations = new address[](2);
+        uint256[] memory caps = new uint256[](2);
+        assets[0] = address(token); assets[1] = address(second);
+        destinations[0] = DESTINATION; destinations[1] = address(0xD00D);
+        caps[0] = 500; caps[1] = 700;
+        ScopedRecoveryExecutor multi = new ScopedRecoveryExecutor(uint64(block.timestamp + 1 days), assets, destinations, caps, true, true, AUTOMATION_OPERATOR, ADMIN_OPERATOR);
+        token.approve(address(multi), 500);
+        second.mint(address(this), 700);
+        second.approve(address(multi), 700);
+        vm.prank(ADMIN_OPERATOR);
+        multi.executeAdminToken(address(token), 100);
+        multi.revokeAsset(address(token));
+        require(multi.assetLimit(address(token)) == 100, "revocation did not freeze remaining cap");
+        vm.prank(ADMIN_OPERATOR);
+        (bool revokedAssetOk,) = address(multi).call(abi.encodeWithSelector(multi.executeAdminToken.selector, address(token), 1));
+        require(!revokedAssetOk, "revoked asset still executable");
+        vm.prank(ADMIN_OPERATOR);
+        multi.executeAdminToken(address(second), 200);
+        require(second.balanceOf(address(0xD00D)) == 200, "unrevoked asset was blocked");
+        require(token.balanceOf(DESTINATION) == 100, "revocation changed prior recovery");
+    }
+
+    function testNonOwnerCannotRevokeSingleAsset() public {
+        vm.prank(STRANGER);
+        (bool ok,) = address(executor).call(abi.encodeWithSelector(executor.revokeAsset.selector, address(token)));
+        require(!ok, "non-owner revoked asset");
+    }
+
     function testConstructorRejectsNonContractAssetAddress() public {
         address[] memory assets = new address[](1);
         address[] memory destinations = new address[](1);
