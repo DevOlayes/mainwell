@@ -86,7 +86,7 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
     .bind(admin.adminId,id,JSON.stringify({network:asset.network,address:normalized,symbol:asset.symbol,name:asset.name,decimals:asset.decimals,provenance:asset.provenance,verification:"chain-id+bytecode+decimals"}),now));
   }
   if(statements.length){
-   const results=await env.DB.batch(statements);
+   const results=await env.DB.batch(statements as unknown as Parameters<typeof env.DB.batch>[0]);
    if(results.some(result=>!result.success))return response({error:"One or more verified assets could not be committed. Review the registry and retry; successful statements are recorded in D1."},503);
   }
   return response({registered:verified.length,verified:verified.map(asset=>({network:asset.network,symbol:asset.symbol,address:asset.address,decimals:asset.decimals,provenance:asset.provenance})),rejected});
