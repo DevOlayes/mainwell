@@ -235,7 +235,7 @@ function renderWalletAssetInventory(targetId){
   const action=document.createElement("div");action.className="inventory-action";
   const help=node("p",reason||"All displayed readiness checks passed. The live recovery worker will still revalidate the authorization before any transaction.");
   help.className="inventory-action-help";
-  const button=node("button",grant&&policy&&allowance&&locked&&monitored&&supported?"Review recovery request":"Recovery unavailable");
+  const button=document.createElement("button");button.textContent=grant&&policy&&allowance&&locked&&monitored&&supported?"Review recovery request":"Recovery unavailable";
   button.type="button";button.className="secondary inventory-action-button";
   const eligible=!reason;
   button.disabled=!eligible;
