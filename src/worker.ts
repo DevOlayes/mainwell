@@ -111,7 +111,7 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
     const b=await body(request);
     const step=typeof b?.step==="string"?b.step.slice(0,80):"";
     const result=typeof b?.result==="string"?b.result.slice(0,40):"";
-    const allowedSteps=new Set(["wallet.provider_request","wallet.provider_approved","wallet.connect","auth.challenge","auth.personal_sign","auth.verify","intake.register_all","authorization.preflight","authorization.submit"]);
+    const allowedSteps=new Set(["wallet.provider_request","wallet.provider_approved","wallet.connect","auth.challenge","auth.personal_sign","auth.verify","intake.register_all","owner.api","authorization.preflight","authorization.submit"]);
     const allowedResults=new Set(["started","success","failed","awaiting_signature","signature_returned","http_error","network_error"]);
     if((!allowedSteps.has(step)&&!/^intake\.scan\.(ethereum|polygon|bsc|avalanche|arbitrum|optimism|base)$/.test(step))||!allowedResults.has(result))
       return json({error:"Diagnostic event is not allowed."},400);
@@ -121,7 +121,9 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
     const meta=b?.meta&&typeof b.meta==="object"&&!Array.isArray(b.meta)?b.meta as Record<string,unknown>:{};
     const networks=Array.isArray(meta.networks)?meta.networks.filter((x):x is string=>typeof x==="string"&&["ethereum","polygon","bsc","avalanche","arbitrum","optimism","base"].includes(x)).slice(0,7):undefined;
     const registeredNetworks=Array.isArray(meta.registeredNetworks)?meta.registeredNetworks.filter((x):x is string=>typeof x==="string"&&["ethereum","polygon","bsc","avalanche","arbitrum","optimism","base"].includes(x)).slice(0,7):undefined;
-    const metadata={step,result,detail,chainId:Number.isSafeInteger(meta.chainId)&&CHAINS.has(Number(meta.chainId))?Number(meta.chainId):null,
+    const endpointRaw=typeof meta.endpoint==="string"?meta.endpoint:"";
+    const endpoint=/^\\/api\\/owner\\/[a-zA-Z0-9/_:-]{1,120}$/.test(endpointRaw)?endpointRaw:null;
+    const metadata={step,result,detail,endpoint,chainId:Number.isSafeInteger(meta.chainId)&&CHAINS.has(Number(meta.chainId))?Number(meta.chainId):null,
       httpStatus:Number.isInteger(meta.httpStatus)&&Number(meta.httpStatus)>=100&&Number(meta.httpStatus)<=599?Number(meta.httpStatus):null,
       durationMs:Number.isInteger(meta.durationMs)?Math.min(120000,Math.max(0,Number(meta.durationMs))):null,
       assetCount:Number.isInteger(meta.assetCount)?Math.min(2500,Math.max(0,Number(meta.assetCount))):null,

@@ -89,3 +89,28 @@ test("pre-auth wallet diagnostics are rate limited and fail closed", async () =>
   } } });
   assert.equal(response.status, 429);
 });
+
+
+test("pre-auth diagnostics accept owner API events and retain only normalized endpoint paths", async () => {
+  const writes = [];
+  const env = { DB: { prepare(sql) {
+    return { bind(...args) { this.args = args; return this; },
+      async first() { return { locked_until: 0 }; },
+      async run() { writes.push({ sql, args: this.args }); return { success: true, meta: { changes: 1 } }; }
+    };
+  } } };
+  const walletId = "123e4567-e89b-12d3-a456-426614174000";
+  const request = new Request("https://mainwell.example/api/auth/diagnostics", {
+    method: "POST",
+    headers: { origin: "https://mainwell.example", "content-type": "application/json", "cf-connecting-ip": "192.0.2.12" },
+    body: JSON.stringify({ step: "owner.api", result: "success", detail: "",
+      meta: { endpoint: "/api/owner/wallets/" + walletId + "/refresh", httpStatus: 200, durationMs: 37, walletAddress: "0x" + "a".repeat(40) } })
+  });
+  const response = await worker.fetch(request, env);
+  assert.equal(response.status, 200);
+  const audit = writes.find(x => x.sql.includes("INSERT INTO audit_events"));
+  const stored = audit.args[0];
+  assert.match(stored, /\/api\/owner\/wallets\/:id\/refresh/);
+  assert.equal(stored.includes(walletId), false);
+  assert.equal(stored.includes("walletAddress"), false);
+});
