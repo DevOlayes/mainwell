@@ -31,9 +31,25 @@ test("owner wallet reads are filtered by the authenticated session wallet", asyn
   assert.equal(data.wallets[0].assets[0].symbol, "ETH");
 });
 
-test("owner cannot register a wallet on a chain other than the authenticated chain", async () => {
-  const env = { DB: { prepare() { throw new Error("must not write"); } } };
+test("authenticated EOA can register the same address for read-only monitoring on another supported EVM network", async () => {
+  let insertArgs;
+  const env = { DB: { prepare(sql) {
+    return {
+      bind(...args) { this.args = args; return this; },
+      async run() { if (sql.includes("INSERT INTO recovery_wallets")) { insertArgs = this.args; return { success: true, meta: { changes: 1 } }; } return { success: true, meta: { changes: 1 } }; },
+      async first() { return { id: "polygon-wallet-row", owner_address: session.wallet, network: "polygon", chain_id: 137, status: "monitoring" }; }
+    };
+  } } };
   const response = await handleOwnerApi(req("/api/owner/wallets", "POST", { network: "polygon", chainId: 137 }), env, session);
+  assert.equal(response.status, 200);
+  assert.equal(insertArgs[1], session.wallet);
+  assert.equal(insertArgs[2], "polygon");
+  assert.equal(insertArgs[3], 137);
+});
+
+test("owner cannot register a mismatched network and chain ID", async () => {
+  const env = { DB: { prepare() { throw new Error("must not write"); } } };
+  const response = await handleOwnerApi(req("/api/owner/wallets", "POST", { network: "polygon", chainId: 1 }), env, session);
   assert.equal(response.status, 400);
 });
 
