@@ -239,7 +239,7 @@ function renderWalletAssetInventory(targetId){
   button.type="button";button.className="secondary inventory-action-button";
   const eligible=!reason;
   button.disabled=!eligible;
-  if(eligible)button.addEventListener("click",()=>{setView("operations");$("recoveryGrantSelect").value=String(x.grantId);renderRecoveryAssetOptions();$("recoveryAssetSelect").value=String(x.assetId);$("recoveryAmount").value="";$("recoveryAmount").disabled=false;$("queueRecoveryButton").disabled=false;$("recoveryQueueStatus").textContent="Review the amount and submit only if this is the intended recovery."});
+  if(eligible)button.addEventListener("click",async()=>{setView("operations");try{const [jobs,grants,inventory]=await Promise.all([api("/api/admin/recovery-jobs"),api("/api/admin/recovery-grants"),api("/api/admin/wallet-inventory")]);renderList($("recoveryJobs"),jobs.jobs||[],x=>x.execution_mode+" · "+x.status+" · "+x.asset_id+" · "+(x.requested_amount_raw||"amount pending")+" · "+x.created_at);eligibleRecoveryGrants=grants.grants||[];walletAssetInventory=inventory.inventory||[];renderWalletAssetInventory("recoveryAssetInventory");renderRecoveryGrantOptions();$("recoveryGrantSelect").value=String(x.grantId);renderRecoveryAssetOptions();$("recoveryAssetSelect").value=String(x.assetId);$("recoveryAmount").value="";$("recoveryAmount").disabled=false;$("queueRecoveryButton").disabled=false;$("recoveryQueueStatus").textContent="Review the amount and confirm the intended source, token and destination before queueing."}catch(error){$("recoveryQueueStatus").className="status error";$("recoveryQueueStatus").textContent=error.message}});
   action.append(help,button);card.append(action);grid.append(card);
  }
  root.append(grid);
