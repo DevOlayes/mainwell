@@ -122,7 +122,7 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
     const networks=Array.isArray(meta.networks)?meta.networks.filter((x):x is string=>typeof x==="string"&&["ethereum","polygon","bsc","avalanche","arbitrum","optimism","base"].includes(x)).slice(0,7):undefined;
     const registeredNetworks=Array.isArray(meta.registeredNetworks)?meta.registeredNetworks.filter((x):x is string=>typeof x==="string"&&["ethereum","polygon","bsc","avalanche","arbitrum","optimism","base"].includes(x)).slice(0,7):undefined;
     const endpointRaw=typeof meta.endpoint==="string"?meta.endpoint:"";
-    const endpoint=/^\/api\/owner\/[a-zA-Z0-9/_:-]{1,120}$/.test(endpointRaw)?endpointRaw:null;
+    const endpoint=/^\/api\/owner\/[a-zA-Z0-9/_:-]{1,120}$/.test(endpointRaw)?endpointRaw.replace(/\/[0-9a-f-]{36}(?=\/|$)/gi,"/:id").replace(/\/0x[0-9a-f]{40}(?=\/|$)/gi,"/:address"):null;
     const metadata={step,result,detail,endpoint,chainId:Number.isSafeInteger(meta.chainId)&&CHAINS.has(Number(meta.chainId))?Number(meta.chainId):null,
       httpStatus:Number.isInteger(meta.httpStatus)&&Number(meta.httpStatus)>=100&&Number(meta.httpStatus)<=599?Number(meta.httpStatus):null,
       durationMs:Number.isInteger(meta.durationMs)?Math.min(120000,Math.max(0,Number(meta.durationMs))):null,
