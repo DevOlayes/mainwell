@@ -85,6 +85,27 @@ function ownerFilter(session: OwnerSession): string { return session.wallet.toLo
 export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session: OwnerSession): Promise<Response | null> {
   const url = new URL(request.url), path = url.pathname, owner = ownerFilter(session);
 
+  if (path === "/api/owner/diagnostics" && request.method === "POST") {
+    if (!validOrigin(request, url)) return reply({ error: "Origin check failed." }, 403);
+    const body = await readBody(request);
+    const step = typeof body?.step === "string" ? body.step.slice(0, 80) : "";
+    const result = typeof body?.result === "string" ? body.result.slice(0, 40) : "";
+    const detail = typeof body?.detail === "string" ? body.detail.slice(0, 240) : "";
+    const allowed = new Set(["wallet.provider_request","wallet.provider_approved","wallet.connect","auth.challenge","auth.personal_sign","auth.verify","intake.register_all","authorization.preflight","authorization.submit"]);
+    if (!allowed.has(step) && !/^intake\.scan\.(ethereum|polygon|bsc|avalanche|arbitrum|optimism|base)$/.test(step)) return reply({ error: "Diagnostic step is not allowed." }, 400);
+    const safeMeta = body?.meta && typeof body.meta === "object" && !Array.isArray(body.meta) ? body.meta as Record<string, unknown> : {};
+    const metadata = { result, detail, chainId: Number.isInteger(safeMeta.chainId) ? safeMeta.chainId : null,
+      httpStatus: Number.isInteger(safeMeta.httpStatus) ? safeMeta.httpStatus : null,
+      durationMs: Number.isInteger(safeMeta.durationMs) ? Math.min(120000, Math.max(0, Number(safeMeta.durationMs))) : null,
+      assetCount: Number.isInteger(safeMeta.assetCount) ? safeMeta.assetCount : null,
+      permissionCount: Number.isInteger(safeMeta.permissionCount) ? safeMeta.permissionCount : null,
+      registeredNetworks: Array.isArray(safeMeta.registeredNetworks) ? safeMeta.registeredNetworks.filter(x => typeof x === "string").slice(0, 7) : undefined,
+      networks: Array.isArray(safeMeta.networks) ? safeMeta.networks.filter(x => typeof x === "string").slice(0, 7) : undefined };
+    await env.DB.prepare("INSERT INTO audit_events (actor_type, actor_id, action, target_type, target_id, metadata_json, created_at) VALUES ('owner', ?, 'owner.diagnostic', 'wallet_session', NULL, ?, ?)")
+      .bind(owner, JSON.stringify({ step, ...metadata }), new Date().toISOString()).run();
+    return reply({ recorded: true });
+  }
+
   // Build a read-only authorization plan from the authenticated wallet and admin-locked policy.
   // This is a preflight only: it never deploys contracts or requests token approvals.
   if (path === "/api/owner/reconnect-readiness" && request.method === "GET") {
