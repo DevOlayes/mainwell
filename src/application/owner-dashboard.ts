@@ -94,13 +94,19 @@ async function waitForInjectedWallet(timeoutMs=1800){
  }
  return null;
 }
-async function connect(){
+function connect(){
  const button=$("connect");
  try{
-  const current=await waitForInjectedWallet();
-  if(current){await connectWithProvider(current.provider,current.info.name);return}
+  // Resolve synchronously inside the trusted tap. Awaiting a polling loop here
+  // expires the mobile user-activation window and can suppress wallet approval UI.
+  discoverLegacyProviders();
+  const current=getCurrentBrowserWallet();
+  if(current){connectWithProvider(current.provider,current.info.name);return}
   openWalletModal();
- }catch(error){button.disabled=false;setStatus("connectStatus",error instanceof Error?error.message:"Wallet connection could not start. Please try again.",true)}
+ }catch(error){
+  button.disabled=false;
+  setStatus("connectStatus",error instanceof Error?error.message:"Wallet connection could not start. Please try again.",true);
+ }
 }
 async function showDashboard(){$("connectView").classList.add("hidden");$("dashboard").classList.remove("hidden");$("walletAddress").textContent=short(account)+" · Signed in with your wallet";$("networkName").textContent=NETWORKS[chainId]||"Unsupported";$("networkSelect").value=String(chainId);await load();await ensureMonitoringAcrossNetworks()}
 function formatUnits(raw,decimals){try{const n=BigInt(raw||"0"),d=10n**BigInt(decimals||0),whole=n/d,frac=(n%d).toString().padStart(Number(decimals||0),"0").replace(/0+$/,"");return whole.toString()+(frac?"."+frac:"")}catch{return "—"}}
@@ -154,8 +160,15 @@ async function ensureMonitoringAcrossNetworks(){
 $("connect").addEventListener("click",connect);
 updateConnectButton();
 try{window.dispatchEvent(new Event("eip6963:requestProvider"))}catch{}
+setTimeout(()=>{discoverLegacyProviders();updateConnectButton()},100);
 setTimeout(()=>{discoverLegacyProviders();updateConnectButton()},250);
+setTimeout(()=>{discoverLegacyProviders();updateConnectButton()},500);
 setTimeout(()=>{discoverLegacyProviders();updateConnectButton()},900);
+setTimeout(()=>{discoverLegacyProviders();updateConnectButton()},1800);
+const walletDiscoveryTimer=setInterval(()=>{
+ try{discoverLegacyProviders();updateConnectButton()}catch{}
+},250);
+setTimeout(()=>clearInterval(walletDiscoveryTimer),8000);
 $("walletModalClose").addEventListener("click",closeWalletModal);
 $("walletModal").addEventListener("click",event=>{if(event.target===$("walletModal"))closeWalletModal()});
 document.addEventListener("keydown",event=>{if(event.key==="Escape")closeWalletModal()});
