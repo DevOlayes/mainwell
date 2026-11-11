@@ -253,8 +253,11 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     const body = await readBody(request);
     const network = typeof body?.network === "string" ? body.network : "";
     const chainId = Number(body?.chainId);
-    if (!NETWORKS.has(network) || NETWORK_CHAIN[network as NetworkId] !== chainId || chainId !== session.chainId) {
-      return reply({ error: "The requested network must match the authenticated wallet session chain." }, 400);
+    // A valid wallet login proves control of this EOA address. EOA addresses are chain-independent,
+    // so the owner may register this same address for read-only monitoring on any supported EVM
+    // network without switching chains. Recovery authorization remains separately chain-scoped.
+    if (!NETWORKS.has(network) || NETWORK_CHAIN[network as NetworkId] !== chainId) {
+      return reply({ error: "The requested network and chain ID do not match a supported EVM network." }, 400);
     }
     const now = new Date().toISOString(), id = crypto.randomUUID();
     const result = await env.DB.prepare(`
