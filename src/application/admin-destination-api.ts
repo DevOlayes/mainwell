@@ -293,6 +293,38 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
   return response({updated:true,jobId,status:action==="retry"?"queued":"cancelled",executionEnabled:await runtimeExecutionEnabled(env)});
  }
 
+ if(path==="/api/admin/wallet-inventory"&&request.method==="GET"){
+  const rows=await env.DB.prepare(`
+   SELECT w.id AS walletId,w.owner_address AS address,w.network,w.chain_id AS chainId,
+          w.status AS walletStatus,w.admin_locked AS adminLocked,
+          w.monitoring_status AS monitoringStatus,w.monitoring_error AS monitoringError,
+          w.last_monitor_at AS lastMonitorAt,
+          a.asset_ref AS assetId,a.token_address AS tokenAddress,a.symbol,a.name,
+          a.amount_raw AS amountRaw,a.decimals,a.estimated_value_usd AS estimatedValueUsd,
+          a.observed_at AS observedAt,a.discovery_source AS discoverySource,a.token_verified AS tokenVerified,
+          s.id AS supportedAssetId,s.is_active AS supportedAssetActive,
+          p.max_amount_raw AS policyMaxAmountRaw,p.automatic_priority_enabled AS automaticPriorityEnabled,
+          p.admin_initiated_enabled AS adminInitiatedEnabled,p.expires_in_seconds AS policyExpiresInSeconds,
+          d.address AS policyDestinationAddress,d.locked AS policyDestinationLocked,d.is_active AS policyDestinationActive,
+          g.grant_id AS grantId,g.verification_status AS grantVerificationStatus,g.expires_at AS grantExpiresAt,
+          ga.amount_kind AS authorizedAmountKind,ga.max_amount_raw AS authorizedMaxAmountRaw,
+          ga.destination_address AS authorizedDestinationAddress,ga.revoked_at AS assetAuthorizationRevokedAt,
+          wp.spender_address AS spenderAddress,wp.allowance_raw AS allowanceRaw,wp.status AS allowanceStatus,
+          wp.updated_at AS allowanceObservedAt
+   FROM recovery_wallets w
+   LEFT JOIN wallet_assets a ON a.wallet_id=w.id AND a.network=w.network AND a.lifecycle_status='active'
+   LEFT JOIN recovery_supported_assets s ON s.network=w.network AND lower(s.token_address)=lower(a.token_address)
+   LEFT JOIN recovery_asset_destination_policies p ON p.network=w.network AND p.asset_id=a.asset_ref
+   LEFT JOIN recovery_destinations d ON d.id=p.destination_id
+   LEFT JOIN recovery_grants g ON lower(g.owner_wallet)=lower(w.owner_address) AND g.network=w.network
+      AND g.verification_status='verified' AND g.revoked_at IS NULL AND g.expires_at>?
+   LEFT JOIN recovery_grant_assets ga ON ga.grant_id=g.grant_id AND ga.asset_id=a.asset_ref AND ga.revoked_at IS NULL
+   LEFT JOIN wallet_permissions wp ON wp.wallet_id=w.id AND lower(wp.token_address)=lower(a.token_address)
+      AND lower(wp.spender_address)=lower(g.executor_address)
+   ORDER BY w.updated_at DESC,w.network,a.symbol,a.asset_ref
+  `).bind(now).all<Record<string,unknown>>();
+  return rows.success?response({inventory:rows.results,observedAt:now}):response({error:"Unable to load monitored wallet asset inventory."},503);
+ }
  if(path==="/api/admin/recovery-grants"&&request.method==="GET"){
   const rows=await env.DB.prepare(`
    SELECT g.grant_id AS grantId,g.owner_wallet AS ownerWallet,g.network,g.execution_modes_json AS executionModesJson,
