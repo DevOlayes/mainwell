@@ -205,7 +205,7 @@ function renderWalletAssetInventory(targetId){
   const statusRow=document.createElement("div");statusRow.className="inventory-status-row";
   const modes=(()=>{try{const v=JSON.parse(String(x.grantExecutionModesJson||"[]"));return Array.isArray(v)?v:[]}catch{return []}})();
   const locked=Number(x.adminLocked)===1;
-  const monitored=x.walletStatus==="monitoring"&&String(x.monitoringStatus||"").toLowerCase()==="complete";
+  const monitored=x.walletStatus==="monitoring"&&String(x.monitoringStatus||"").toLowerCase()==="healthy";
   const supported=Boolean(x.tokenAddress)&&Number(x.supportedAssetActive)===1;
   const policy=Boolean(x.policyMaxAmountRaw)&&Number(x.adminInitiatedEnabled)===1&&Number(x.policyDestinationLocked)===1&&Number(x.policyDestinationActive)===1;
   const grant=Boolean(x.grantId)&&x.grantVerificationStatus==="verified"&&!x.assetAuthorizationRevokedAt&&x.authorizedAmountKind==="capped"&&Boolean(x.authorizedMaxAmountRaw)&&modes.includes("admin-initiated");
