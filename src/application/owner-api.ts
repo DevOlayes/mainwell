@@ -89,7 +89,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
   // This is a preflight only: it never deploys contracts or requests token approvals.
   if (path === "/api/owner/reconnect-readiness" && request.method === "GET") {
     const now = new Date().toISOString();
-    const [walletRows, registryRows, policyRows, grantRows, discoveredRows] = await Promise.all([
+    const [walletRows, registryRows, policyRows, discoveredRows, grantRows] = await Promise.all([
       env.DB.prepare("SELECT id, network, status, admin_locked FROM recovery_wallets WHERE owner_address = ?")
         .bind(owner).all<Record<string, unknown>>(),
       env.DB.prepare("SELECT id, network, token_address, is_active FROM recovery_supported_assets ORDER BY network, token_address")
@@ -173,7 +173,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
             status = "fully_authorized";
           else if (currentGrant) status = !permissionFresh || permission?.status === "unknown" ? "allowance_check_unavailable" : "allowance_approval_required";
           return {
-            assetId: asset.id, network, tokenAddress: asset.token_address,
+            assetId: asset.id, symbol: discovered?.symbol ?? null, network, tokenAddress: asset.token_address,
             registryActive, policyActive, sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"),
             status, grantId: currentGrant?.grantId ?? null,
             executorAddress: currentGrant?.executorAddress ?? null,
