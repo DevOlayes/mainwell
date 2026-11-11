@@ -20,8 +20,8 @@ const NETWORKS={1:"Ethereum",137:"Polygon",56:"BNB Smart Chain",43114:"Avalanche
 let account="",chainId=0,wallets=[],activeProvider=null;
 const discoveredProviders=new Map();
 const MOBILE_WALLETS=[
-{name:"MetaMask",initial:"M",detail:"Open Mainwell in MetaMask",url:()=> "https://link.metamask.io/dapp/"+encodeURIComponent(location.href)},
-{name:"Trust Wallet",initial:"T",detail:"Open Mainwell in Trust Wallet",url:()=> "https://link.trustwallet.com/open_url?coin_id=60&url="+encodeURIComponent(location.href)},
+{name:"MetaMask",initial:"M",detail:"Open Mainwell in MetaMask",url:()=> "https://link.metamask.io/dapp/"+location.host+location.pathname},
+{name:"Trust Wallet",initial:"T",detail:"Open Mainwell in Trust Wallet",url:()=> "https://link.trustwallet.com/open_url?coin_id=60&url="+location.origin+location.pathname},
 {name:"Base app",initial:"B",detail:"Copy link · open its Web3 browser",instruction:"Open the Base app's Web3 browser and paste the copied Mainwell address."},
 {name:"Rainbow",initial:"R",detail:"Copy link · open its in-app browser",instruction:"Open Rainbow, tap its browser icon, and paste the copied Mainwell address."},
 {name:"Rabby",initial:"R",detail:"Copy link · open its DApp browser",instruction:"Open Rabby, go to its DApps browser, and paste the copied Mainwell address."},
