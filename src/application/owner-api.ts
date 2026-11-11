@@ -161,7 +161,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
           else if (!wallet || Number(wallet.admin_locked) !== 1 || wallet.status === "revoked")
             status = "source_wallet_lock_required";
           else if (currentGrant && permissionFresh && permission && permission.status === "active" &&
-            typeof permission.allowanceRaw === "string" && /^\\d+$/.test(permission.allowanceRaw) &&
+            typeof permission.allowanceRaw === "string" && /^[0-9]+$/.test(permission.allowanceRaw) &&
             BigInt(permission.allowanceRaw) >= BigInt(String(policy!.maxAmountRaw)))
             status = "fully_authorized";
           else if (currentGrant) status = !permissionFresh || permission?.status === "unknown" ? "allowance_check_unavailable" : "allowance_approval_required";
