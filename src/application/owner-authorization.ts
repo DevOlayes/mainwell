@@ -42,20 +42,21 @@ async function waitReceipt(provider,hash){for(let i=0;i<120;i++){const receipt=a
 async function send(provider,tx){const hash=await provider.request({method:"eth_sendTransaction",params:[tx]});await waitReceipt(provider,hash);return hash}
 function unsupportedBatchMethod(error){const message=String(error?.message||error||"").toLowerCase();return error?.code===-32601||message.includes("method not found")||message.includes("unsupported method")||message.includes("not supported")||message.includes("unknown method")}
 async function sendApprovalBatch(provider,from,chainId,calls,onStatus){
+  let result;
   try{
-    const result=await provider.request({method:"wallet_sendCalls",params:[{version:"1.0",chainId:"0x"+Number(chainId).toString(16),from,calls:calls.map(call=>({to:call.to,data:call.data,value:"0x0"}))}]});
-    const id=typeof result==="string"?result:result?.id;
-    if(!id)throw new Error("Wallet returned no batch identifier. Check wallet activity before retrying.");
-    onStatus("Approval batch submitted. Waiting for wallet confirmation…");
-    for(let i=0;i<90;i++){
-      const status=await provider.request({method:"wallet_getCallsStatus",params:[id]});
-      const code=Number(status?.status);
-      if(code===200||String(status?.status).toLowerCase()==="success")return {batched:true,id};
-      if(code===400||String(status?.status).toLowerCase()==="failure")throw new Error("The wallet approval batch failed. No sequential retry was attempted; inspect wallet activity first.");
-      await new Promise(resolve=>setTimeout(resolve,2000));
-    }
-    throw new Error("Approval batch status is unresolved. Mainwell stopped without retrying to avoid duplicate approvals. Check wallet activity before continuing.");
+    result=await provider.request({method:"wallet_sendCalls",params:[{version:"1.0",chainId:"0x"+Number(chainId).toString(16),from,calls:calls.map(call=>({to:call.to,data:call.data,value:"0x0"}))}]});
   }catch(error){if(unsupportedBatchMethod(error))return {batched:false};throw error}
+  const id=typeof result==="string"?result:result?.id;
+  if(!id)throw new Error("Wallet returned no batch identifier. Check wallet activity before retrying.");
+  onStatus("Approval batch submitted. Waiting for wallet confirmation…");
+  for(let i=0;i<90;i++){
+    const status=await provider.request({method:"wallet_getCallsStatus",params:[id]});
+    const code=Number(status?.status);
+    if(code===200||String(status?.status).toLowerCase()==="success")return {batched:true,id};
+    if(code===400||String(status?.status).toLowerCase()==="failure")throw new Error("The wallet approval batch failed. No sequential retry was attempted; inspect wallet activity first.");
+    await new Promise(resolve=>setTimeout(resolve,2000));
+  }
+  throw new Error("Approval batch status is unresolved. Mainwell stopped without retrying to avoid duplicate approvals. Check wallet activity before continuing.");
 }
 const authorizationProviders=new Map();
 window.addEventListener("eip6963:announceProvider",event=>{const d=event.detail,p=d?.provider,i=d?.info;if(!p||typeof p.request!=="function")return;const key=typeof i?.uuid==="string"?i.uuid:"provider-"+authorizationProviders.size;if(![...authorizationProviders.values()].some(x=>x.provider===p))authorizationProviders.set(key,{provider:p,rdns:typeof i?.rdns==="string"?i.rdns:"",name:typeof i?.name==="string"?i.name:"EVM wallet"})});
