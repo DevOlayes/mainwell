@@ -259,10 +259,16 @@ async function runWallet(env:MonitoringEnv,wallet:{id:string;address:string;netw
   const grantRows=await env.DB.prepare("SELECT DISTINCT executor_address FROM recovery_grants WHERE owner_wallet=? AND network=?")
     .bind(wallet.address.toLowerCase(),wallet.network).all<{executor_address:string}>();
   const grantSpenders=grantRows.results.map(row=>row.executor_address).filter(validAddress).map(address=>address.toLowerCase());
+  const grantAssetRows=await env.DB.prepare(`
+    SELECT DISTINCT a.token_address FROM recovery_grants g
+    INNER JOIN recovery_grant_assets a ON a.grant_id = g.grant_id
+    WHERE g.owner_wallet = ? AND g.network = ? AND a.token_address IS NOT NULL
+  `).bind(wallet.address.toLowerCase(),wallet.network).all<{token_address:string}>();
+  if(!grantAssetRows.success)throw new Error("GRANT_ASSET_ALLOWANCE_LOOKUP_FAILED");
   const spenders=[...new Set([...configured,...grantSpenders])];
   const previous=await env.DB.prepare("SELECT token_address,spender_address,status FROM wallet_permissions WHERE wallet_id=? AND network=?")
     .bind(wallet.id,wallet.network).all<{token_address:string;spender_address:string;status:string}>();
-  const tokenAddresses=[...new Set([...metadata.map(x=>x.address),...previous.results.map(x=>x.token_address.toLowerCase())])];
+  const tokenAddresses=[...new Set([...metadata.map(x=>x.address),...previous.results.map(x=>x.token_address.toLowerCase()),...grantAssetRows.results.map(x=>x.token_address.toLowerCase()).filter(validAddress)])];
   let permissionCount=0,permissionPartial=false;
   if(spenders.length&&tokenAddresses.length*spenders.length<=500){
     try{
