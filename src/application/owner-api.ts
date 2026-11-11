@@ -90,7 +90,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
   if (path === "/api/owner/reconnect-readiness" && request.method === "GET") {
     const now = new Date().toISOString();
     const [walletRows, registryRows, policyRows, discoveredRows, grantRows] = await Promise.all([
-      env.DB.prepare("SELECT id, network, status, admin_locked FROM recovery_wallets WHERE owner_address = ?")
+      env.DB.prepare("SELECT id, network, status, admin_locked, last_monitor_at, monitoring_status FROM recovery_wallets WHERE owner_address = ?")
         .bind(owner).all<Record<string, unknown>>(),
       env.DB.prepare("SELECT id, network, token_address, is_active FROM recovery_supported_assets ORDER BY network, token_address")
         .all<Record<string, unknown>>(),
@@ -156,7 +156,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
             String(row.spender).toLowerCase() === String(currentGrant.executorAddress).toLowerCase()
           ) : null;
           const permissionAge = permission ? Date.parse(now) - Date.parse(String(permission.observedAt)) : Number.POSITIVE_INFINITY;
-          const permissionFresh = Number.isFinite(permissionAge) && permissionAge >= 0 && permissionAge <= 300000;
+          const lastMonitorAt = wallet?.last_monitor_at ? Date.parse(String(wallet.last_monitor_at)) : Number.NaN;\n          const permissionFresh = Number.isFinite(permissionAge) && permissionAge >= 0 && permissionAge <= 300000 &&\n            Number.isFinite(lastMonitorAt) && Date.parse(String(permission?.observedAt)) >= lastMonitorAt - 10000 &&\n            wallet?.status === "monitoring" && wallet?.monitoring_status !== "error" && wallet?.monitoring_status !== "running";
           const capValid = typeof policy?.maxAmountRaw === "string" && /^[1-9][0-9]{0,77}$/.test(policy.maxAmountRaw);
           const registryActive = Number(asset.is_active) === 1;
           const policyActive = Boolean(policy && Number(policy.destinationLocked) === 1 &&
