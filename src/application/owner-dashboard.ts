@@ -64,7 +64,7 @@ const SUPPORTED_NETWORKS=[["ethereum",1],["polygon",137],["bsc",56],["avalanche"
 function renderReconnectReadiness(data){
  const root=$("readinessResults");root.replaceChildren();
  const summary=data.summary||{};$("readinessSummary").textContent=(summary.fullyAuthorized||0)+" / "+(summary.total||0)+" assets authorized";
- const labels={fully_authorized:"Fully authorized · no action",token_inactive:"Token inactive in registry",administrator_policy_required:"Administrator policy or destination required",source_wallet_lock_required:"Administrator must lock this source wallet",owner_authorization_missing:"Owner authorization required",allowance_approval_required:"Token allowance missing or insufficient",allowance_check_unavailable:"Allowance check unavailable"};
+ const labels={fully_authorized:"Fully authorized · no action",token_inactive:"Token inactive in registry",token_not_registered:"Token requires registry review",administrator_policy_required:"Administrator policy or destination required",source_wallet_lock_required:"Administrator must lock this source wallet",owner_authorization_missing:"Owner authorization required",allowance_approval_required:"Token allowance missing or insufficient",allowance_check_unavailable:"Allowance check unavailable"};
  for(const network of (data.networks||[])){
   const section=document.createElement("div");section.className="wallet";
   const heading=document.createElement("div");heading.className="wallet-head";
@@ -75,7 +75,7 @@ function renderReconnectReadiness(data){
   if(!network.walletRegistered){const note=node("div","Connect and register this wallet for monitoring on this network.");note.className="empty";section.append(note)}
   for(const asset of network.assets||[]){
    const line=document.createElement("div");line.className="asset";
-   const left=document.createElement("span");left.textContent=String(asset.assetId);
+   const left=document.createElement("span");left.textContent=String(asset.symbol||asset.assetId);
    const right=document.createElement("span");right.textContent=labels[asset.status]||asset.status;right.style.color=asset.status==="fully_authorized"?"#a5ddca":"#e2c68c";
    line.append(left,right);section.append(line);
   }
