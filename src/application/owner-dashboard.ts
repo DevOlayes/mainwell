@@ -89,6 +89,19 @@ async function connectWithWalletConnect(brand="trustwallet"){
   if(!$("walletModal").classList.contains("hidden"))setStatus("walletModalStatus",message,true);
  }finally{button.disabled=false}
 }
+async function restoreExistingWalletConnectSession(){
+ try{
+  const client=await getWalletConnectClient();
+  const existing=client.session.getAll().find(session=>getWalletConnectAccounts(session).length&&getWalletConnectChains(session).length);
+  if(!existing)return;
+  installWalletConnectProvider(client,existing);
+  rememberWalletIntent("trustwallet");walletIntent="trustwallet";
+  updateConnectButton();
+  setStatus("connectStatus","Existing Trust Wallet connection found. Tap Connect wallet to restore Mainwell sign-in; no new wallet pairing is needed.");
+ }catch(error){
+  setStatus("connectStatus","Wallet session check unavailable. You can still connect directly; "+(error instanceof Error?error.message:"connection check failed"),true);
+ }
+}
 const walletIntentKey="mainwell.walletIntent";
 function rememberWalletIntent(brand){try{localStorage.setItem(walletIntentKey,brand)}catch{}}
 function walletReturnUrl(brand){const u=new URL(location.href);u.searchParams.set("mw_wallet",brand);return u.toString()}
@@ -157,7 +170,7 @@ function updateConnectButton(){
  const button=$("connect"),current=getCurrentBrowserWallet();
  if(current){walletIntent=walletBrand(current.info.name,current.info.rdns);rememberWalletIntent(walletIntent);button.innerHTML="Connect "+current.info.name+' <span aria-hidden="true">→</span>';button.setAttribute("aria-label","Connect "+current.info.name);button.dataset.detectedWallet="true";delete button.dataset.walletIntent}
  else if(walletIntent){const name=walletIntentName();button.innerHTML="Connect "+name+' <span aria-hidden="true">→</span>';button.setAttribute("aria-label","Connect "+name);button.dataset.walletIntent=walletIntent;delete button.dataset.detectedWallet}
- else{button.innerHTML='Choose a wallet <span aria-hidden="true">→</span>';button.setAttribute("aria-label","Choose a wallet");delete button.dataset.detectedWallet;delete button.dataset.walletIntent}
+ else{button.innerHTML='Connect wallet <span aria-hidden="true">→</span>';button.setAttribute("aria-label","Connect wallet");delete button.dataset.detectedWallet;delete button.dataset.walletIntent}
 }
 async function waitForInjectedWallet(timeoutMs=1800){
  const deadline=Date.now()+timeoutMs;
@@ -182,7 +195,7 @@ function connect(){
   if(current){connectWithProvider(current.provider,current.info.name);return}
   if(walletIntent==="trustwallet"||isTrustWalletBrowser()){rememberWalletIntent("trustwallet");walletIntent="trustwallet";connectWithWalletConnect("trustwallet");return}
   if(walletIntent){setStatus("connectStatus",walletIntentName()+" was selected. Open Mainwell inside that wallet or choose Trust Wallet for a WalletConnect connection.");return}
-  if(isMobileBrowser()){openWalletModal();return}
+  if(isMobileBrowser()){rememberWalletIntent("trustwallet");walletIntent="trustwallet";connectWithWalletConnect("trustwallet");return}
   openWalletModal();
  }catch(error){
   button.disabled=false;
@@ -277,6 +290,7 @@ $("refreshAll").addEventListener("click",async()=>{const button=$("refreshAll");
 $("switchNetwork").addEventListener("click",async()=>{try{const p=await provider(),id=Number($("networkSelect").value);await p.request({method:"wallet_switchEthereumChain",params:[{chainId:"0x"+id.toString(16)}]});setStatus("dashboardStatus","Network switched. Reconnect to create a session for the selected chain.")}catch(e){setStatus("dashboardStatus",e.message,true)}});
 $("logout").addEventListener("click",async()=>{try{await api("/api/auth/logout",{method:"POST",body:"{}"})}finally{location.reload()}});
 api("/api/auth/me").then(async s=>{account=s.wallet;chainId=s.chainId;await showDashboard()}).catch(()=>{});
+restoreExistingWalletConnectSession();
 function attachProviderEvents(p){p.on?.("chainChanged",()=>setStatus("dashboardStatus","Wallet network changed. Reconnect to refresh the authenticated session."));p.on?.("accountsChanged",()=>setStatus("dashboardStatus","Wallet account changed. Disconnect and reconnect to refresh your session."))}
 </script></main></body></html>`;
 const OWNER_SCRIPT_START="<script>";
