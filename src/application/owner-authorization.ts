@@ -77,39 +77,85 @@ async function authorizationProvider(){
   }
   throw new Error("Mainwell could not find the wallet used for this login on the selected network. Return to the wallet workspace and reconnect the same wallet.");
 }
-async function executeAuthorization(){const button=$("authorize");button.disabled=true;$("txStatus").textContent="Preparing the owner-approved deployment…";try{
-const provider=await authorizationProvider();
-const accounts=await provider.request({method:"eth_accounts"});const from=accounts?.find(address=>String(address).toLowerCase()===session.wallet.toLowerCase());const chain=Number(BigInt(await provider.request({method:"eth_chainId"})));if(!from||chain!==plan.chainId)throw new Error("The connected wallet account or network changed. Reconnect before authorizing.");
-const sel=updateSelection(),chosen=sel.chosen;if(!chosen.length||(!sel.commonAuto&&!sel.commonAdmin))throw new Error("Choose assets with at least one shared execution mode.");const latestPlan=await api("/api/owner/authorization-plan");if(scopeSignature(latestPlan,selected)!==scopeSignature(plan,selected))throw new Error("An administrator changed one or more selected asset policies. Refresh the plan and review it again before authorizing.");plan=latestPlan;
-const ops=plan.readiness.executionOperators;if(!ops?.automation||!ops?.administrator)throw new Error("Trusted operator addresses are unavailable.");
-const assets=chosen.map(a=>a.tokenAddress),destinations=chosen.map(a=>a.policy.destinationAddress),caps=chosen.map(a=>a.policy.maxAmountRaw);
-const duration=Math.min(...chosen.map(a=>Number(a.policy.expiresInSeconds)));const expiry=Math.floor(Date.now()/1000)+duration;const data=artifact.creationBytecode+constructorData(assets,destinations,caps,expiry,sel.commonAuto,sel.commonAdmin,ops);
-$("txStatus").textContent="Confirm the executor deployment in your wallet. Review the contract creation transaction carefully.";
-const deploymentHash=await send(provider,{from,data});const receipt=await waitReceipt(provider,deploymentHash);const executor=receipt.contractAddress;if(!executor)throw new Error("Deployment receipt did not include a contract address.");const afterDeployPlan=await api("/api/owner/authorization-plan");if(scopeSignature(afterDeployPlan,selected)!==scopeSignature(plan,selected))throw new Error("The administrator policy changed after deployment. No token allowances were requested. The unused executor is deployed at "+executor+"; do not authorize it further.");
-$("txStatus").textContent="Executor deployed. Checking current token allowances…";
-const approvalCalls=[];
-for(let i=0;i<chosen.length;i++){
-  const token=assets[i],cap=caps[i],allowanceData="0xdd62ed3e"+addressWord(from)+addressWord(executor);
-  const allowance=BigInt(await provider.request({method:"eth_call",params:[{to:token,data:allowanceData},"latest"]}));
-  if(allowance>=BigInt(cap))continue;
-  if(allowance>0n)approvalCalls.push({to:token,data:"0x095ea7b3"+addressWord(executor)+word(0),label:"Reset "+chosen[i].symbol+" allowance"});
-  approvalCalls.push({to:token,data:"0x095ea7b3"+addressWord(executor)+word(cap),label:"Approve exact "+chosen[i].symbol+" cap"});
+async function executeAuthorization(){
+ const button=$("authorize");button.disabled=true;$("txStatus").textContent="Checking existing owner authorizations and live allowances…";
+ try{
+  const provider=await authorizationProvider();
+  const accounts=await provider.request({method:"eth_accounts"});
+  const from=accounts?.find(address=>String(address).toLowerCase()===session.wallet.toLowerCase());
+  const chain=Number(BigInt(await provider.request({method:"eth_chainId"})));
+  if(!from||chain!==plan.chainId)throw new Error("The connected wallet account or network changed. Reconnect before authorizing.");
+  const sel=updateSelection(),chosen=sel.chosen;
+  if(!chosen.length||(!sel.commonAuto&&!sel.commonAdmin))throw new Error("Choose assets with at least one shared execution mode.");
+  const latestPlan=await api("/api/owner/authorization-plan");
+  if(scopeSignature(latestPlan,selected)!==scopeSignature(plan,selected))throw new Error("An administrator changed one or more selected asset policies. Refresh the plan and review it again before authorizing.");
+  plan=latestPlan;
+  const existing=await api("/api/owner/grants");
+  const now=Date.now(),reused=[],needsNew=[];
+  for(const asset of chosen){
+   const active=(existing.grants||[]).filter(g=>g.network===plan.network&&g.chainId===plan.chainId&&Date.parse(g.expiresAt)>now);
+   const sameAsset=active.flatMap(g=>(g.assets||[]).filter(a=>a.assetId===asset.assetId&&String(a.tokenAddress).toLowerCase()===String(asset.tokenAddress).toLowerCase()&&!a.revokedAt).map(a=>({grant:g,asset:a})));
+   const match=sameAsset.find(x=>x.asset.ownerAcknowledged===true&&x.asset.amountKind==="capped"&&String(x.asset.maxAmountRaw)===String(asset.policy.maxAmountRaw)&&String(x.asset.destinationAddress||x.grant.destinationAddress).toLowerCase()===String(asset.policy.destinationAddress).toLowerCase());
+   if(match)reused.push({asset,grant:match.grant});
+   else if(sameAsset.length)throw new Error("An active authorization exists for "+(asset.symbol||asset.assetId)+" but its cap or destination differs from the current administrator policy. No duplicate executor was deployed. Ask the administrator to reconcile the policy or revoke the old authorization first.");
+   else needsNew.push(asset);
+  }
+  const approvalCalls=[];
+  async function queueExactApproval(asset,executor,cap){
+   const token=asset.tokenAddress,allowanceData="0xdd62ed3e"+addressWord(from)+addressWord(executor);
+   const allowance=BigInt(await provider.request({method:"eth_call",params:[{to:token,data:allowanceData},"latest"]}));
+   if(allowance>=BigInt(cap))return;
+   if(allowance>0n)approvalCalls.push({to:token,data:"0x095ea7b3"+addressWord(executor)+word(0),label:"Reset "+asset.symbol+" allowance"});
+   approvalCalls.push({to:token,data:"0x095ea7b3"+addressWord(executor)+word(cap),label:"Approve exact "+asset.symbol+" cap"});
+  }
+  for(const item of reused)await queueExactApproval(item.asset,item.grant.executorAddress,item.asset.policy.maxAmountRaw);
+  const ops=plan.readiness.executionOperators;
+  if(needsNew.length){
+   if(!ops?.automation||!ops?.administrator)throw new Error("Trusted operator addresses are unavailable.");
+   const assets=needsNew.map(a=>a.tokenAddress),destinations=needsNew.map(a=>a.policy.destinationAddress),caps=needsNew.map(a=>a.policy.maxAmountRaw);
+   const duration=Math.min(...needsNew.map(a=>Number(a.policy.expiresInSeconds)));
+   const expiry=Math.floor(Date.now()/1000)+duration;
+   const data=artifact.creationBytecode+constructorData(assets,destinations,caps,expiry,sel.commonAuto,sel.commonAdmin,ops);
+   $("txStatus").textContent="Deploying an executor only for assets that do not already have a valid grant. Confirm the contract deployment in your wallet.";
+   const deploymentHash=await send(provider,{from,data});
+   const receipt=await waitReceipt(provider,deploymentHash),executor=receipt.contractAddress;
+   if(!executor)throw new Error("Deployment receipt did not include a contract address.");
+   const afterDeployPlan=await api("/api/owner/authorization-plan");
+   if(scopeSignature(afterDeployPlan,selected)!==scopeSignature(plan,selected))throw new Error("The administrator policy changed after deployment. No token allowances were requested. The unused executor is deployed at "+executor+"; do not authorize it further.");
+   for(let i=0;i<needsNew.length;i++)await queueExactApproval(needsNew[i],executor,caps[i]);
+   window.__mainwellPendingGrant={needsNew,assets,destinations,caps,expiry,executor,deploymentHash,receipt,ops,sel};
+  }
+  if(approvalCalls.length){
+   $("txStatus").textContent="Requesting only missing or insufficient token allowances. Already sufficient allowances are being left untouched.";
+   const batch=await sendApprovalBatch(provider,from,plan.chainId,approvalCalls,message=>{$("txStatus").textContent=message});
+   if(!batch.batched)for(const call of approvalCalls){$("txStatus").textContent=call.label+" — confirm in your wallet.";await send(provider,{from,to:call.to,data:call.data})}
+  }
+  for(const item of reused){
+   const data="0xdd62ed3e"+addressWord(from)+addressWord(item.grant.executorAddress);
+   const allowance=BigInt(await provider.request({method:"eth_call",params:[{to:item.asset.tokenAddress,data},"latest"]}));
+   if(allowance<BigInt(item.asset.policy.maxAmountRaw))throw new Error("On-chain allowance verification failed for "+item.asset.symbol+". No new grant was recorded.");
+  }
+  const pending=window.__mainwellPendingGrant;delete window.__mainwellPendingGrant;
+  if(pending){
+   for(let i=0;i<pending.needsNew.length;i++){
+    const data="0xdd62ed3e"+addressWord(from)+addressWord(pending.executor);
+    const allowance=BigInt(await provider.request({method:"eth_call",params:[{to:pending.assets[i],data},"latest"]}));
+    if(allowance<BigInt(pending.caps[i]))throw new Error("On-chain allowance verification failed for "+pending.needsNew[i].symbol+". No grant was recorded.");
+   }
+   const block=await provider.request({method:"eth_getBlockByNumber",params:[pending.receipt.blockNumber,false]});
+   if(!block?.timestamp)throw new Error("Could not read the deployment block timestamp.");
+   const approvedAt=new Date(Number(BigInt(block.timestamp))*1000).toISOString();
+   const grant={grantId:crypto.randomUUID(),ownerWallet:from,network:plan.network,chainId:plan.chainId,executorAddress:pending.executor,executorCodeHash:artifact.normalizedRuntimeCodeHash,destinationAddress:pending.destinations[0],assets:pending.needsNew.map((a,i)=>({assetId:a.assetId,tokenAddress:pending.assets[i],destinationAddress:pending.destinations[i],amount:{kind:"capped",maxAmountRaw:pending.caps[i]}})),executionModes:[...(pending.sel.commonAuto?["automatic-priority"]:[]),...(pending.sel.commonAdmin?["admin-initiated"]:[])],executionOperators:{automation:pending.ops.automation,administrator:pending.ops.administrator},approvedAt,expiresAt:new Date(pending.expiry*1000).toISOString(),evidence:{kind:"onchain-approval",reference:pending.deploymentHash}};
+   $("txStatus").textContent="New approvals confirmed. Mainwell is independently verifying only the newly authorized asset scope.";
+   const verified=await api("/api/owner/grants/verify",{method:"POST",body:JSON.stringify({grant})});
+   $("txStatus").textContent="Authorization verified. New executor: "+pending.executor+" · Grant: "+verified.grantId;
+  }else{
+   $("txStatus").textContent=reused.length?"Existing executor reused. Only previously missing allowances were requested; sufficient authorizations were untouched.":"Everything selected is already fully authorized. No deployment or approval was needed.";
+  }
+  $("txStatus").className="status success";
+ }catch(e){$("txStatus").className="status error";$("txStatus").textContent=e.message}
+ finally{readiness()}
 }
-if(approvalCalls.length){
-  $("txStatus").textContent="Requesting required token approvals. Review the spender and exact transactions in your wallet.";
-  const batch=await sendApprovalBatch(provider,from,plan.chainId,approvalCalls,message=>{$("txStatus").textContent=message});
-  if(!batch.batched)for(const call of approvalCalls){$("txStatus").textContent=call.label+" — confirm in your wallet.";await send(provider,{from,to:call.to,data:call.data})}
-}
-for(let i=0;i<chosen.length;i++){
-  const allowanceData="0xdd62ed3e"+addressWord(from)+addressWord(executor);
-  const allowance=BigInt(await provider.request({method:"eth_call",params:[{to:assets[i],data:allowanceData},"latest"]}));
-  if(allowance<BigInt(caps[i]))throw new Error("On-chain allowance verification failed for "+chosen[i].symbol+". No grant was recorded.");
-}
-const block=await provider.request({method:"eth_getBlockByNumber",params:[receipt.blockNumber,false]});if(!block?.timestamp)throw new Error("Could not read the deployment block timestamp.");const approvedAt=new Date(Number(BigInt(block.timestamp))*1000).toISOString();
-const grant={grantId:crypto.randomUUID(),ownerWallet:from,network:plan.network,chainId:plan.chainId,executorAddress:executor,executorCodeHash:artifact.normalizedRuntimeCodeHash,destinationAddress:destinations[0],assets:chosen.map((a,i)=>({assetId:a.assetId,tokenAddress:assets[i],destinationAddress:destinations[i],amount:{kind:"capped",maxAmountRaw:caps[i]}})),executionModes:[...(sel.commonAuto?["automatic-priority"]:[]),...(sel.commonAdmin?["admin-initiated"]:[])],executionOperators:{automation:ops.automation,administrator:ops.administrator},approvedAt,expiresAt:new Date(expiry*1000).toISOString(),evidence:{kind:"onchain-approval",reference:deploymentHash}};
-$("txStatus").textContent="All wallet approvals confirmed. Mainwell is independently verifying the executor, exact token scopes and live allowances.";
-const verified=await api("/api/owner/grants/verify",{method:"POST",body:JSON.stringify({grant})});$("txStatus").className="status success";$("txStatus").textContent="Authorization verified and recorded. Executor: "+executor+" · Grant: "+verified.grantId;
-}catch(e){$("txStatus").className="status error";$("txStatus").textContent=e.message}finally{readiness()}}
 $("refresh").addEventListener("click",load);$("ack").addEventListener("change",readiness);$("auditAck").addEventListener("change",readiness);$("authorize").addEventListener("click",executeAuthorization);load();
 </script></body></html>`;
 export function ownerAuthorizationResponse():Response{return new Response(AUTHORIZATION_HTML,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"}});}
