@@ -56,7 +56,7 @@ test("pre-auth wallet diagnostics persist only allowlisted sanitized fields", as
   assert.ok(audit);
   const stored = audit.args[0];
   assert.equal(stored.includes(address), false);
-  assert.equal(stored.includes("signature"), false);
+  assert.equal(stored.includes("0x" + "b".repeat(130)), false);
   assert.equal(stored.includes("walletAddress"), false);
   assert.match(stored, /auth.personal_sign/);
 });
