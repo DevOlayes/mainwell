@@ -112,6 +112,24 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{max-width:1180px;m
  .overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
+/* Wallet inventory cards */
+.inventory-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.inventory-card{min-width:0;background:linear-gradient(145deg,#172b36,#111f2a);border:1px solid #35505a;border-radius:14px;padding:15px;box-shadow:0 10px 28px #0002}
+.inventory-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.inventory-identity{min-width:0}.inventory-identity h3{font-size:14px;margin:0 0 5px;letter-spacing:-.02em}
+.inventory-address{font-size:10px;color:#849ba8;overflow-wrap:anywhere;margin:0}
+.inventory-balance{font-size:19px;white-space:nowrap;color:#c6eddf;letter-spacing:-.035em}
+.inventory-status-row{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.inventory-chip{font-size:9px;line-height:1.35;padding:5px 7px;border-radius:7px;border:1px solid #3a4b54;color:#a9bac2;background:#172630}
+.inventory-chip.is-good{border-color:#356c5c;background:#14332d;color:#a9e1ce}
+.inventory-chip.is-pending{border-color:#65543b;background:#30291e;color:#e6c995}
+.inventory-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;border-top:1px solid #2b414b;border-bottom:1px solid #2b414b;padding:11px 0}
+.inventory-detail{min-width:0;display:grid;gap:4px}.inventory-detail span{font-size:9px;color:#8095a2}.inventory-detail strong{font-size:10px;font-weight:650;color:#d1dce1;overflow-wrap:anywhere}
+.inventory-action{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px}
+.inventory-action-help{font-size:10px;line-height:1.45;color:#9aabb5;margin:0;flex:1}
+.inventory-action-button{flex:0 0 auto;min-width:145px}
+.inventory-action-button:disabled{opacity:.55;cursor:not-allowed;filter:saturate(.55)}
+@media(max-width:700px){.inventory-grid{grid-template-columns:1fr}.inventory-card{padding:13px}.inventory-action{align-items:stretch;flex-direction:column}.inventory-action-button{width:100%}.inventory-balance{font-size:17px}}
 </style></head><body><div class="shell">
 <header class="topbar"><div class="brand"><div class="mark">M</div><div>MAINWELL<small>RECOVERY INFRASTRUCTURE</small></div></div><div class="secure"><i class="dot"></i> Secure administrator access</div></header>
 <section id="loginView" class="layout">
@@ -140,7 +158,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{max-width:1180px;m
 </nav>
 <section id="overviewView">
 <div class="view-head"><div><div class="eyebrow">LIVE CONFIGURATION SUMMARY</div><h2>System overview</h2><p class="muted">A quick view of the policy and wallet configuration currently registered in Mainwell.</p></div></div>
-<div class="section-note"><b>Mainwell setup guide:</b> follow these steps in order. A wallet connection is only a read-only sign-in; it does not authorize Mainwell to move funds.</div><div class="setup-steps"><article class="setup-step"><span class="step-no">STEP 01</span><b>Set destination wallets</b><p>Choose the receiving address for each supported network.</p><a href="#" data-go-view="destinations">Configure destinations →</a></article><article class="setup-step"><span class="step-no">STEP 02</span><b>Register supported assets</b><p>Enable verified ERC-20 contracts that Mainwell may offer in recovery policies on each network.</p><a href="#" data-go-view="assets">Manage assets →</a></article><article class="setup-step"><span class="step-no">STEP 03</span><b>Connect the source wallet</b><p>Open the owner wallet page and connect the wallet. Mainwell automatically monitors the same EOA address across all seven supported EVM networks. Then lock that address across all seven networks here.</p><a href="/" target="_blank" rel="noopener">Open owner workspace →</a></article><article class="setup-step"><span class="step-no">STEP 04</span><b>Set policy and get owner approval</b><p>Set per-asset caps and expiry. The wallet owner must separately approve the exact on-chain authorization.</p><a href="#" data-go-view="policies">Configure policies →</a></article></div><div class="overview-grid">
+<div class="overview-grid">
 <div class="metric"><small>LOCKED SOURCE WALLETS</small><strong id="metricWallets">—</strong><span>Administrator-registered</span></div>
 <div class="metric"><small>RECOVERY DESTINATIONS</small><strong id="metricDestinations">—</strong><span>Configured destinations</span></div>
 <div class="metric"><small>SUPPORTED ERC-20 ASSETS</small><strong id="metricAssets">—</strong><span>Registered token contracts</span></div>
@@ -171,17 +189,60 @@ let destinations=[];let supportedAssets=[];let currentView="overview";let eligib
 function formatRawAmount(raw,decimals){try{const n=BigInt(raw),base=10n**BigInt(decimals),whole=n/base,frac=(n%base).toString().padStart(decimals,"0").replace(/0+$/,"");return frac?whole+"."+frac:whole.toString()}catch{return "—"}}
 function parseHumanAmount(value,decimals){if(!/^\\d+(?:\\.\\d*)?$/.test(value))throw new Error("Enter a valid positive token amount.");const [whole,fraction=""]=value.split(".");if(fraction.length>decimals)throw new Error("This token supports at most "+decimals+" decimal places.");const raw=(BigInt(whole)*10n**BigInt(decimals)+BigInt((fraction+"0".repeat(decimals)).slice(0,decimals)||"0")).toString();if(BigInt(raw)<=0n)throw new Error("Amount must be greater than zero.");return raw}
 function renderWalletAssetInventory(targetId){
- const rows=walletAssetInventory;
- renderList($(targetId),rows,x=>{
-  const balance=x.amountRaw!==null&&x.amountRaw!==undefined?formatRawAmount(String(x.amountRaw),Number(x.decimals||0))+" "+(x.symbol||""):"Balance not yet observed";
-  const lock=Number(x.adminLocked)===1?"SOURCE LOCKED":"NOT ADMIN-LOCKED";
-  const monitor=(x.monitoringStatus||"pending").toUpperCase();
-  const supported=x.tokenAddress?(Number(x.supportedAssetActive)===1?"SUPPORTED TOKEN":"NOT IN SUPPORTED TOKEN REGISTRY"):"NATIVE ASSET · NOT RECOVERABLE";
-  const policy=x.policyMaxAmountRaw&&x.policyDestinationAddress&&Number(x.policyDestinationLocked)===1&&Number(x.policyDestinationActive)===1?"POLICY READY":"NO ACTIVE LOCKED ASSET POLICY";
-  let grantModes="";try{grantModes=Array.isArray(JSON.parse(String(x.grantExecutionModesJson||"[]")))?JSON.parse(String(x.grantExecutionModesJson||"[]")).join(", "):""}catch{}const grant=x.grantId&&x.authorizedMaxAmountRaw&&!x.assetAuthorizationRevokedAt?"OWNER GRANT VERIFIED · "+grantModes+" · CAP "+formatRawAmount(String(x.authorizedMaxAmountRaw),Number(x.decimals||0)):"NO VERIFIED OWNER GRANT FOR THIS ASSET";
-  const allowance=x.allowanceRaw!==null&&x.allowanceRaw!==undefined?"EXECUTOR ALLOWANCE "+formatRawAmount(String(x.allowanceRaw),Number(x.decimals||0))+" · "+(x.allowanceStatus||"observed").toUpperCase():"EXECUTOR ALLOWANCE NOT OBSERVED";
-  return x.network+" · "+x.address+" · "+(x.symbol||x.name||x.assetId||"Unknown asset")+" · "+balance+" · "+lock+" · MONITOR "+monitor+" · "+supported+" · "+policy+" · "+grant+" · "+allowance+" · observed "+(x.observedAt||x.lastMonitorAt||"not yet");
- });
+ const root=$(targetId),rows=walletAssetInventory;
+ root.replaceChildren();
+ if(!rows.length){const empty=node("p","No monitored wallet assets have been returned yet. Connect a source wallet to begin automatic monitoring.");empty.className="empty";root.append(empty);return}
+ const grid=document.createElement("div");grid.className="inventory-grid";
+ for(const x of rows){
+  const card=document.createElement("article");card.className="inventory-card";
+  const head=document.createElement("div");head.className="inventory-card-head";
+  const identity=document.createElement("div");identity.className="inventory-identity";
+  const title=node("h3",(x.symbol||x.name||"Unknown asset")+" · "+String(x.network||"").toUpperCase());
+  const address=node("p",String(x.address||""));address.className="inventory-address";
+  identity.append(title,address);
+  const amount=node("strong",x.amountRaw!==null&&x.amountRaw!==undefined?formatRawAmount(String(x.amountRaw),Number(x.decimals||0))+" "+(x.symbol||""):"Balance not yet observed");amount.className="inventory-balance";
+  head.append(identity,amount);card.append(head);
+  const statusRow=document.createElement("div");statusRow.className="inventory-status-row";
+  const modes=(()=>{try{const v=JSON.parse(String(x.grantExecutionModesJson||"[]"));return Array.isArray(v)?v:[]}catch{return []}})();
+  const locked=Number(x.adminLocked)===1;
+  const monitored=x.walletStatus==="monitoring"&&String(x.monitoringStatus||"").toLowerCase()==="complete";
+  const supported=Boolean(x.tokenAddress)&&Number(x.supportedAssetActive)===1;
+  const policy=Boolean(x.policyMaxAmountRaw)&&Number(x.adminInitiatedEnabled)===1&&Number(x.policyDestinationLocked)===1&&Number(x.policyDestinationActive)===1;
+  const grant=Boolean(x.grantId)&&x.grantVerificationStatus==="verified"&&!x.assetAuthorizationRevokedAt&&x.authorizedAmountKind==="capped"&&Boolean(x.authorizedMaxAmountRaw)&&modes.includes("admin-initiated");
+  let allowance=false;try{allowance=x.allowanceRaw!==null&&x.allowanceRaw!==undefined&&BigInt(String(x.allowanceRaw))>0n&&String(x.allowanceStatus||"").toLowerCase()==="active"}catch{}
+  const checks=[["Source wallet",locked?"Locked":"Not locked",locked],["Monitoring",monitored?"Healthy":String(x.monitoringStatus||"Pending"),monitored],["Token registry",supported?"Supported":"Not registered",supported],["Policy",policy?"Ready":"Not ready",policy],["Owner approval",grant?"Verified":"Missing / not eligible",grant],["Token allowance",allowance?"Observed":"Missing / inactive",allowance]];
+  for(const [label,value,ok] of checks){const chip=node("span",label+" · "+value);chip.className="inventory-chip "+(ok?"is-good":"is-pending");statusRow.append(chip)}
+  card.append(statusRow);
+  const detail=document.createElement("div");detail.className="inventory-details";
+  const rowsDetail=[
+   ["Network",String(x.network||"—")+" · chain "+String(x.chainId||"—")],
+   ["Asset balance",x.amountRaw!==null&&x.amountRaw!==undefined?formatRawAmount(String(x.amountRaw),Number(x.decimals||0))+" "+(x.symbol||""):"Not observed"],
+   ["Recovery cap",x.authorizedMaxAmountRaw?formatRawAmount(String(x.authorizedMaxAmountRaw),Number(x.decimals||0))+" "+(x.symbol||""):"Not authorized"],
+   ["Destination",x.policyDestinationAddress||x.authorizedDestinationAddress||"No destination configured"],
+   ["Executor allowance",x.allowanceRaw!==null&&x.allowanceRaw!==undefined?formatRawAmount(String(x.allowanceRaw),Number(x.decimals||0))+" "+(x.symbol||""):"Not observed"],
+   ["Last checked",x.observedAt||x.lastMonitorAt||"Not yet checked"]
+  ];
+  for(const [label,value] of rowsDetail){const cell=document.createElement("div");cell.className="inventory-detail";const key=node("span",label);const val=node("strong",value);cell.append(key,val);detail.append(cell)}
+  card.append(detail);
+  let reason="";
+  if(!x.tokenAddress)reason="Native-coin recovery is not supported yet.";
+  else if(!locked)reason="Lock this source wallet in Source Wallets first.";
+  else if(!monitored)reason="The latest wallet refresh has not completed successfully.";
+  else if(!supported)reason="This token is not active in the verified supported-token registry.";
+  else if(!policy)reason="No active locked destination policy permits administrator recovery for this token.";
+  else if(!grant)reason="The owner has not provided a verified, active administrator-recovery authorization for this asset.";
+  else if(!allowance)reason="The owner's exact on-chain token allowance has not been observed as active.";
+  const action=document.createElement("div");action.className="inventory-action";
+  const help=node("p",reason||"All displayed readiness checks passed. The live recovery worker will still revalidate the authorization before any transaction.");
+  help.className="inventory-action-help";
+  const button=node("button",grant&&policy&&allowance&&locked&&monitored&&supported?"Review recovery request":"Recovery unavailable");
+  button.type="button";button.className="secondary inventory-action-button";
+  const eligible=!reason;
+  button.disabled=!eligible;
+  if(eligible)button.addEventListener("click",()=>{setView("operations");$("recoveryGrantSelect").value=String(x.grantId);renderRecoveryAssetOptions();$("recoveryAssetSelect").value=String(x.assetId);$("recoveryAmount").value="";$("recoveryAmount").disabled=false;$("queueRecoveryButton").disabled=false;$("recoveryQueueStatus").textContent="Review the amount and submit only if this is the intended recovery."});
+  action.append(help,button);card.append(action);grid.append(card);
+ }
+ root.append(grid);
 }
 function renderRecoveryGrantOptions(){const select=$("recoveryGrantSelect");select.replaceChildren(node("option","Choose an eligible owner authorization"));const grants=Array.from(new Map(eligibleRecoveryGrants.map(g=>[g.grantId,g])).values());for(const g of grants){const o=node("option",g.network+" · "+g.ownerWallet.slice(0,8)+"…"+g.ownerWallet.slice(-6)+" · expires "+g.expiresAt.slice(0,10));o.value=g.grantId;select.append(o)}select.disabled=grants.length===0;if(!grants.length)select.replaceChildren(node("option","No eligible admin-authorized grants"))}
 function renderRecoveryAssetOptions(){const grant=eligibleRecoveryGrants.find(g=>g.grantId===$("recoveryGrantSelect").value),select=$("recoveryAssetSelect");select.replaceChildren(node("option",grant?"Choose an authorized token":"Select an authorization first"));if(grant){for(const a of eligibleRecoveryGrants.filter(g=>g.grantId===grant.grantId)){const o=node("option",a.symbol+" · max "+formatRawAmount(a.maxAmountRaw,a.decimals)+" "+a.symbol);o.value=a.assetId;select.append(o)}}select.disabled=!grant||!select.options.length||!grant.symbol;$("recoveryAmount").disabled=select.disabled;$("queueRecoveryButton").disabled=select.disabled}
