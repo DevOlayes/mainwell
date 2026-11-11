@@ -87,6 +87,103 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
 
   // Build a read-only authorization plan from the authenticated wallet and admin-locked policy.
   // This is a preflight only: it never deploys contracts or requests token approvals.
+  if (path === "/api/owner/reconnect-readiness" && request.method === "GET") {
+    const now = new Date().toISOString();
+    const [walletRows, registryRows, policyRows, grantRows] = await Promise.all([
+      env.DB.prepare("SELECT id, network, status, admin_locked FROM recovery_wallets WHERE owner_address = ?")
+        .bind(owner).all<Record<string, unknown>>(),
+      env.DB.prepare("SELECT id, network, token_address, is_active FROM recovery_supported_assets ORDER BY network, token_address")
+        .all<Record<string, unknown>>(),
+      env.DB.prepare(`
+        SELECT p.network, p.asset_id AS assetId, p.max_amount_raw AS maxAmountRaw,
+               p.automatic_priority_enabled AS automaticPriorityEnabled,
+               p.admin_initiated_enabled AS adminInitiatedEnabled,
+               p.expires_in_seconds AS expiresInSeconds,
+               d.address AS destinationAddress, d.locked AS destinationLocked,
+               d.is_active AS destinationActive
+        FROM recovery_asset_destination_policies p
+        LEFT JOIN recovery_destinations d ON d.id = p.destination_id
+      `).all<Record<string, unknown>>(),
+      env.DB.prepare(`
+        SELECT g.grant_id AS grantId, g.network, g.chain_id AS chainId,
+               g.executor_address AS executorAddress, g.destination_address AS destinationAddress,
+               g.verification_status AS verificationStatus, g.revoked_at AS revokedAt,
+               g.expires_at AS expiresAt, a.asset_id AS assetId, a.token_address AS tokenAddress,
+               a.max_amount_raw AS maxAmountRaw, a.owner_acknowledged AS ownerAcknowledged,
+               a.revoked_at AS assetRevokedAt, a.destination_address AS assetDestinationAddress
+        FROM recovery_grants g
+        INNER JOIN recovery_grant_assets a ON a.grant_id = g.grant_id
+        WHERE g.owner_wallet = ?
+        ORDER BY g.approved_at DESC
+      `).bind(owner).all<Record<string, unknown>>()
+    ]);
+    if (!walletRows.success || !registryRows.success || !policyRows.success || !grantRows.success)
+      return reply({ error: "Unable to load complete reconnect authorization readiness." }, 503);
+    const networks = Object.entries(NETWORK_CHAIN).map(([network, chainId]) => {
+      const wallet = walletRows.results.find(row => String(row.network) === network);
+      const registry = registryRows.results.filter(row => String(row.network) === network);
+      const policies = policyRows.results.filter(row => String(row.network) === network);
+      const grants = grantRows.results.filter(row => String(row.network) === network);
+      const permissions = wallet ? env.DB.prepare(`
+        SELECT token_address AS tokenAddress, spender_address AS spender,
+               allowance_raw AS allowanceRaw, status, updated_at AS observedAt
+        FROM wallet_permissions WHERE wallet_id = ? AND network = ?
+      `).bind(wallet.id, network).all<Record<string, unknown>>() : Promise.resolve({success:true,results:[] as Record<string, unknown>[]});
+      return permissions.then(permissionRows => {
+        const assets = registry.map(asset => {
+          const policy = policies.find(row => String(row.assetId) === String(asset.id));
+          const matchingGrants = grants.filter(grant =>
+            String(grant.assetId) === String(asset.id) &&
+            String(grant.tokenAddress).toLowerCase() === String(asset.token_address).toLowerCase() &&
+            grant.verificationStatus === "verified" &&
+            !grant.revokedAt && !grant.assetRevokedAt &&
+            grant.ownerAcknowledged === 1
+          );
+          const currentGrant = matchingGrants.find(grant =>
+            Date.parse(String(grant.expiresAt)) > Date.parse(now) &&
+            policy && String(grant.maxAmountRaw) === String(policy.maxAmountRaw) &&
+            String(grant.assetDestinationAddress || grant.destinationAddress).toLowerCase() === String(policy.destinationAddress || "").toLowerCase()
+          );
+          const permission = currentGrant ? permissionRows.results.find(row =>
+            String(row.tokenAddress).toLowerCase() === String(asset.token_address).toLowerCase() &&
+            String(row.spender).toLowerCase() === String(currentGrant.executorAddress).toLowerCase()
+          ) : null;
+          const capValid = typeof policy?.maxAmountRaw === "string" && /^[1-9][0-9]{0,77}$/.test(policy.maxAmountRaw);
+          const registryActive = Number(asset.is_active) === 1;
+          const policyActive = Boolean(policy && Number(policy.destinationLocked) === 1 &&
+            Number(policy.destinationActive) === 1 && capValid &&
+            (Number(policy.automaticPriorityEnabled) === 1 || Number(policy.adminInitiatedEnabled) === 1));
+          let status = "owner_authorization_missing";
+          if (!registryActive) status = "token_inactive";
+          else if (!policyActive) status = "administrator_policy_required";
+          else if (!wallet || Number(wallet.admin_locked) !== 1 || wallet.status === "revoked")
+            status = "source_wallet_lock_required";
+          else if (currentGrant && permission && permission.status === "active" &&
+            typeof permission.allowanceRaw === "string" && BigInt(permission.allowanceRaw) >= BigInt(String(policy!.maxAmountRaw)))
+            status = "fully_authorized";
+          else if (currentGrant) status = permission?.status === "unknown" ? "allowance_check_unavailable" : "allowance_approval_required";
+          return {
+            assetId: asset.id, network, tokenAddress: asset.token_address,
+            registryActive, policyActive, sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"),
+            status, grantId: currentGrant?.grantId ?? null,
+            executorAddress: currentGrant?.executorAddress ?? null,
+            allowanceRaw: permission?.allowanceRaw ?? null,
+            allowanceStatus: permission?.status ?? null,
+            maxAmountRaw: policy?.maxAmountRaw ?? null,
+            destinationAddress: policy?.destinationAddress ?? null
+          };
+        });
+        return { network, chainId, walletRegistered: Boolean(wallet), sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"), assets };
+      });
+    });
+    const results = await Promise.all(networks);
+    return reply({ checkedAt: now, networks: results, summary: {
+      total: results.reduce((n, row) => n + row.assets.length, 0),
+      fullyAuthorized: results.reduce((n, row) => n + row.assets.filter(asset => asset.status === "fully_authorized").length, 0),
+      outstanding: results.reduce((n, row) => n + row.assets.filter(asset => asset.status !== "fully_authorized").length, 0)
+    }});
+  }
+
   if (path === "/api/owner/executor-artifact" && request.method === "GET") {
     return reply({
       contractName: "ScopedRecoveryExecutor",
