@@ -178,7 +178,7 @@ function renderWalletAssetInventory(targetId){
   const monitor=(x.monitoringStatus||"pending").toUpperCase();
   const supported=x.tokenAddress?(Number(x.supportedAssetActive)===1?"SUPPORTED TOKEN":"NOT IN SUPPORTED TOKEN REGISTRY"):"NATIVE ASSET · NOT RECOVERABLE";
   const policy=x.policyMaxAmountRaw&&x.policyDestinationAddress&&Number(x.policyDestinationLocked)===1&&Number(x.policyDestinationActive)===1?"POLICY READY":"NO ACTIVE LOCKED ASSET POLICY";
-  const grant=x.grantId&&x.authorizedMaxAmountRaw&&!x.assetAuthorizationRevokedAt?"OWNER GRANT VERIFIED · CAP "+formatRawAmount(String(x.authorizedMaxAmountRaw),Number(x.decimals||0)):"NO VERIFIED OWNER GRANT FOR THIS ASSET";
+  let grantModes="";try{grantModes=Array.isArray(JSON.parse(String(x.grantExecutionModesJson||"[]")))?JSON.parse(String(x.grantExecutionModesJson||"[]")).join(", "):""}catch{}const grant=x.grantId&&x.authorizedMaxAmountRaw&&!x.assetAuthorizationRevokedAt?"OWNER GRANT VERIFIED · "+grantModes+" · CAP "+formatRawAmount(String(x.authorizedMaxAmountRaw),Number(x.decimals||0)):"NO VERIFIED OWNER GRANT FOR THIS ASSET";
   const allowance=x.allowanceRaw!==null&&x.allowanceRaw!==undefined?"EXECUTOR ALLOWANCE "+formatRawAmount(String(x.allowanceRaw),Number(x.decimals||0))+" · "+(x.allowanceStatus||"observed").toUpperCase():"EXECUTOR ALLOWANCE NOT OBSERVED";
   return x.network+" · "+x.address+" · "+(x.symbol||x.name||x.assetId||"Unknown asset")+" · "+balance+" · "+lock+" · MONITOR "+monitor+" · "+supported+" · "+policy+" · "+grant+" · "+allowance+" · observed "+(x.observedAt||x.lastMonitorAt||"not yet");
  });
