@@ -1,5 +1,5 @@
 {
-  "sourceCommit": "299c54bf0d960bcb99bfde682f73b8956a5187c8",
+  "sourceCommit": "c0b91a5d1f9de447330ad5c726558e3f32f49837",
   "sourceEntrypoint": "src/worker.ts",
   "generatedBy": "wrangler deploy --dry-run with targeted mobile wallet fallback",
   "bundleFile": "worker.js",
