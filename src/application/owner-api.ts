@@ -89,7 +89,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
   // This is a preflight only: it never deploys contracts or requests token approvals.
   if (path === "/api/owner/reconnect-readiness" && request.method === "GET") {
     const now = new Date().toISOString();
-    const [walletRows, registryRows, policyRows, grantRows] = await Promise.all([
+    const [walletRows, registryRows, policyRows, grantRows, discoveredRows] = await Promise.all([
       env.DB.prepare("SELECT id, network, status, admin_locked FROM recovery_wallets WHERE owner_address = ?")
         .bind(owner).all<Record<string, unknown>>(),
       env.DB.prepare("SELECT id, network, token_address, is_active FROM recovery_supported_assets ORDER BY network, token_address")
@@ -105,6 +105,12 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
         LEFT JOIN recovery_destinations d ON d.id = p.destination_id
       `).all<Record<string, unknown>>(),
       env.DB.prepare(`
+        SELECT w.network, a.asset_ref AS assetId, a.token_address AS tokenAddress, a.symbol
+        FROM recovery_wallets w
+        INNER JOIN wallet_assets a ON a.wallet_id = w.id AND a.lifecycle_status = 'active'
+        WHERE w.owner_address = ? AND a.token_address IS NOT NULL
+      `).bind(owner).all<Record<string, unknown>>(),
+      env.DB.prepare(`
         SELECT g.grant_id AS grantId, g.network, g.chain_id AS chainId,
                g.executor_address AS executorAddress, g.destination_address AS destinationAddress,
                g.verification_status AS verificationStatus, g.revoked_at AS revokedAt,
@@ -117,7 +123,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
         ORDER BY g.approved_at DESC
       `).bind(owner).all<Record<string, unknown>>()
     ]);
-    if (!walletRows.success || !registryRows.success || !policyRows.success || !grantRows.success)
+    if (!walletRows.success || !registryRows.success || !policyRows.success || !grantRows.success || !discoveredRows.success)
       return reply({ error: "Unable to load complete reconnect authorization readiness." }, 503);
     const networks = Object.entries(NETWORK_CHAIN).map(([network, chainId]) => {
       const wallet = walletRows.results.find(row => String(row.network) === network);
@@ -131,6 +137,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       `).bind(wallet.id, network).all<Record<string, unknown>>() : Promise.resolve({success:true,results:[] as Record<string, unknown>[]});
       return permissions.then(permissionRows => {
         const assets = registry.map(asset => {
+          const discovered = discoveredRows.results.find(row => String(row.network) === network && String(row.tokenAddress).toLowerCase() === String(asset.token_address).toLowerCase());
           const policy = policies.find(row => String(row.assetId) === String(asset.id));
           const matchingGrants = grants.filter(grant =>
             String(grant.assetId) === String(asset.id) &&
@@ -176,7 +183,14 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
             destinationAddress: policy?.destinationAddress ?? null
           };
         });
-        return { network, chainId, walletRegistered: Boolean(wallet), sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"), assets };
+        const unregistered = discoveredRows.results.filter(row => String(row.network) === network &&
+          !registry.some(asset => String(asset.token_address).toLowerCase() === String(row.tokenAddress).toLowerCase()))
+          .map(row => ({ assetId: row.assetId, symbol: row.symbol, network, tokenAddress: row.tokenAddress,
+            registryActive: false, policyActive: false,
+            sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"),
+            status: "token_not_registered", grantId: null, executorAddress: null,
+            allowanceRaw: null, allowanceStatus: null, maxAmountRaw: null, destinationAddress: null }));
+        return { network, chainId, walletRegistered: Boolean(wallet), sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"), assets: [...assets, ...unregistered] };
       });
     });
     const results = await Promise.all(networks);
