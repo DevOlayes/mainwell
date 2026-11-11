@@ -4,7 +4,7 @@ import { handleAdminDestinationApi } from "./application/admin-destination-api";
 import { handleAdminAuthApi } from "./application/admin-auth";
 import { adminRecoveryPageResponse, handleAdminRecoveryApi } from "./application/admin-recovery";
 import { adminDashboardResponse } from "./application/admin-dashboard";
-import { ownerDashboardResponse } from "./application/owner-dashboard";
+import { ownerDashboardResponse, ownerDashboardScriptResponse } from "./application/owner-dashboard";
 import { ownerAuthorizationResponse } from "./application/owner-authorization";
 import { operatorWalletSetupResponse } from "./application/operator-wallet-setup";
 import { adminDiagnosticsResponse } from "./application/admin-diagnostics";
@@ -54,6 +54,7 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
   if(request.method==="GET"&&url.pathname==="/admin/diagnostics")return adminDiagnosticsResponse();
   if(request.method==="GET"&&url.pathname==="/admin/recover-once")return adminRecoveryPageResponse(env);
   if(request.method==="GET"&&url.pathname==="/admin/operators")return operatorWalletSetupResponse();
+  if(request.method==="GET"&&url.pathname==="/assets/owner-dashboard.js")return ownerDashboardScriptResponse();
   if(request.method==="GET"&&url.pathname==="/")return ownerDashboardResponse();
   if(request.method==="GET"&&url.pathname==="/authorize")return ownerAuthorizationResponse();
   if(request.method==="GET"&&url.pathname==="/health")return json({service:"mainwell",status:"ok",database:"configured",timestamp:new Date().toISOString()});
