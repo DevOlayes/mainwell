@@ -38,6 +38,19 @@ async function walletAuthRateLimit(request: Request, env: Env): Promise<boolean>
     return false;
   }
 }
+async function walletDiagnosticRateLimit(request: Request, env: Env): Promise<boolean> {
+  const ip=request.headers.get("cf-connecting-ip")??"unknown";
+  const identifierHash=await hash("mainwell-wallet-diagnostic|"+ip);
+  const epoch=Math.floor(Date.now()/1000);
+  try {
+    await env.DB.prepare("INSERT INTO wallet_auth_rate_limits(identifier_hash,attempts,window_started_at,locked_until) VALUES(?,1,?,0) ON CONFLICT(identifier_hash) DO UPDATE SET attempts=CASE WHEN ?-window_started_at>600 THEN 1 ELSE attempts+1 END,window_started_at=CASE WHEN ?-window_started_at>600 THEN ? ELSE window_started_at END,locked_until=CASE WHEN (CASE WHEN ?-window_started_at>600 THEN 1 ELSE attempts+1 END)>=120 THEN ?+600 ELSE locked_until END")
+      .bind(identifierHash,epoch,epoch,epoch,epoch,epoch,epoch).run();
+    const row=await env.DB.prepare("SELECT locked_until FROM wallet_auth_rate_limits WHERE identifier_hash=?").bind(identifierHash).first<{locked_until:number}>();
+    return !!row && row.locked_until<=epoch;
+  } catch {
+    return false;
+  }
+}
 function cookie(req: Request,name="mw_owner_session"): string|null { for (const part of (req.headers.get("cookie")??"").split(";")) { const [k,...v]=part.trim().split("="); if(k===name) return v.join("=")||null; } return null; }
 function sameOrigin(req: Request,url: URL): boolean { return req.headers.get("origin")===url.origin; }
 async function body(req: Request): Promise<Record<string,unknown>|null> { if(Number(req.headers.get("content-length")??"0")>4096)return null; try { const s=await req.text(); if(s.length>4096)return null; const x=JSON.parse(s); return x&&typeof x==="object"&&!Array.isArray(x)?x:null; } catch{return null;} }
@@ -93,6 +106,32 @@ export default { async scheduled(_event: {cron:string},env:Env,ctx:{waitUntil(pr
     return json({authenticated:true,wallet:c.wallet_address,chainId,expiresAt:expires},200,{"set-cookie":"mw_owner_session="+token+"; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age="+SESSION_SECONDS});
   }
   if(url.pathname==="/api/auth/me"&&request.method==="GET"){const s=await session(request,env);return s?json({authenticated:true,...s}):json({authenticated:false},401);}
+  if(url.pathname==="/api/auth/diagnostics"&&request.method==="POST"){
+    if(!sameOrigin(request,url))return json({error:"Origin check failed."},403);
+    const b=await body(request);
+    const step=typeof b?.step==="string"?b.step.slice(0,80):"";
+    const result=typeof b?.result==="string"?b.result.slice(0,40):"";
+    const allowedSteps=new Set(["wallet.provider_request","wallet.provider_approved","wallet.connect","auth.challenge","auth.personal_sign","auth.verify","intake.register_all","authorization.preflight","authorization.submit"]);
+    const allowedResults=new Set(["started","success","failed","awaiting_signature","signature_returned","http_error","network_error"]);
+    if((!allowedSteps.has(step)&&!/^intake\.scan\.(ethereum|polygon|bsc|avalanche|arbitrum|optimism|base)$/.test(step))||!allowedResults.has(result))
+      return json({error:"Diagnostic event is not allowed."},400);
+    if(!(await walletDiagnosticRateLimit(request,env)))return json({error:"Diagnostic rate limit reached. Try again later."},429,{"retry-after":"600"});
+    const rawDetail=typeof b?.detail==="string"?b.detail.slice(0,500):"";
+    const detail=rawDetail.replace(/https?:\/\/\S+/gi,"[URL redacted]").replace(/0x[0-9a-f]{40,}/gi,"[hex data redacted]").replace(/\b[A-Za-z0-9_+/=-]{80,}\b/g,"[long value redacted]").replace(/[\r\n\t]+/g," ").slice(0,160);
+    const meta=b?.meta&&typeof b.meta==="object"&&!Array.isArray(b.meta)?b.meta as Record<string,unknown>:{};
+    const networks=Array.isArray(meta.networks)?meta.networks.filter((x):x is string=>typeof x==="string"&&["ethereum","polygon","bsc","avalanche","arbitrum","optimism","base"].includes(x)).slice(0,7):undefined;
+    const registeredNetworks=Array.isArray(meta.registeredNetworks)?meta.registeredNetworks.filter((x):x is string=>typeof x==="string"&&["ethereum","polygon","bsc","avalanche","arbitrum","optimism","base"].includes(x)).slice(0,7):undefined;
+    const metadata={step,result,detail,chainId:Number.isSafeInteger(meta.chainId)&&CHAINS.has(Number(meta.chainId))?Number(meta.chainId):null,
+      httpStatus:Number.isInteger(meta.httpStatus)&&Number(meta.httpStatus)>=100&&Number(meta.httpStatus)<=599?Number(meta.httpStatus):null,
+      durationMs:Number.isInteger(meta.durationMs)?Math.min(120000,Math.max(0,Number(meta.durationMs))):null,
+      assetCount:Number.isInteger(meta.assetCount)?Math.min(2500,Math.max(0,Number(meta.assetCount))):null,
+      permissionCount:Number.isInteger(meta.permissionCount)?Math.min(5000,Math.max(0,Number(meta.permissionCount))):null,
+      networks,registeredNetworks};
+    const now=new Date().toISOString();
+    await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('system','preauth-diagnostic','owner.diagnostic.pre_auth','wallet_signin','preauth',?,?)")
+      .bind(JSON.stringify(metadata),now).run();
+    return json({recorded:true});
+  }
   if(url.pathname==="/api/admin/auth/recover-once"){
     const recoveryResponse=await handleAdminRecoveryApi(request,env);
     if(recoveryResponse)return recoveryResponse;
