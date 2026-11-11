@@ -148,6 +148,8 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
             String(row.tokenAddress).toLowerCase() === String(asset.token_address).toLowerCase() &&
             String(row.spender).toLowerCase() === String(currentGrant.executorAddress).toLowerCase()
           ) : null;
+          const permissionAge = permission ? Date.parse(now) - Date.parse(String(permission.observedAt)) : Number.POSITIVE_INFINITY;
+          const permissionFresh = Number.isFinite(permissionAge) && permissionAge >= 0 && permissionAge <= 300000;
           const capValid = typeof policy?.maxAmountRaw === "string" && /^[1-9][0-9]{0,77}$/.test(policy.maxAmountRaw);
           const registryActive = Number(asset.is_active) === 1;
           const policyActive = Boolean(policy && Number(policy.destinationLocked) === 1 &&
@@ -158,10 +160,11 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
           else if (!policyActive) status = "administrator_policy_required";
           else if (!wallet || Number(wallet.admin_locked) !== 1 || wallet.status === "revoked")
             status = "source_wallet_lock_required";
-          else if (currentGrant && permission && permission.status === "active" &&
-            typeof permission.allowanceRaw === "string" && BigInt(permission.allowanceRaw) >= BigInt(String(policy!.maxAmountRaw)))
+          else if (currentGrant && permissionFresh && permission && permission.status === "active" &&
+            typeof permission.allowanceRaw === "string" && /^\\d+$/.test(permission.allowanceRaw) &&
+            BigInt(permission.allowanceRaw) >= BigInt(String(policy!.maxAmountRaw)))
             status = "fully_authorized";
-          else if (currentGrant) status = permission?.status === "unknown" ? "allowance_check_unavailable" : "allowance_approval_required";
+          else if (currentGrant) status = !permissionFresh || permission?.status === "unknown" ? "allowance_check_unavailable" : "allowance_approval_required";
           return {
             assetId: asset.id, network, tokenAddress: asset.token_address,
             registryActive, policyActive, sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"),
