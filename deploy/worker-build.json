@@ -1,8 +1,8 @@
 {
-  "sourceCommit": "71077204f2546ec56c285255c45dd33024c5995c",
+  "sourceCommit": "299c54bf0d960bcb99bfde682f73b8956a5187c8",
   "sourceEntrypoint": "src/worker.ts",
-  "generatedBy": "wrangler deploy --dry-run",
+  "generatedBy": "wrangler deploy --dry-run with targeted mobile wallet fallback",
   "bundleFile": "worker.js",
-  "byteLength": 696050,
-  "sha256": "7d3cbffb1e8cd65c1f8b20f1667e55fa5b7b3c468b651462e073aaa94b97ee31"
+  "byteLength": 698237,
+  "sha256": "3bcff68fc2589746e2cda86a79fa16c2938dab491f72dd92f20af3c6614fd8fd"
 }
