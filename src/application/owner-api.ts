@@ -389,9 +389,19 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       const now = new Date().toISOString();
       await env.DB.prepare("INSERT INTO audit_events (actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES ('owner',?,'recovery.grant.verified','recovery_grant',?,?,?)")
         .bind(owner, grant.grantId, JSON.stringify({ network: grant.network, chainId: verified.chainId, assets: verified.assets.length }), now).run();
+      // Immediately refresh the inventory after grant persistence. The monitoring service
+      // now knows the newly deployed executor address and can record its live ERC-20 allowances.
+      let monitoringRefresh = "pending";
+      try {
+        await refreshWalletWithAlchemy(env, { id: lockedWallet.id, address: owner, network: grant.network, chain_id: grant.chainId });
+        monitoringRefresh = "complete";
+      } catch {
+        // Grant verification is already authoritative; a transient indexer/RPC failure must
+        // not misreport the on-chain authorization as failed. The scheduled monitor retries.
+      }
       return reply({ verified: true, grantId: grant.grantId, verifiedAt: verified.verifiedAt,
         network: grant.network, chainId: verified.chainId, executor: verified.executor,
-        destination: verified.destination, assets: verified.assets });
+        destination: verified.destination, assets: verified.assets, monitoringRefresh });
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message === "GRANT_VERIFIER_NOT_CONFIGURED") return reply({ error: "The trusted executor verifier is not configured for this network.", code: "grant_verifier_not_configured" }, 503);
