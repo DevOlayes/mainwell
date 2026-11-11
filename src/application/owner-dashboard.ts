@@ -60,7 +60,7 @@ async function getWalletConnectClient(){
   client.on("session_update",({topic})=>{if(walletConnectSession?.topic===topic){try{installWalletConnectProvider(client,client.session.get(topic))}catch{}}});
   client.on("session_event",({topic,params})=>{if(walletConnectSession?.topic!==topic)return;const event=params?.event;if(event?.name==="accountsChanged")emitWalletConnectEvent("accountsChanged",event.data);if(event?.name==="chainChanged")emitWalletConnectEvent("chainChanged",typeof event.data==="number"?"0x"+event.data.toString(16):event.data)});
   walletConnectClient=client;return client;
- })();
+ })().catch(error=>{walletConnectInitPromise=null;throw error});
  return walletConnectInitPromise;
 }
 function showWalletConnectLink(uri){
@@ -179,7 +179,8 @@ function connect(){
   discoverLegacyProviders();
   const current=getCurrentBrowserWallet();
   if(current){connectWithProvider(current.provider,current.info.name);return}
-  if(walletIntent){connectWithWalletConnect(walletIntent);return}
+  if(walletIntent==="trustwallet"){connectWithWalletConnect("trustwallet");return}
+  if(walletIntent){setStatus("connectStatus",walletIntentName()+" was selected. Open Mainwell inside that wallet or choose Trust Wallet for a WalletConnect connection.");return}
   openWalletModal();
  }catch(error){
   button.disabled=false;
