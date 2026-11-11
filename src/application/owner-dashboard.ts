@@ -108,6 +108,7 @@ async function api(path,options={}){const r=await fetch(path,{credentials:"same-
 function short(a){return a.slice(0,8)+"…"+a.slice(-6)}
 function setStatus(id,msg,error=false){$(id).textContent=msg;$(id).className="status"+(error?" error":"")}
 function isMobileBrowser(){return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||((navigator.platform==="MacIntel")&&navigator.maxTouchPoints>1)}
+function isTrustWalletBrowser(){return !!(window.trustwallet?.ethereum||window.trustwallet?.request||window.ethereum?.isTrust||window.ethereum?.isTrustWallet||/TrustWallet|Trust Wallet/i.test(navigator.userAgent))}
 function addDiscoveredProvider(detail){const info=detail?.info,p=detail?.provider;if(!p||typeof p.request!=="function")return;const uuid=typeof info?.uuid==="string"?info.uuid:"";if(uuid&&discoveredProviders.has(uuid))return;if([...discoveredProviders.values()].some(x=>x.provider===p))return;const key=uuid||("legacy-"+discoveredProviders.size);discoveredProviders.set(key,{info:{name:typeof info?.name==="string"?info.name:"EVM wallet",rdns:typeof info?.rdns==="string"?info.rdns:""},provider:p});updateConnectButton();if(!$("walletModal").classList.contains("hidden"))renderWalletOptions()}
 window.addEventListener("eip6963:announceProvider",event=>addDiscoveredProvider(event.detail));
 window.addEventListener("trustwallet#initialized",()=>{discoverLegacyProviders();updateConnectButton()});
@@ -179,8 +180,9 @@ function connect(){
   discoverLegacyProviders();
   const current=getCurrentBrowserWallet();
   if(current){connectWithProvider(current.provider,current.info.name);return}
-  if(walletIntent==="trustwallet"){connectWithWalletConnect("trustwallet");return}
+  if(walletIntent==="trustwallet"||isTrustWalletBrowser()){rememberWalletIntent("trustwallet");walletIntent="trustwallet";connectWithWalletConnect("trustwallet");return}
   if(walletIntent){setStatus("connectStatus",walletIntentName()+" was selected. Open Mainwell inside that wallet or choose Trust Wallet for a WalletConnect connection.");return}
+  if(isMobileBrowser()){openWalletModal();return}
   openWalletModal();
  }catch(error){
   button.disabled=false;
