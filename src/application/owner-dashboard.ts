@@ -70,6 +70,8 @@ function renderReconnectReadiness(data){
   const heading=document.createElement("div");heading.className="wallet-head";
   const name=document.createElement("b");name.textContent=NETWORKS[network.chainId]||network.network;
   const count=document.createElement("span");count.className="tag";const ready=(network.assets||[]).filter(a=>a.status==="fully_authorized").length;count.textContent=ready+" / "+network.assets.length+" ready";heading.append(name,count);section.append(heading);
+  const ownerAction=(network.assets||[]).some(a=>a.status==="owner_authorization_missing"||a.status==="allowance_approval_required");
+  if(Number(network.chainId)===chainId&&ownerAction){const action=document.createElement("a");action.href="/authorize";action.className="secondary";action.style.display="inline-block";action.style.textDecoration="none";action.textContent="Review missing owner approvals →";section.append(action)}
   if(!network.walletRegistered){const note=node("div","Connect and register this wallet for monitoring on this network.");note.className="empty";section.append(note)}
   for(const asset of network.assets||[]){
    const line=document.createElement("div");line.className="asset";
