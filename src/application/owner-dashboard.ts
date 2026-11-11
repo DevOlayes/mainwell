@@ -199,7 +199,7 @@ const SUPPORTED_NETWORKS=[["ethereum",1],["polygon",137],["bsc",56],["avalanche"
 function renderReconnectReadiness(data){
  const root=$("readinessResults");root.replaceChildren();
  const summary=data.summary||{};$("readinessSummary").textContent=(summary.fullyAuthorized||0)+" / "+(summary.total||0)+" assets authorized · "+(summary.outstanding||0)+" need review";
- const labels={fully_authorized:"Fully authorized",token_inactive:"Token inactive in registry",token_not_registered:"Not registered for recovery review",administrator_policy_required:"Administrator policy or locked destination required",source_wallet_lock_required:"Administrator must lock this source wallet",owner_authorization_missing:"Owner authorization required",allowance_approval_required:"Exact token allowance missing or insufficient",allowance_check_unavailable:"Allowance check unavailable"};
+ const labels={fully_authorized:"Fully authorized",native_asset_observed:"Native gas balance · informational only",token_inactive:"Token inactive in registry",token_not_registered:"Not registered for recovery review",administrator_policy_required:"Administrator policy or locked destination required",source_wallet_lock_required:"Administrator must lock this source wallet",owner_authorization_missing:"Owner authorization required",allowance_approval_required:"Exact token allowance missing or insufficient",allowance_check_unavailable:"Allowance check unavailable"};
  for(const network of (data.networks||[])){
   const section=document.createElement("div");section.className="wallet";
   const heading=document.createElement("div");heading.className="wallet-head";
