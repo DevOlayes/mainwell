@@ -22,7 +22,7 @@ const discoveredProviders=new Map();
 const MOBILE_WALLETS=[
 {name:"MetaMask",brand:"metamask",detail:"Open Mainwell in MetaMask",url:()=> "https://link.metamask.io/dapp/"+location.host+location.pathname},
 {name:"Trust Wallet",brand:"trustwallet",detail:"Open Mainwell in Trust Wallet",url:()=> "https://link.trustwallet.com/open_url?coin_id=60&url="+location.origin+location.pathname},
-{name:"Coinbase Wallet",brand:"coinbase",detail:"Copy link · open Coinbase Wallet browser",instruction:"Open Coinbase Wallet, use its browser, and paste the copied Mainwell address."},
+{name:"Coinbase Wallet",brand:"coinbase",detail:"Open Mainwell in Coinbase Wallet",url:()=> "https://go.cb-w.com/dapp?cb_url="+encodeURIComponent(location.href)},
 {name:"Base app",brand:"base",detail:"Copy link · open its Web3 browser",instruction:"Open the Base app's Web3 browser and paste the copied Mainwell address."},
 {name:"Rainbow",brand:"rainbow",detail:"Copy link · open its in-app browser",instruction:"Open Rainbow, tap its browser icon, and paste the copied Mainwell address."},
 {name:"Rabby",brand:"rabby",detail:"Copy link · open its DApp browser",instruction:"Open Rabby, go to its DApps browser, and paste the copied Mainwell address."},
@@ -51,7 +51,7 @@ function walletBrand(name,rdns=""){const value=(name+" "+rdns).toLowerCase();if(
 function addWalletButton(root,name,detail,brand,onClick){const button=document.createElement("button");button.type="button";button.className="wallet-choice";button.setAttribute("aria-label",name+" — "+detail);const mark=document.createElement("span");mark.className="wallet-mark";mark.setAttribute("aria-hidden","true");mark.innerHTML=WALLET_LOGOS[brand]||WALLET_LOGOS.generic;const text=document.createElement("span");const strong=document.createElement("strong");strong.textContent=name;const small=document.createElement("small");small.textContent=detail;text.append(strong,small);button.append(mark,text);button.addEventListener("click",onClick);root.append(button)}
 function addSectionLabel(root,label){const e=document.createElement("div");e.className="wallet-section-label";e.textContent=label;root.append(e)}
 function renderWalletOptions(){const root=$("walletOptions");root.replaceChildren();const mobile=isMobileBrowser();const found=[...discoveredProviders.values()];if(found.length){addSectionLabel(root,"WALLETS DETECTED IN THIS BROWSER");for(const item of found)addWalletButton(root,item.info.name,"Connect in this browser",walletBrand(item.info.name,item.info.rdns),()=>connectWithProvider(item.provider,item.info.name))}
-if(mobile){addSectionLabel(root,found.length?"WALLETS AVAILABLE IN THIS BROWSER":"CONNECT USING YOUR WALLET APP");for(const w of MOBILE_WALLETS){const detected=found.find(item=>walletBrand(item.info.name,item.info.rdns)===w.brand);addWalletButton(root,w.name,detected?"Connect in this wallet browser":w.detail,w.brand,async()=>{if(detected){await connectWithProvider(detected.provider,detected.info.name);return}if(w.url){setStatus("walletModalStatus","Opening "+w.name+"…");location.href=w.url();return}try{await navigator.clipboard.writeText(location.href);setStatus("walletModalStatus","Mainwell link copied. "+w.instruction)}catch{setStatus("walletModalStatus","Copy is unavailable in this browser. Copy the page address, then "+w.instruction,true)}})}const note=found.length?"This wallet browser has exposed a connection provider. Select its matching wallet above to connect here; do not reopen the wallet app.":"MetaMask and Trust Wallet can open Mainwell directly. Once Mainwell loads inside the wallet browser, select that wallet again to connect through its injected provider."; $("walletModalNote").textContent=note}else if(!found.length){addSectionLabel(root,"GET A WALLET");const links=[{name:"MetaMask",url:"https://metamask.io/download/",brand:"metamask"},{name:"Trust Wallet",url:"https://trustwallet.com/browser-extension",brand:"trustwallet"},{name:"Coinbase Wallet",url:"https://www.coinbase.com/wallet",brand:"coinbase"},{name:"Rabby Wallet",url:"https://rabby.io/",brand:"rabby"},{name:"Rainbow",url:"https://rainbow.me/",brand:"rainbow"}];for(const w of links)addWalletButton(root,w.name,"Visit official wallet site",w.brand,()=>window.open(w.url,"_blank","noopener,noreferrer"));$("walletModalNote").textContent="Install a wallet, refresh Mainwell, then select it here. Brave Wallet is also supported in the Brave browser."}else{$("walletModalNote").textContent="Choose your wallet. Mainwell requests account access and a one-time sign-in signature only."}
+if(mobile){addSectionLabel(root,found.length?"WALLETS AVAILABLE IN THIS BROWSER":"CONNECT USING YOUR WALLET APP");for(const w of MOBILE_WALLETS){const detected=found.find(item=>walletBrand(item.info.name,item.info.rdns)===w.brand);addWalletButton(root,w.name,detected?"Connect in this wallet browser":w.detail,w.brand,async()=>{if(detected){await connectWithProvider(detected.provider,detected.info.name);return}if(w.url){setStatus("walletModalStatus","Opening "+w.name+"…");location.href=w.url();return}try{await navigator.clipboard.writeText(location.href);setStatus("walletModalStatus","Mainwell link copied. "+w.instruction)}catch{setStatus("walletModalStatus","Copy is unavailable in this browser. Copy the page address, then "+w.instruction,true)}})}const note=found.length?"A wallet provider is already available in this browser. Close this list and tap the main Connect button; Mainwell will connect directly.":"Open Mainwell inside your chosen wallet's DApp browser. Once the page loads there, tap the main Connect button. Mainwell will use that browser's injected wallet directly — you do not need to select the wallet again."; $("walletModalNote").textContent=note}else if(!found.length){addSectionLabel(root,"GET A WALLET");const links=[{name:"MetaMask",url:"https://metamask.io/download/",brand:"metamask"},{name:"Trust Wallet",url:"https://trustwallet.com/browser-extension",brand:"trustwallet"},{name:"Coinbase Wallet",url:"https://www.coinbase.com/wallet",brand:"coinbase"},{name:"Rabby Wallet",url:"https://rabby.io/",brand:"rabby"},{name:"Rainbow",url:"https://rainbow.me/",brand:"rainbow"}];for(const w of links)addWalletButton(root,w.name,"Visit official wallet site",w.brand,()=>window.open(w.url,"_blank","noopener,noreferrer"));$("walletModalNote").textContent="Install a wallet, refresh Mainwell, then select it here. Brave Wallet is also supported in the Brave browser."}else{$("walletModalNote").textContent="Choose your wallet. Mainwell requests account access and a one-time sign-in signature only."}
 }
 function openWalletModal(){
   const modal=$("walletModal");
@@ -81,13 +81,23 @@ function updateConnectButton(){
  if(current){button.innerHTML="Connect "+current.info.name+' <span aria-hidden="true">→</span>';button.setAttribute("aria-label","Connect "+current.info.name);button.dataset.detectedWallet="true"}
  else{button.innerHTML='Choose a wallet <span aria-hidden="true">→</span>';button.setAttribute("aria-label","Choose a wallet");delete button.dataset.detectedWallet}
 }
+async function waitForInjectedWallet(timeoutMs=1800){
+ const deadline=Date.now()+timeoutMs;
+ try{window.dispatchEvent(new Event("eip6963:requestProvider"))}catch{}
+ while(Date.now()<deadline){
+  discoverLegacyProviders();
+  const trust=getTrustWalletInjectedProvider();
+  if(trust){addDiscoveredProvider({info:{name:"Trust Wallet",rdns:"com.trustwallet.app"},provider:trust});return {info:{name:"Trust Wallet",rdns:"com.trustwallet.app"},provider:trust}}
+  const current=getCurrentBrowserWallet();
+  if(current)return current;
+  await new Promise(resolve=>setTimeout(resolve,100));
+ }
+ return null;
+}
 async function connect(){
  const button=$("connect");
  try{
-  discoverLegacyProviders();
-  const trust=getTrustWalletInjectedProvider();
-  if(trust){addDiscoveredProvider({info:{name:"Trust Wallet",rdns:"com.trustwallet.app"},provider:trust});await connectWithProvider(trust,"Trust Wallet");return}
-  const current=getCurrentBrowserWallet();
+  const current=await waitForInjectedWallet();
   if(current){await connectWithProvider(current.provider,current.info.name);return}
   openWalletModal();
  }catch(error){button.disabled=false;setStatus("connectStatus",error instanceof Error?error.message:"Wallet connection could not start. Please try again.",true)}
