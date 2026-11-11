@@ -385,6 +385,31 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     return reply({ wallets: Array.from(wallets.values()) });
   }
 
+  if (path === "/api/owner/wallets/register-all" && request.method === "POST") {
+    if (!validOrigin(request, url)) return reply({ error: "Origin check failed." }, 403);
+    const now = new Date().toISOString();
+    const networks = Object.entries(NETWORK_CHAIN) as Array<[NetworkId, number]>;
+    const statements = networks.map(([network, chainId]) => env.DB.prepare(`
+      INSERT INTO recovery_wallets (id, owner_address, network, chain_id, status, first_seen_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'monitoring', ?, ?, ?)
+      ON CONFLICT(owner_address, network) DO NOTHING
+    `).bind(crypto.randomUUID(), owner, network, chainId, now, now, now));
+    const saved = await env.DB.batch(statements);
+    if (saved.length !== networks.length || saved.some(result => !result.success))
+      return reply({ error: "Unable to register the connected wallet across all supported networks. No recovery permission was granted; retry registration." }, 503);
+    const rows = await env.DB.prepare(`
+      SELECT id, owner_address AS address, network, chain_id AS chainId, status,
+             admin_locked AS adminLocked, monitoring_status AS monitoringStatus,
+             monitoring_error AS monitoringError, last_monitor_at AS lastMonitorAt
+      FROM recovery_wallets WHERE owner_address = ? ORDER BY network
+    `).bind(owner).all<Record<string, unknown>>();
+    if (!rows.success) return reply({ error: "Wallet registration was saved but could not be read back." }, 503);
+    const registered = new Set(rows.results.map(row => String(row.network)));
+    const missing = networks.map(([network]) => network).filter(network => !registered.has(network));
+    if (missing.length) return reply({ error: "Wallet registration is incomplete on: " + missing.join(", ") }, 503);
+    return reply({ registered: true, networkCount: networks.length, wallets: rows.results }, 200);
+  }
+
   if (path === "/api/owner/wallets" && request.method === "POST") {
     if (!validOrigin(request, url)) return reply({ error: "Origin check failed." }, 403);
     const body = await readBody(request);
