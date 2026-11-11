@@ -92,7 +92,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     const [walletRows, registryRows, policyRows, discoveredRows, grantRows] = await Promise.all([
       env.DB.prepare("SELECT id, network, status, admin_locked, last_monitor_at, monitoring_status FROM recovery_wallets WHERE owner_address = ?")
         .bind(owner).all<Record<string, unknown>>(),
-      env.DB.prepare("SELECT id, network, token_address, is_active FROM recovery_supported_assets ORDER BY network, token_address")
+      env.DB.prepare("SELECT id, network, token_address, symbol, is_active FROM recovery_supported_assets ORDER BY network, token_address")
         .all<Record<string, unknown>>(),
       env.DB.prepare(`
         SELECT p.network, p.asset_id AS assetId, p.max_amount_raw AS maxAmountRaw,
@@ -176,7 +176,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
             status = "fully_authorized";
           else if (currentGrant) status = !permissionFresh || permission?.status === "unknown" ? "allowance_check_unavailable" : "allowance_approval_required";
           return {
-            assetId: asset.id, symbol: discovered?.symbol ?? null, network, tokenAddress: asset.token_address,
+            assetId: asset.id, symbol: asset.symbol ?? discovered?.symbol ?? null, network, tokenAddress: asset.token_address,
             registryActive, policyActive, sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"),
             status, grantId: currentGrant?.grantId ?? null,
             executorAddress: currentGrant?.executorAddress ?? null,
