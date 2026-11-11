@@ -68,7 +68,7 @@ function showWalletConnectLink(uri){
  const link=document.createElement("a");link.href="https://link.trustwallet.com/wc?uri="+encodeURIComponent(uri);link.textContent="Open Trust Wallet to approve";link.target="_blank";link.rel="noopener noreferrer";link.style.display="inline-block";link.style.marginTop="9px";link.style.color="#b5e5d7";link.style.fontWeight="700";status.append(document.createElement("br"),link);
 }
 async function connectWithWalletConnect(brand="trustwallet"){
- const button=$("connect");button.disabled=true;
+ const button=$("connect"),modal=$("walletModal");button.disabled=true;modal.classList.remove("hidden");modal.setAttribute("aria-hidden","false");
  try{
   setStatus("connectStatus","Preparing a secure WalletConnect session…");
   const client=await getWalletConnectClient();
@@ -141,7 +141,7 @@ function openWalletModal(){
     catch(error){setStatus("walletModalStatus","Wallet detection failed, but the selection window remains open.",true)}
   },350)
 }
-function closeWalletModal(){$("walletModal").classList.add("hidden")}
+function closeWalletModal(){$("walletModal").classList.add("hidden");$("walletModal").setAttribute("aria-hidden","true")}
 window.openWalletModal=openWalletModal;
 window.closeWalletModal=closeWalletModal;
 async function provider(){if(activeProvider)return activeProvider;discoverLegacyProviders();const first=discoveredProviders.values().next().value;if(first?.provider)return first.provider;throw new Error("No wallet is connected. Choose a wallet from the connection window.")}
