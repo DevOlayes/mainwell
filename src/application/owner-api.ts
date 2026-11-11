@@ -217,7 +217,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
 
   if (path === "/api/owner/wallets" && request.method === "GET") {
     const rows = await env.DB.prepare(`
-      SELECT w.id, w.owner_address, w.network, w.chain_id, w.status,
+      SELECT w.id, w.owner_address, w.network, w.chain_id, w.status, w.admin_locked,
              w.first_seen_at, w.created_at, w.updated_at,
              a.id AS asset_row_id, a.asset_ref, a.token_address, a.symbol, a.name,
              a.amount_raw, a.decimals, a.estimated_value_usd, a.price_observed_at,
