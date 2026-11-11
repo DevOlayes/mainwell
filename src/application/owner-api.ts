@@ -90,7 +90,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
   if (path === "/api/owner/reconnect-readiness" && request.method === "GET") {
     const now = new Date().toISOString();
     const [walletRows, registryRows, policyRows, discoveredRows, grantRows] = await Promise.all([
-      env.DB.prepare("SELECT id, network, status, admin_locked, last_monitor_at, monitoring_status FROM recovery_wallets WHERE owner_address = ?")
+      env.DB.prepare("SELECT id, network, status, admin_locked, last_monitor_at, monitoring_status, monitoring_error FROM recovery_wallets WHERE owner_address = ?")
         .bind(owner).all<Record<string, unknown>>(),
       env.DB.prepare("SELECT id, network, token_address, symbol, is_active FROM recovery_supported_assets ORDER BY network, token_address")
         .all<Record<string, unknown>>(),
@@ -105,10 +105,13 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
         LEFT JOIN recovery_destinations d ON d.id = p.destination_id
       `).all<Record<string, unknown>>(),
       env.DB.prepare(`
-        SELECT w.network, a.asset_ref AS assetId, a.token_address AS tokenAddress, a.symbol
+        SELECT w.network, a.asset_ref AS assetId, a.token_address AS tokenAddress, a.symbol,
+               a.name, a.amount_raw AS balanceRaw, a.decimals, a.estimated_value_usd AS estimatedValueUsd,
+               a.observed_at AS observedAt, a.discovery_source AS discoverySource,
+               a.token_verified AS tokenVerified, a.lifecycle_status AS lifecycleStatus
         FROM recovery_wallets w
         INNER JOIN wallet_assets a ON a.wallet_id = w.id AND a.lifecycle_status = 'active'
-        WHERE w.owner_address = ? AND a.token_address IS NOT NULL
+        WHERE w.owner_address = ?
       `).bind(owner).all<Record<string, unknown>>(),
       env.DB.prepare(`
         SELECT g.grant_id AS grantId, g.network, g.chain_id AS chainId,
@@ -175,25 +178,41 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
             BigInt(permission.allowanceRaw) >= BigInt(String(policy!.maxAmountRaw)))
             status = "fully_authorized";
           else if (currentGrant) status = !permissionFresh || permission?.status === "unknown" ? "allowance_check_unavailable" : "allowance_approval_required";
+          const observed = discoveredRows.results.find(row => String(row.network) === network &&
+            String(row.tokenAddress || "").toLowerCase() === String(asset.token_address).toLowerCase());
+          const tokenPermissions = permissionRows.results.filter(row =>
+            String(row.tokenAddress).toLowerCase() === String(asset.token_address).toLowerCase());
           return {
-            assetId: asset.id, symbol: asset.symbol ?? discovered?.symbol ?? null, network, tokenAddress: asset.token_address,
+            assetId: asset.id, symbol: asset.symbol ?? observed?.symbol ?? null, name: observed?.name ?? null,
+            network, tokenAddress: asset.token_address, balanceRaw: observed?.balanceRaw ?? "0",
+            decimals: observed?.decimals ?? null, estimatedValueUsd: observed?.estimatedValueUsd ?? null,
+            observedAt: observed?.observedAt ?? null, discoverySource: observed?.discoverySource ?? null,
+            tokenVerified: Number(observed?.tokenVerified ?? 0) === 1,
             registryActive, policyActive, sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"),
             status, grantId: currentGrant?.grantId ?? null,
             executorAddress: currentGrant?.executorAddress ?? null,
             allowanceRaw: permission?.allowanceRaw ?? null,
             allowanceStatus: permission?.status ?? null,
+            permissions: tokenPermissions.map(row => ({spender:row.spender,allowanceRaw:row.allowanceRaw,status:row.status,observedAt:row.observedAt})),
             maxAmountRaw: policy?.maxAmountRaw ?? null,
             destinationAddress: policy?.destinationAddress ?? null
           };
         });
         const unregistered = discoveredRows.results.filter(row => String(row.network) === network &&
           !registry.some(asset => String(asset.token_address).toLowerCase() === String(row.tokenAddress).toLowerCase()))
-          .map(row => ({ assetId: row.assetId, symbol: row.symbol, network, tokenAddress: row.tokenAddress,
+          .map(row => ({ assetId: row.assetId, symbol: row.symbol, name: row.name, network, tokenAddress: row.tokenAddress,
+            balanceRaw: row.balanceRaw, decimals: row.decimals, estimatedValueUsd: row.estimatedValueUsd,
+            observedAt: row.observedAt, discoverySource: row.discoverySource,
+            tokenVerified: Number(row.tokenVerified ?? 0) === 1,
             registryActive: false, policyActive: false,
             sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"),
             status: "token_not_registered", grantId: null, executorAddress: null,
-            allowanceRaw: null, allowanceStatus: null, maxAmountRaw: null, destinationAddress: null }));
-        return { network, chainId, walletRegistered: Boolean(wallet), sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"), assets: [...assets, ...unregistered] };
+            allowanceRaw: null, allowanceStatus: null, permissions: [],
+            maxAmountRaw: null, destinationAddress: null }));
+        return { network, chainId, walletRegistered: Boolean(wallet), sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"),
+          monitoringStatus: wallet?.monitoring_status ?? (wallet ? "not_scanned" : "not_registered"),
+          monitoringError: wallet?.monitoring_error ?? null, lastMonitorAt: wallet?.last_monitor_at ?? null,
+          assets: [...assets, ...unregistered] };
       });
     });
     const results = await Promise.all(networks);
