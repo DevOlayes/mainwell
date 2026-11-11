@@ -91,11 +91,11 @@ async function executeAuthorization(){
   if(scopeSignature(latestPlan,selected)!==scopeSignature(plan,selected))throw new Error("An administrator changed one or more selected asset policies. Refresh the plan and review it again before authorizing.");
   plan=latestPlan;
   const existing=await api("/api/owner/grants");
-  const now=Date.now(),reused=[],needsNew=[];
+  const now=Date.now(),reused=[],needsNew=[];let pendingGrant=null;
   for(const asset of chosen){
    const active=(existing.grants||[]).filter(g=>g.network===plan.network&&g.chainId===plan.chainId&&Date.parse(g.expiresAt)>now);
    const sameAsset=active.flatMap(g=>(g.assets||[]).filter(a=>a.assetId===asset.assetId&&String(a.tokenAddress).toLowerCase()===String(asset.tokenAddress).toLowerCase()&&!a.revokedAt).map(a=>({grant:g,asset:a})));
-   const match=sameAsset.find(x=>x.asset.ownerAcknowledged===true&&x.asset.amountKind==="capped"&&String(x.asset.maxAmountRaw)===String(asset.policy.maxAmountRaw)&&String(x.asset.destinationAddress||x.grant.destinationAddress).toLowerCase()===String(asset.policy.destinationAddress).toLowerCase());
+   const match=sameAsset.find(x=>x.asset.ownerAcknowledged===true&&x.asset.amountKind==="capped"&&String(x.asset.maxAmountRaw)===String(asset.policy.maxAmountRaw)&&String(x.asset.destinationAddress||x.grant.destinationAddress).toLowerCase()===String(asset.policy.destinationAddress).toLowerCase()&&(!sel.commonAuto||(x.grant.executionModes||[]).includes("automatic-priority"))&&(!sel.commonAdmin||(x.grant.executionModes||[]).includes("admin-initiated")));
    if(match)reused.push({asset,grant:match.grant});
    else if(sameAsset.length)throw new Error("An active authorization exists for "+(asset.symbol||asset.assetId)+" but its cap or destination differs from the current administrator policy. No duplicate executor was deployed. Ask the administrator to reconcile the policy or revoke the old authorization first.");
    else needsNew.push(asset);
@@ -123,7 +123,7 @@ async function executeAuthorization(){
    const afterDeployPlan=await api("/api/owner/authorization-plan");
    if(scopeSignature(afterDeployPlan,selected)!==scopeSignature(plan,selected))throw new Error("The administrator policy changed after deployment. No token allowances were requested. The unused executor is deployed at "+executor+"; do not authorize it further.");
    for(let i=0;i<needsNew.length;i++)await queueExactApproval(needsNew[i],executor,caps[i]);
-   window.__mainwellPendingGrant={needsNew,assets,destinations,caps,expiry,executor,deploymentHash,receipt,ops,sel};
+   pendingGrant={needsNew,assets,destinations,caps,expiry,executor,deploymentHash,receipt,ops,sel};
   }
   if(approvalCalls.length){
    $("txStatus").textContent="Requesting only missing or insufficient token allowances. Already sufficient allowances are being left untouched.";
@@ -135,7 +135,7 @@ async function executeAuthorization(){
    const allowance=BigInt(await provider.request({method:"eth_call",params:[{to:item.asset.tokenAddress,data},"latest"]}));
    if(allowance<BigInt(item.asset.policy.maxAmountRaw))throw new Error("On-chain allowance verification failed for "+item.asset.symbol+". No new grant was recorded.");
   }
-  const pending=window.__mainwellPendingGrant;delete window.__mainwellPendingGrant;
+  const pending=pendingGrant;
   if(pending){
    for(let i=0;i<pending.needsNew.length;i++){
     const data="0xdd62ed3e"+addressWord(from)+addressWord(pending.executor);
