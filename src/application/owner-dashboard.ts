@@ -228,11 +228,19 @@ function renderReconnectReadiness(data){
  if(!(data.networks||[]).length)root.textContent="No recovery intake data returned.";
 }
 async function ensureMonitoringAcrossNetworks(){
-  setStatus("dashboardStatus","Wallet connected successfully. Mainwell is registering and checking your wallet across seven EVM networks…");
-  const tasks=SUPPORTED_NETWORKS.map(async([network,id])=>{
-    const registered=await api("/api/owner/wallets",{method:"POST",body:JSON.stringify({network,chainId:id})});
-    if(registered.wallet?.status!=="monitoring")throw new Error(network+": monitoring is paused or unavailable");
-    const refreshed=await api("/api/owner/wallets/"+registered.wallet.id+"/refresh",{method:"POST",body:"{}"});
+  setStatus("dashboardStatus","Wallet connected. Registering your address across all seven EVM networks before scanning balances…");
+  let registration;
+  try{
+    registration=await api("/api/owner/wallets/register-all",{method:"POST",body:"{}"});
+  }catch(error){
+    setStatus("dashboardStatus","Wallet sign-in succeeded, but multi-network registration failed: "+(error?.message||"Request failed")+". Retry by refreshing this page.",true);
+    return;
+  }
+  const byNetwork=new Map((registration.wallets||[]).map(wallet=>[wallet.network,wallet]));
+  const tasks=SUPPORTED_NETWORKS.map(async([network])=>{
+    const wallet=byNetwork.get(network);
+    if(!wallet||wallet.status!=="monitoring")throw new Error(network+": wallet registration is missing or monitoring is paused");
+    const refreshed=await api("/api/owner/wallets/"+wallet.id+"/refresh",{method:"POST",body:"{}"});
     return {network,assets:Array.isArray(refreshed.assets)?refreshed.assets.length:0};
   });
   const results=await Promise.allSettled(tasks);
@@ -241,10 +249,10 @@ async function ensureMonitoringAcrossNetworks(){
   const completed=results.filter(x=>x.status==="fulfilled").length;
   const failed=results.filter(x=>x.status==="rejected");
   if(completed===SUPPORTED_NETWORKS.length){
-    setStatus("dashboardStatus","Wallet connected successfully. Monitoring is active across all seven supported EVM networks. Asset inventory is up to date.");
+    setStatus("dashboardStatus","Wallet connected. All seven EVM networks are registered and their first balance scans completed. Asset inventory is available for administrator review.");
   }else{
     const details=failed.map(x=>x.reason instanceof Error?x.reason.message:"Network refresh failed").join("; ");
-    setStatus("dashboardStatus","Wallet connected. Monitoring completed on "+completed+" of 7 networks. Some balances need attention: "+details,true);
+    setStatus("dashboardStatus","Wallet connected. All seven networks are registered; balance scans completed on "+completed+" of 7. Remaining networks will retry during scheduled monitoring: "+details,true);
   }
 }
 // The native inline button handler is the primary tap path; it survives setup failures.
