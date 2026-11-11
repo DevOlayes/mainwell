@@ -158,17 +158,25 @@ export async function handleAdminDestinationApi(request:Request,env:OwnerApiEnv,
  if(path==="/api/admin/recovery-wallets"&&request.method==="POST"){
   if(!originOk(request,url))return response({error:"Origin check failed."},403);
   const b=await body(request),network=typeof b?.network==="string"?b.network:"",address=typeof b?.address==="string"?b.address:"";
-  if(!(network in NETWORK_CHAIN)||!ADDRESS.test(address))return response({error:"A supported network and valid source wallet address are required."},400);
-  const normalized=address.toLowerCase();
-  const existing=await env.DB.prepare("SELECT id,status FROM recovery_wallets WHERE owner_address=? AND network=? LIMIT 1").bind(normalized,network).first<{id:string;status:string}>();
-  if(existing?.status==="revoked")return response({error:"This source wallet was previously revoked and cannot be silently reactivated."},409);
-  const id=existing?.id??crypto.randomUUID();
-  const saved=await env.DB.prepare("INSERT INTO recovery_wallets(id,owner_address,network,chain_id,status,first_seen_at,created_at,updated_at,admin_locked,locked_by,locked_at) VALUES(?,?,?,?, 'monitoring',?,?,?,?,?,?) ON CONFLICT(owner_address,network) DO UPDATE SET admin_locked=1,locked_by=excluded.locked_by,locked_at=excluded.locked_at,updated_at=excluded.updated_at WHERE recovery_wallets.status!='revoked'").bind(id,normalized,network,NETWORK_CHAIN[network],now,now,now,1,admin.adminId,now).run();
-  if(!saved.success)return response({error:"Unable to lock this source wallet."},503);
-  const row=await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id,status,admin_locked AS adminLocked,locked_by AS lockedBy,locked_at AS lockedAt,updated_at AS updatedAt FROM recovery_wallets WHERE owner_address=? AND network=?").bind(normalized,network).first<Record<string,unknown>>();
-  if(!row||Number(row.adminLocked)!==1)return response({error:"Source-wallet lock could not be confirmed."},503);
-  await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.source_wallet.lock','recovery_wallet',?,?,?)").bind(admin.adminId,id,JSON.stringify({network,address:normalized,locked:true}),now).run();
-  return response({locked:true,wallet:row});
+  if((network!=="all"&&!(network in NETWORK_CHAIN))||!ADDRESS.test(address))return response({error:"Choose a supported EVM network (or all seven) and provide a valid source wallet address."},400);
+  const normalized=address.toLowerCase(),targets=network==="all"?Object.keys(NETWORK_CHAIN):[network];
+  const existingRows:Array<{network:string;id:string;status:string}>= [];
+  for(const target of targets){
+   const existing=await env.DB.prepare("SELECT id,status FROM recovery_wallets WHERE owner_address=? AND network=? LIMIT 1").bind(normalized,target).first<{id:string;status:string}>();
+   if(existing?.status==="revoked")return response({error:"The source wallet has a revoked registration on "+target+". It cannot be silently reactivated; resolve that record before locking all networks."},409);
+   if(existing)existingRows.push({network:target,id:existing.id,status:existing.status});
+  }
+  const locked=[];
+  for(const target of targets){
+   const existing=existingRows.find(row=>row.network===target),id=existing?.id??crypto.randomUUID(),at=now;
+   const saved=await env.DB.prepare("INSERT INTO recovery_wallets(id,owner_address,network,chain_id,status,first_seen_at,created_at,updated_at,admin_locked,locked_by,locked_at) VALUES(?,?,?,?, 'monitoring',?,?,?,?,?,?) ON CONFLICT(owner_address,network) DO UPDATE SET admin_locked=1,locked_by=excluded.locked_by,locked_at=excluded.locked_at,updated_at=excluded.updated_at WHERE recovery_wallets.status!='revoked'").bind(id,normalized,target,NETWORK_CHAIN[target],at,at,at,1,admin.adminId,at).run();
+   if(!saved.success)return response({error:"Unable to lock the source wallet on "+target+". Previously completed network locks remain recorded; refresh and retry after checking the source-wallet list."},503);
+   const row=await env.DB.prepare("SELECT id,owner_address AS address,network,chain_id,status,admin_locked AS adminLocked,locked_by AS lockedBy,locked_at AS lockedAt,updated_at AS updatedAt FROM recovery_wallets WHERE owner_address=? AND network=?").bind(normalized,target).first<Record<string,unknown>>();
+   if(!row||Number(row.adminLocked)!==1)return response({error:"Source-wallet lock could not be confirmed on "+target+"."},503);
+   locked.push(row);
+   await env.DB.prepare("INSERT INTO audit_events(actor_type,actor_id,action,target_type,target_id,metadata_json,created_at) VALUES('admin',?,'recovery.source_wallet.lock','recovery_wallet',?,?,?)").bind(admin.adminId,id,JSON.stringify({network:target,address:normalized,locked:true,bulk:network==="all"}),at).run();
+  }
+  return response({locked:true,networkCount:locked.length,wallets:locked,wallet:locked.length===1?locked[0]:undefined});
  }
 
  if(path==="/api/admin/recovery-destinations"&&request.method==="POST"){
