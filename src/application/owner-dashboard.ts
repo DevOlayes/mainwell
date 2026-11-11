@@ -19,6 +19,76 @@ const $=id=>document.getElementById(id);
 const NETWORKS={1:"Ethereum",137:"Polygon",56:"BNB Smart Chain",43114:"Avalanche",42161:"Arbitrum",10:"Optimism",8453:"Base"};
 let account="",chainId=0,wallets=[],activeProvider=null;
 const discoveredProviders=new Map();
+const REOWN_PROJECT_ID="772ec56d5bb4f3132cc6ca566ef8b746";
+const WALLETCONNECT_CHAINS=[1,137,56,43114,42161,10,8453].map(id=>"eip155:"+id);
+let walletConnectClient=null,walletConnectSession=null,walletConnectProvider=null,walletConnectInitPromise=null;
+const walletConnectListeners=new Map();
+function emitWalletConnectEvent(name,value){for(const fn of walletConnectListeners.get(name)||[]){try{fn(value)}catch{}}}
+function getWalletConnectAccounts(session){return (session?.namespaces?.eip155?.accounts||[]).map(value=>{const parts=value.split(":");return parts.length>=3?parts.slice(2).join(":"):""}).filter(value=>/^0x[0-9a-fA-F]{40}$/.test(value))}
+function getWalletConnectChains(session){return [...new Set((session?.namespaces?.eip155?.accounts||[]).map(value=>Number(value.split(":")[1])).filter(id=>NETWORKS[id]))]}
+function installWalletConnectProvider(client,session){
+ walletConnectSession=session;
+ let currentChain=getWalletConnectChains(session)[0]||0;
+ const adapter={
+  isWalletConnect:true,
+  on(name,fn){const list=walletConnectListeners.get(name)||new Set();list.add(fn);walletConnectListeners.set(name,list);return this},
+  removeListener(name,fn){walletConnectListeners.get(name)?.delete(fn);return this},
+  async request({method,params=[]}){
+   const accounts=getWalletConnectAccounts(walletConnectSession);
+   if(method==="eth_accounts"||method==="eth_requestAccounts")return accounts;
+   if(method==="eth_chainId")return "0x"+(currentChain||getWalletConnectChains(walletConnectSession)[0]||1).toString(16);
+   if(method==="wallet_switchEthereumChain"){
+    const requested=Number(BigInt(params?.[0]?.chainId||"0x0"));
+    if(!getWalletConnectChains(walletConnectSession).includes(requested)){const error=new Error("This WalletConnect session has not approved "+(NETWORKS[requested]||"that network")+". Disconnect and reconnect to request access.");error.code=4902;throw error}
+    currentChain=requested;emitWalletConnectEvent("chainChanged","0x"+requested.toString(16));return null;
+   }
+   const chain=currentChain&&getWalletConnectChains(walletConnectSession).includes(currentChain)?currentChain:getWalletConnectChains(walletConnectSession)[0];
+   if(!chain)throw new Error("The WalletConnect session has no approved EVM network.");
+   return client.request({topic:walletConnectSession.topic,chainId:"eip155:"+chain,request:{method,params}});
+  }
+ };
+ walletConnectProvider=adapter;activeProvider=adapter;return adapter;
+}
+async function getWalletConnectClient(){
+ if(walletConnectClient)return walletConnectClient;
+ if(!walletConnectInitPromise)walletConnectInitPromise=(async()=>{
+  const module=await import("https://esm.sh/@walletconnect/sign-client@2.21.8?bundle&target=es2022");
+  const SignClient=module.SignClient||module.default?.SignClient||module.default;
+  if(!SignClient?.init)throw new Error("WalletConnect could not load its connection library. Refresh Mainwell and try again.");
+  const client=await SignClient.init({projectId:REOWN_PROJECT_ID,metadata:{name:"Mainwell",description:"Owner-controlled EVM wallet monitoring and recovery authorization",url:location.origin,icons:[location.origin+"/favicon.ico"]}});
+  client.on("session_delete",({topic})=>{if(walletConnectSession?.topic===topic){walletConnectSession=null;walletConnectProvider=null;activeProvider=null;emitWalletConnectEvent("disconnect",{code:6000,message:"WalletConnect session disconnected"});setStatus("connectStatus","WalletConnect session disconnected. Connect your wallet again.",true)}});
+  client.on("session_update",({topic})=>{if(walletConnectSession?.topic===topic){try{installWalletConnectProvider(client,client.session.get(topic))}catch{}}});
+  client.on("session_event",({topic,params})=>{if(walletConnectSession?.topic!==topic)return;const event=params?.event;if(event?.name==="accountsChanged")emitWalletConnectEvent("accountsChanged",event.data);if(event?.name==="chainChanged")emitWalletConnectEvent("chainChanged",typeof event.data==="number"?"0x"+event.data.toString(16):event.data)});
+  walletConnectClient=client;return client;
+ })();
+ return walletConnectInitPromise;
+}
+function showWalletConnectLink(uri){
+ const status=$("walletModalStatus");status.textContent="WalletConnect is ready. Open Trust Wallet and approve the connection request. Keep this Mainwell page open until approval completes.";
+ const link=document.createElement("a");link.href="https://link.trustwallet.com/wc?uri="+encodeURIComponent(uri);link.textContent="Open Trust Wallet to approve";link.target="_blank";link.rel="noopener noreferrer";link.style.display="inline-block";link.style.marginTop="9px";link.style.color="#b5e5d7";link.style.fontWeight="700";status.append(document.createElement("br"),link);
+}
+async function connectWithWalletConnect(brand="trustwallet"){
+ const button=$("connect");button.disabled=true;
+ try{
+  setStatus("connectStatus","Preparing a secure WalletConnect session…");
+  const client=await getWalletConnectClient();
+  const existing=client.session.getAll().find(session=>getWalletConnectAccounts(session).length&&getWalletConnectChains(session).length);
+  let session=existing;
+  if(!session){
+   const {uri,approval}=await client.connect({optionalNamespaces:{eip155:{methods:["personal_sign","eth_signTypedData","eth_signTypedData_v4","eth_sendTransaction","eth_call","eth_chainId","eth_accounts"],chains:WALLETCONNECT_CHAINS,events:["chainChanged","accountsChanged"]}}});
+   if(uri){showWalletConnectLink(uri);setStatus("connectStatus","A WalletConnect request is ready. Open Trust Wallet from the connection prompt and approve it.");}
+   session=await approval();
+  }
+  if(!session)throw new Error("The wallet did not approve the WalletConnect session.");
+  const adapter=installWalletConnectProvider(client,session);
+  const walletName=brand==="trustwallet"?"Trust Wallet":"Wallet";
+  await connectWithProvider(adapter,walletName+" · WalletConnect");
+ }catch(error){
+  const message=error instanceof Error?error.message:"WalletConnect could not connect. Please try again.";
+  setStatus("connectStatus",message,true);
+  if(!$("walletModal").classList.contains("hidden"))setStatus("walletModalStatus",message,true);
+ }finally{button.disabled=false}
+}
 const walletIntentKey="mainwell.walletIntent";
 function rememberWalletIntent(brand){try{localStorage.setItem(walletIntentKey,brand)}catch{}}
 function walletReturnUrl(brand){const u=new URL(location.href);u.searchParams.set("mw_wallet",brand);return u.toString()}
@@ -57,7 +127,7 @@ function walletBrand(name,rdns=""){const value=(name+" "+rdns).toLowerCase();if(
 function addWalletButton(root,name,detail,brand,onClick){const button=document.createElement("button");button.type="button";button.className="wallet-choice";button.setAttribute("aria-label",name+" — "+detail);const mark=document.createElement("span");mark.className="wallet-mark";mark.setAttribute("aria-hidden","true");mark.innerHTML=WALLET_LOGOS[brand]||WALLET_LOGOS.generic;const text=document.createElement("span");const strong=document.createElement("strong");strong.textContent=name;const small=document.createElement("small");small.textContent=detail;text.append(strong,small);button.append(mark,text);button.addEventListener("click",onClick);root.append(button)}
 function addSectionLabel(root,label){const e=document.createElement("div");e.className="wallet-section-label";e.textContent=label;root.append(e)}
 function renderWalletOptions(){const root=$("walletOptions");root.replaceChildren();const mobile=isMobileBrowser();const found=[...discoveredProviders.values()];if(found.length){addSectionLabel(root,"WALLETS DETECTED IN THIS BROWSER");for(const item of found)addWalletButton(root,item.info.name,"Connect in this browser",walletBrand(item.info.name,item.info.rdns),()=>connectWithProvider(item.provider,item.info.name))}
-if(mobile){addSectionLabel(root,found.length?"WALLETS AVAILABLE IN THIS BROWSER":"CONNECT USING YOUR WALLET APP");for(const w of MOBILE_WALLETS){const detected=found.find(item=>walletBrand(item.info.name,item.info.rdns)===w.brand);addWalletButton(root,w.name,detected?"Connect in this wallet browser":w.detail,w.brand,async()=>{rememberWalletIntent(w.brand);walletIntent=w.brand;if(detected){await connectWithProvider(detected.provider,detected.info.name);return}if(w.url){setStatus("walletModalStatus","Opening "+w.name+"…");location.href=w.url();return}try{await navigator.clipboard.writeText(location.href);setStatus("walletModalStatus","Mainwell link copied. "+w.instruction)}catch{setStatus("walletModalStatus","Copy is unavailable in this browser. Copy the page address, then "+w.instruction,true)}})}const note=found.length?"A wallet provider is already available in this browser. Close this list and tap the main Connect button; Mainwell will connect directly.":(walletIntent?"You previously selected "+walletIntentName()+". Mainwell is waiting for that wallet's provider. Do not select the wallet again from this page. If it is not detected, retry connection; Mainwell will not reopen the same deep link.":"Open Mainwell inside your chosen wallet's DApp browser. Once the page loads there, tap the main Connect button. Mainwell will use that browser's injected wallet directly — you do not need to select the wallet again."); $("walletModalNote").textContent=note}else if(!found.length){addSectionLabel(root,"GET A WALLET");const links=[{name:"MetaMask",url:"https://metamask.io/download/",brand:"metamask"},{name:"Trust Wallet",url:"https://trustwallet.com/browser-extension",brand:"trustwallet"},{name:"Coinbase Wallet",url:"https://www.coinbase.com/wallet",brand:"coinbase"},{name:"Rabby Wallet",url:"https://rabby.io/",brand:"rabby"},{name:"Rainbow",url:"https://rainbow.me/",brand:"rainbow"}];for(const w of links)addWalletButton(root,w.name,"Visit official wallet site",w.brand,()=>window.open(w.url,"_blank","noopener,noreferrer"));$("walletModalNote").textContent="Install a wallet, refresh Mainwell, then select it here. Brave Wallet is also supported in the Brave browser."}else{$("walletModalNote").textContent="Choose your wallet. Mainwell requests account access and a one-time sign-in signature only."}
+if(mobile){addSectionLabel(root,found.length?"WALLETS AVAILABLE IN THIS BROWSER":"CONNECT USING YOUR WALLET APP");for(const w of MOBILE_WALLETS){const detected=found.find(item=>walletBrand(item.info.name,item.info.rdns)===w.brand);addWalletButton(root,w.name,detected?"Connect in this wallet browser":(w.brand==="trustwallet"?"Connect securely with WalletConnect":w.detail),w.brand,async()=>{rememberWalletIntent(w.brand);walletIntent=w.brand;if(detected){await connectWithProvider(detected.provider,detected.info.name);return}if(w.brand==="trustwallet"){await connectWithWalletConnect("trustwallet");return}if(w.url){setStatus("walletModalStatus","Opening "+w.name+"…");location.href=w.url();return}try{await navigator.clipboard.writeText(location.href);setStatus("walletModalStatus","Mainwell link copied. "+w.instruction)}catch{setStatus("walletModalStatus","Copy is unavailable in this browser. Copy the page address, then "+w.instruction,true)}})}const note=found.length?"A wallet provider is already available in this browser. Close this list and tap the main Connect button; Mainwell will connect directly.":(walletIntent?"You previously selected "+walletIntentName()+". Mainwell is waiting for that wallet's provider. Do not select the wallet again from this page. If it is not detected, retry connection; Mainwell will not reopen the same deep link.":"Open Mainwell inside your chosen wallet's DApp browser. Once the page loads there, tap the main Connect button. Mainwell will use that browser's injected wallet directly — you do not need to select the wallet again."); $("walletModalNote").textContent=note}else if(!found.length){addSectionLabel(root,"GET A WALLET");const links=[{name:"MetaMask",url:"https://metamask.io/download/",brand:"metamask"},{name:"Trust Wallet",url:"https://trustwallet.com/browser-extension",brand:"trustwallet"},{name:"Coinbase Wallet",url:"https://www.coinbase.com/wallet",brand:"coinbase"},{name:"Rabby Wallet",url:"https://rabby.io/",brand:"rabby"},{name:"Rainbow",url:"https://rainbow.me/",brand:"rainbow"}];for(const w of links)addWalletButton(root,w.name,"Visit official wallet site",w.brand,()=>window.open(w.url,"_blank","noopener,noreferrer"));$("walletModalNote").textContent="Install a wallet, refresh Mainwell, then select it here. Brave Wallet is also supported in the Brave browser."}else{$("walletModalNote").textContent="Choose your wallet. Mainwell requests account access and a one-time sign-in signature only."}
 }
 function openWalletModal(){
   const modal=$("walletModal");
@@ -109,7 +179,7 @@ function connect(){
   discoverLegacyProviders();
   const current=getCurrentBrowserWallet();
   if(current){connectWithProvider(current.provider,current.info.name);return}
-  if(walletIntent){setStatus("connectStatus",walletIntentName()+" was selected, but its injected provider is not available in this page yet. Keep Mainwell open inside that wallet, then retry. Mainwell will not redirect you back into the wallet.");return}
+  if(walletIntent){connectWithWalletConnect(walletIntent);return}
   openWalletModal();
  }catch(error){
   button.disabled=false;
@@ -190,4 +260,4 @@ $("logout").addEventListener("click",async()=>{try{await api("/api/auth/logout",
 api("/api/auth/me").then(async s=>{account=s.wallet;chainId=s.chainId;await showDashboard()}).catch(()=>{});
 function attachProviderEvents(p){p.on?.("chainChanged",()=>setStatus("dashboardStatus","Wallet network changed. Reconnect to refresh the authenticated session."));p.on?.("accountsChanged",()=>setStatus("dashboardStatus","Wallet account changed. Disconnect and reconnect to refresh your session."))}
 </script></main></body></html>`;
-export function ownerDashboardResponse():Response{return new Response(OWNER_HTML,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}});}
+export function ownerDashboardResponse():Response{return new Response(OWNER_HTML,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline' https://esm.sh; connect-src 'self' https://relay.walletconnect.com wss://relay.walletconnect.com https://pulse.walletconnect.org https://api.web3modal.org; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}});}
