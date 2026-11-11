@@ -206,7 +206,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
             tokenVerified: Number(row.tokenVerified ?? 0) === 1,
             registryActive: false, policyActive: false,
             sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"),
-            status: "token_not_registered", grantId: null, executorAddress: null,
+            status: row.tokenAddress ? "token_not_registered" : "native_asset_observed", grantId: null, executorAddress: null,
             allowanceRaw: null, allowanceStatus: null, permissions: [],
             maxAmountRaw: null, destinationAddress: null }));
         return { network, chainId, walletRegistered: Boolean(wallet), sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"),
@@ -217,9 +217,10 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     });
     const results = await Promise.all(networks);
     return reply({ checkedAt: now, networks: results, summary: {
-      total: results.reduce((n, row) => n + row.assets.length, 0),
+      total: results.reduce((n, row) => n + row.assets.filter(asset => asset.status !== "native_asset_observed").length, 0),
+      discoveredAssets: results.reduce((n, row) => n + row.assets.filter(asset => asset.status === "token_not_registered").length, 0),
       fullyAuthorized: results.reduce((n, row) => n + row.assets.filter(asset => asset.status === "fully_authorized").length, 0),
-      outstanding: results.reduce((n, row) => n + row.assets.filter(asset => asset.status !== "fully_authorized").length, 0)
+      outstanding: results.reduce((n, row) => n + row.assets.filter(asset => asset.status !== "fully_authorized" && asset.status !== "native_asset_observed").length, 0)
     }});
   }
 
