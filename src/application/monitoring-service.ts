@@ -261,7 +261,7 @@ async function runWallet(env:MonitoringEnv,wallet:{id:string;address:string;netw
   const grantSpenders=grantRows.results.map(row=>row.executor_address).filter(validAddress).map(address=>address.toLowerCase());
   const spenders=[...new Set([...configured,...grantSpenders])];
   const previous=await env.DB.prepare("SELECT token_address,spender_address,status FROM wallet_permissions WHERE wallet_id=? AND network=?")
-    .bind(wallet.id,wallet.network).all<{token_address:string;spender_address:string}>();
+    .bind(wallet.id,wallet.network).all<{token_address:string;spender_address:string;status:string}>();
   const tokenAddresses=[...new Set([...metadata.map(x=>x.address),...previous.results.map(x=>x.token_address.toLowerCase())])];
   let permissionCount=0,permissionPartial=false;
   if(spenders.length&&tokenAddresses.length*spenders.length<=500){
