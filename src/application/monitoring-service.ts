@@ -260,7 +260,7 @@ async function runWallet(env:MonitoringEnv,wallet:{id:string;address:string;netw
     .bind(wallet.address.toLowerCase(),wallet.network).all<{executor_address:string}>();
   const grantSpenders=grantRows.results.map(row=>row.executor_address).filter(validAddress).map(address=>address.toLowerCase());
   const spenders=[...new Set([...configured,...grantSpenders])];
-  const previous=await env.DB.prepare("SELECT token_address,spender_address FROM wallet_permissions WHERE wallet_id=? AND network=?")
+  const previous=await env.DB.prepare("SELECT token_address,spender_address,status FROM wallet_permissions WHERE wallet_id=? AND network=?")
     .bind(wallet.id,wallet.network).all<{token_address:string;spender_address:string}>();
   const tokenAddresses=[...new Set([...metadata.map(x=>x.address),...previous.results.map(x=>x.token_address.toLowerCase())])];
   let permissionCount=0,permissionPartial=false;
@@ -281,6 +281,9 @@ async function runWallet(env:MonitoringEnv,wallet:{id:string;address:string;netw
           .bind(observedAt,wallet.id,wallet.network,p.token_address,p.spender_address).run();
       }
     }catch{permissionPartial=true;}
+  }else if(!spenders.length&&!previous.results.some(p=>p.status==="active")){
+    // No Mainwell executor or configured spender exists yet. Allowance coverage is
+    // not applicable until an owner creates a grant; this is not a monitoring failure.
   }else{
     permissionPartial=true;
     await env.DB.prepare("UPDATE wallet_permissions SET status='unknown',updated_at=? WHERE wallet_id=? AND network=? AND status='active'")
