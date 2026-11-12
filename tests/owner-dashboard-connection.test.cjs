@@ -22,7 +22,7 @@ test("wallet dashboard pins the ox Tempo module and uses one guarded sign-in pat
   assert.doesNotMatch(html, /type="text\/plain" id="owner-dashboard-source"/);
   assert.match(script, /window\.mainwellConnect=connect/);
   assert.match(script, /connectWithAppKit\(\)/);
-  assert.equal((script.match(/deps=ox@0\.14\.29/g) || []).length, 2, "Reown AppKit entry points must pin ox to a version exporting MultisigConfig");
+  assert.equal((script.match(/deps=ox@0\.14\.40/g) || []).length, 2, "Reown AppKit entry points must pin ox to a version exporting MultisigConfig");
   assert.match(script, /Never deeplink from inside a wallet browser/);
   assert.doesNotMatch(script, /location\.href="https:\/\/link\.trustwallet\.com\/open_url/);
   assert.match(script, /connectWithAppKit\(\)/);
@@ -32,7 +32,7 @@ test("wallet dashboard pins the ox Tempo module and uses one guarded sign-in pat
   assert.doesNotMatch(script, /returned_without_provider/);
   assert.doesNotMatch(script, /Do not select Trust Wallet again/);
   assert.match(html, /type="importmap"/);
-  assert.match(html, /https:\/\/esm\.sh\/ox@0\.14\.29\//);
+  assert.match(html, /https:\/\/esm\.sh\/ox@0\.14\.40\//);
   assert.match(html, /Connect wallet/);
   assert.match(html, /Wallet connection did not initialize/);
 });
