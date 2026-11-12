@@ -71,8 +71,8 @@ async function getAppKitModal(){
  if(appKitModal)return appKitModal;
  if(!appKitInitPromise)appKitInitPromise=(async()=>{
   const [core,adapterModule,networkModule]=await Promise.all([
-   import("https://esm.sh/@reown/appkit@1.8.24?bundle&target=es2022"),
-   import("https://esm.sh/@reown/appkit-adapter-ethers@1.8.24?bundle&target=es2022"),
+   import("https://esm.sh/@reown/appkit@1.8.24?bundle&target=es2022&deps=ox@0.14.29"),
+   import("https://esm.sh/@reown/appkit-adapter-ethers@1.8.24?bundle&target=es2022&deps=ox@0.14.29"),
    import("https://esm.sh/@reown/appkit@1.8.24/networks?bundle&target=es2022")
   ]);
   const createAppKit=core.createAppKit||core.default?.createAppKit;
