@@ -16,7 +16,7 @@ test("wallet dashboard uses one guarded sign-in path and no inline duplicate per
   assert.match(script, /Registration and scanning succeeded on/);
   assert.doesNotMatch(script, /registration=await api\("\/api\/owner\/wallets\/register-all"/);
   assert.doesNotMatch(html, /p\.request\(\{method:'personal_sign'/);
-  assert.match(html, /assets\/owner-dashboard\.js/);
+  assert.match(html, /window\.mainwellConnect=connect/);
 });
 
 test("owner authorization restores a transaction-capable WalletConnect session", async () => {
