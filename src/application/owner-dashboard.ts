@@ -15,7 +15,7 @@ const OWNER_HTML = `<!doctype html>
 <aside><section class="card panel"><h2>Network</h2><p class="muted">Switch your connected wallet to a supported network, then reconnect to open a session on that chain.</p><select id="networkSelect" class="network"><option value="1">Ethereum</option><option value="137">Polygon</option><option value="56">BNB Smart Chain</option><option value="43114">Avalanche</option><option value="42161">Arbitrum</option><option value="10">Optimism</option><option value="8453">Base</option></select><div class="actions"><button class="secondary" id="switchNetwork">Switch network in wallet</button></div></section>
 <section class="notice"><b>Authorization is not active yet.</b><br>Monitoring does not give Mainwell permission to move assets. Recovery authorization will only be offered after the executor contract has completed independent review and on-chain verification. You remain in control of approvals and revocations.</section>
 <button class="secondary" id="logout" style="margin-top:14px;width:100%">Disconnect session</button><p id="dashboardStatus" class="status" role="status"></p></aside></div>
-</section><script>
+</section><script type="text/plain" id="owner-dashboard-source">
 const $=id=>document.getElementById(id);
 // Publish the tap handler before optional wallet discovery or session restoration can fail.
 window.mainwellConnect=()=>connect();
@@ -336,8 +336,8 @@ setTimeout(async()=>{
  }catch{}
 },250);
 function attachProviderEvents(p){p.on?.("chainChanged",()=>setStatus("dashboardStatus","Wallet network changed. Reconnect to refresh the authenticated session."));p.on?.("accountsChanged",()=>setStatus("dashboardStatus","Wallet account changed. Disconnect and reconnect to refresh your session."))}
-</script></main></body></html>`;
-const OWNER_SCRIPT_START="<script>";
+</script><script src="/assets/owner-dashboard.js" defer></script></main></body></html>`;
+const OWNER_SCRIPT_START="<script type=\"text/plain\" id=\"owner-dashboard-source\">";
 const OWNER_SCRIPT_END="</script>";
 export function ownerDashboardScriptResponse():Response{const start=OWNER_HTML.indexOf(OWNER_SCRIPT_START),end=OWNER_HTML.indexOf(OWNER_SCRIPT_END,start+OWNER_SCRIPT_START.length);if(start<0||end<0)return new Response("Owner dashboard script unavailable",{status:500,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});return new Response(OWNER_HTML.slice(start+OWNER_SCRIPT_START.length,end),{status:200,headers:{"content-type":"text/javascript; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"}});}
 export function ownerDashboardResponse():Response{return new Response(OWNER_HTML,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://esm.sh; connect-src 'self' https://relay.walletconnect.com wss://relay.walletconnect.com https://pulse.walletconnect.org https://api.web3modal.org; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}});}
