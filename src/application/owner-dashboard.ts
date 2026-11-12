@@ -292,6 +292,15 @@ function connect(){
  }
 }
 window.mainwellConnect=connect;
+// Warm the wallet selector after the page has rendered, so the first tap does
+// not have to download and initialize the three Reown modules on demand.
+function warmAppKitOnIdle(){
+ const warm=()=>{if(document.visibilityState==="visible")void getAppKitModal().catch(()=>{});};
+ if("requestIdleCallback" in window)window.requestIdleCallback(warm,{timeout:1200});
+ else window.setTimeout(warm,500);
+}
+if(document.readyState==="complete")warmAppKitOnIdle();
+else window.addEventListener("load",warmAppKitOnIdle,{once:true});
 async function showDashboard(){$("connectView").classList.add("hidden");$("dashboard").classList.remove("hidden");$("walletAddress").textContent=short(account)+" · Signed in with your wallet";$("networkName").textContent=NETWORKS[chainId]||"Unsupported";$("networkSelect").value=String(chainId);await load();await ensureMonitoringAcrossNetworks()}
 function formatUnits(raw,decimals){try{const n=BigInt(raw||"0"),d=10n**BigInt(decimals||0),whole=n/d,frac=(n%d).toString().padStart(Number(decimals||0),"0").replace(/0+$/,"");return whole.toString()+(frac?"."+frac:"")}catch{return "—"}}
 function renderPortfolio(){const root=$("portfolioGrid");root.replaceChildren();const entries=[];for(const w of wallets){for(const a of (w.assets||[])){entries.push({...a,network:w.network,wallet:w.address})}}$("portfolioCount").textContent=entries.length+" assets";if(!entries.length){const e=node("div","No asset balances have been returned yet. Mainwell automatically checks all seven supported EVM networks after connection. Use Refresh balances to retry any network that reports a monitoring issue.");e.className="portfolio-empty";root.append(e);return}for(const a of entries){const card=document.createElement("article");card.className="portfolio-card";const symbol=node("div",a.symbol||a.name||"Unknown asset");symbol.className="asset-symbol";const network=node("div",(NETWORKS[({ethereum:1,polygon:137,bsc:56,avalanche:43114,arbitrum:42161,optimism:10,base:8453})[a.network]]||a.network)+" · "+(String(a.assetId||"").includes(":native")?"Native asset":"ERC-20 token"));network.className="asset-network";const amount=node("div",formatUnits(a.amountRaw,a.decimals));amount.className="asset-amount";const meta=node("div",(a.name||"")+" · "+(a.tokenAddress?"Contract: "+a.tokenAddress:"Native coin")+(a.observedAt?" · Updated "+new Date(a.observedAt).toLocaleString():""));meta.className="asset-meta";card.append(symbol,network,amount,meta);root.append(card)}}
