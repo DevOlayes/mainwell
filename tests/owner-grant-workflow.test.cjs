@@ -17,7 +17,7 @@ const grant = {
   executorCodeHash: "0x" + "a".repeat(64),
   destinationAddress: "0x3333333333333333333333333333333333333333",
   assets: [{ assetId: "token-1", destinationAddress: "0x3333333333333333333333333333333333333333", tokenAddress: "0x4444444444444444444444444444444444444444",
-    amount: { kind: "capped", maxAmountRaw: "1000" } }],
+    amount: { kind: "unlimited-allowance", ownerAcknowledged: true } }],
   executionModes: ["automatic-priority"],
   executionOperators: { automation: "0x6666666666666666666666666666666666666666", administrator: "0x7777777777777777777777777777777777777777" },
   approvedAt: "2026-11-09T06:00:00.000Z", expiresAt: "2026-12-09T06:00:00.000Z",
@@ -47,7 +47,7 @@ test("grant verification fails closed when trusted RPC or service operators are 
       bind() { return this; },
       async first() { return { id: "locked-wallet" }; },
       async all() { return { success: true, results: [{
-        assetId: "token-1", maxAmountRaw: "1000", automaticPriorityEnabled: 1,
+        assetId: "token-1", maxAmountRaw: "115792089237316195423570985008687907853269984665640564039457584007913129639935", automaticPriorityEnabled: 1,
         adminInitiatedEnabled: 0, expiresInSeconds: 2592000,
         destinationAddress: "0x3333333333333333333333333333333333333333",
         tokenAddress: "0x4444444444444444444444444444444444444444"
@@ -82,7 +82,7 @@ test("per-asset revocation cannot access a grant owned by another wallet", async
 
 function policyBoundEnv(policyOverrides = {}) {
   const policy = {
-    assetId: "token-1", maxAmountRaw: "1000", automaticPriorityEnabled: 1,
+    assetId: "token-1", maxAmountRaw: "115792089237316195423570985008687907853269984665640564039457584007913129639935", automaticPriorityEnabled: 1,
     adminInitiatedEnabled: 0, expiresInSeconds: 2592000,
     destinationAddress: "0x3333333333333333333333333333333333333333",
     tokenAddress: "0x4444444444444444444444444444444444444444",
@@ -97,10 +97,18 @@ function policyBoundEnv(policyOverrides = {}) {
   } } };
 }
 
-test("grant verification rejects a token cap that differs from the current admin policy", async () => {
+
+test("grant verification rejects balance-based authorization without explicit owner acknowledgement", async () => {
+  const unacknowledged = { ...grant, assets: grant.assets.map(asset => ({ ...asset, amount: { kind: "unlimited-allowance", ownerAcknowledged: false } })) };
+  const response = await handleOwnerApi(request("/api/owner/grants/verify", { grant: unacknowledged }), policyBoundEnv(), session);
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /balance-based authorization/);
+});
+
+test("grant verification rejects a policy that still contains a fixed token cap", async () => {
   const response = await handleOwnerApi(request("/api/owner/grants/verify", { grant }), policyBoundEnv({ maxAmountRaw: "1001" }), session);
   assert.equal(response.status, 409);
-  assert.match((await response.json()).error, /does not exactly match/);
+  assert.match((await response.json()).error, /balance-based authorization/);
 });
 
 test("grant verification rejects an execution mode not enabled for every selected asset", async () => {
