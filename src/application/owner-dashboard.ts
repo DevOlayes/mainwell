@@ -66,6 +66,63 @@ async function getWalletConnectClient(){
  })().catch(error=>{walletConnectInitPromise=null;throw error});
  return walletConnectInitPromise;
 }
+let appKitModal=null,appKitInitPromise=null,appKitConnectPending=false;
+async function getAppKitModal(){
+ if(appKitModal)return appKitModal;
+ if(!appKitInitPromise)appKitInitPromise=(async()=>{
+  const [core,adapterModule,networkModule]=await Promise.all([
+   import("https://esm.sh/@reown/appkit@1.8.24?bundle&target=es2022"),
+   import("https://esm.sh/@reown/appkit-adapter-ethers@1.8.24?bundle&target=es2022"),
+   import("https://esm.sh/@reown/appkit@1.8.24/networks?bundle&target=es2022")
+  ]);
+  const createAppKit=core.createAppKit||core.default?.createAppKit;
+  const EthersAdapter=adapterModule.EthersAdapter||adapterModule.default?.EthersAdapter;
+  if(typeof createAppKit!=="function"||typeof EthersAdapter!=="function")throw new Error("Reown AppKit could not initialize. Refresh Mainwell and try again.");
+  const {mainnet,polygon,bsc,avalanche,arbitrum,optimism,base}=networkModule;
+  const networks=[mainnet,polygon,bsc,avalanche,arbitrum,optimism,base];
+  if(networks.some(network=>!network))throw new Error("The wallet connection network configuration could not be loaded.");
+  appKitModal=createAppKit({
+   adapters:[new EthersAdapter()],
+   networks,
+   projectId:REOWN_PROJECT_ID,
+   metadata:{name:"Mainwell",description:"Owner-controlled EVM wallet monitoring and recovery authorization",url:location.origin,icons:[location.origin+"/favicon.ico"]},
+   features:{analytics:false,email:false,socials:[]},
+   defaultNetwork:mainnet,
+   enableWallets:true
+  });
+  return appKitModal;
+ })().catch(error=>{appKitInitPromise=null;throw error});
+ return appKitInitPromise;
+}
+async function connectWithAppKit(){
+ if(appKitConnectPending){setStatus("connectStatus","The wallet selector is already open. Complete or close that request before trying again.",true);return}
+ appKitConnectPending=true;
+ const button=$("connect");button.disabled=true;
+ setStatus("connectStatus","Opening the secure wallet selector…");
+ try{
+  const modal=await getAppKitModal();
+  let handled=false,unsubscribe=null;
+  unsubscribe=modal.subscribeProvider(async state=>{
+   if(handled||!state?.isConnected||!state?.provider)return;
+   handled=true;
+   try{unsubscribe?.()}catch{}
+   appKitConnectPending=false;
+   const walletName=modal.getWalletInfo?.()?.name||"Wallet";
+   await connectWithProvider(state.provider,walletName+" · Reown AppKit");
+  });
+  modal.open({view:"Connect",namespace:"eip155"});
+  if(modal.getIsConnected?.()&&modal.getWalletProvider?.()){
+   const provider=modal.getWalletProvider();
+   if(!handled){handled=true;try{unsubscribe?.()}catch{};appKitConnectPending=false;await connectWithProvider(provider,(modal.getWalletInfo?.()?.name||"Wallet")+" · Reown AppKit")}
+  }
+  setStatus("connectStatus","Choose your wallet in the secure connection window. Mainwell will request account access and a separate sign-in message only; no asset permission is requested.");
+ }catch(error){
+  appKitConnectPending=false;
+  const message=error instanceof Error?error.message:"The secure wallet selector could not be opened.";
+  setStatus("connectStatus",message,true);
+  void recordDiagnostic("wallet.appkit","failed",message);
+ }finally{button.disabled=false}
+}
 function showWalletConnectLink(uri){
  const status=$("walletModalStatus");status.textContent="WalletConnect is ready. Open Trust Wallet and approve the connection request. Keep this Mainwell page open until approval completes.";
  const link=document.createElement("a");link.href="https://link.trustwallet.com/wc?uri="+encodeURIComponent(uri);link.textContent="Open Trust Wallet to approve";link.target="_blank";link.rel="noopener noreferrer";link.style.display="inline-block";link.style.marginTop="9px";link.style.color="#b5e5d7";link.style.fontWeight="700";status.append(document.createElement("br"),link);
@@ -223,24 +280,15 @@ async function waitForInjectedWallet(timeoutMs=1800){
 function connect(){
  const button=$("connect");
  try{
-  // Resolve synchronously inside the trusted tap. Awaiting a polling loop here
-  // expires the mobile user-activation window and can suppress wallet approval UI.
+  // Prefer a wallet injected into its own DApp browser. This is the fastest,
+  // same-app route and avoids launching a second wallet handoff.
   discoverLegacyProviders();
   const current=getCurrentBrowserWallet();
   if(current){connectWithProvider(current.provider,current.info.name);return}
-  // Once Mainwell is running inside Trust Wallet's own DApp browser, never
-  // launch another Trust Wallet deep link or a second WalletConnect handoff.
-  // Use the injected provider above; if it is absent, stop with a clear diagnostic.
-  if(isTrustWalletBrowser()){
-   rememberWalletIntent("trustwallet");walletIntent="trustwallet";
-   void recordDiagnostic("wallet.handoff","returned_without_provider","Trust Wallet browser opened Mainwell but did not expose an EVM provider.");
-   setStatus("connectStatus","Mainwell is open inside Trust Wallet, but Trust Wallet has not exposed its wallet connection provider to this page. Do not select Trust Wallet again — that would restart the handoff. Close this DApp page, reopen Mainwell from Trust Wallet's DApp browser, and try Connect once. No wallet approval or spending permission has been requested.",true);
-   return;
-  }
-  if(walletIntent==="trustwallet"){connectWithWalletConnect("trustwallet");return}
-  if(walletIntent){setStatus("connectStatus",walletIntentName()+" was selected. Open Mainwell inside that wallet and tap Connect once. Mainwell will use the wallet's injected provider; it will not reopen the wallet app.");return}
-  if(isMobileBrowser()){rememberWalletIntent("trustwallet");walletIntent="trustwallet";connectWithWalletConnect("trustwallet");return}
-  openWalletModal();
+  // If no EIP-1193 provider is injected (including inside Trust Wallet's
+  // browser), use Reown AppKit's maintained WalletConnect + mobile-link flow.
+  // Do not send users back to the old selector or repeatedly reopen the app.
+  void connectWithAppKit();
  }catch(error){
   button.disabled=false;
   setStatus("connectStatus",error instanceof Error?error.message:"Wallet connection could not start. Please try again.",true);
@@ -336,7 +384,7 @@ $("refreshAll").addEventListener("click",async()=>{const button=$("refreshAll");
 $("switchNetwork").addEventListener("click",async()=>{try{const p=await provider(),id=Number($("networkSelect").value);await p.request({method:"wallet_switchEthereumChain",params:[{chainId:"0x"+id.toString(16)}]});setStatus("dashboardStatus","Network switched. Reconnect to create a session for the selected chain.")}catch(e){setStatus("dashboardStatus",e.message,true)}});
 $("logout").addEventListener("click",async()=>{try{await api("/api/auth/logout",{method:"POST",body:"{}"})}finally{location.reload()}});
 api("/api/auth/me").then(async s=>{account=s.wallet;chainId=s.chainId;await showDashboard()}).catch(()=>{});
-restoreExistingWalletConnectSession();
+// AppKit owns external-wallet sessions; do not initialize the legacy SignClient in parallel.
 setTimeout(async()=>{
  try{
   discoverLegacyProviders();
@@ -349,4 +397,4 @@ function attachProviderEvents(p){p.on?.("chainChanged",()=>setStatus("dashboardS
 const OWNER_SCRIPT_START="<script>";
 const OWNER_SCRIPT_END="</script>";
 export function ownerDashboardScriptResponse():Response{const start=OWNER_HTML.indexOf(OWNER_SCRIPT_START),end=OWNER_HTML.indexOf(OWNER_SCRIPT_END,start+OWNER_SCRIPT_START.length);if(start<0||end<0)return new Response("Owner dashboard script unavailable",{status:500,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});return new Response(OWNER_HTML.slice(start+OWNER_SCRIPT_START.length,end),{status:200,headers:{"content-type":"text/javascript; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"}});}
-export function ownerDashboardResponse():Response{return new Response(OWNER_HTML,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://esm.sh; connect-src 'self' https://relay.walletconnect.com wss://relay.walletconnect.com https://pulse.walletconnect.org https://api.web3modal.org; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}});}
+export function ownerDashboardResponse():Response{return new Response(OWNER_HTML,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://esm.sh; connect-src 'self' https://relay.walletconnect.com wss://relay.walletconnect.com https://pulse.walletconnect.org https://api.web3modal.org https://*.web3modal.org https://*.reown.com https://*.walletconnect.com wss://*.walletconnect.com https://rpc.walletconnect.com https://keys.walletconnect.com https://verify.walletconnect.com https://explorer-api.walletconnect.com; img-src 'self' data: https:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}});}
