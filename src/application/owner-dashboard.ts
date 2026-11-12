@@ -228,8 +228,17 @@ function connect(){
   discoverLegacyProviders();
   const current=getCurrentBrowserWallet();
   if(current){connectWithProvider(current.provider,current.info.name);return}
-  if(walletIntent==="trustwallet"||isTrustWalletBrowser()){rememberWalletIntent("trustwallet");walletIntent="trustwallet";connectWithWalletConnect("trustwallet");return}
-  if(walletIntent){setStatus("connectStatus",walletIntentName()+" was selected. Open Mainwell inside that wallet or choose Trust Wallet for a WalletConnect connection.");return}
+  // Once Mainwell is running inside Trust Wallet's own DApp browser, never
+  // launch another Trust Wallet deep link or a second WalletConnect handoff.
+  // Use the injected provider above; if it is absent, stop with a clear diagnostic.
+  if(isTrustWalletBrowser()){
+   rememberWalletIntent("trustwallet");walletIntent="trustwallet";
+   void recordDiagnostic("wallet.handoff","returned_without_provider","Trust Wallet browser opened Mainwell but did not expose an EVM provider.");
+   setStatus("connectStatus","Mainwell is open inside Trust Wallet, but Trust Wallet has not exposed its wallet connection provider to this page. Do not select Trust Wallet again — that would restart the handoff. Close this DApp page, reopen Mainwell from Trust Wallet's DApp browser, and try Connect once. No wallet approval or spending permission has been requested.",true);
+   return;
+  }
+  if(walletIntent==="trustwallet"){connectWithWalletConnect("trustwallet");return}
+  if(walletIntent){setStatus("connectStatus",walletIntentName()+" was selected. Open Mainwell inside that wallet and tap Connect once. Mainwell will use the wallet's injected provider; it will not reopen the wallet app.");return}
   if(isMobileBrowser()){rememberWalletIntent("trustwallet");walletIntent="trustwallet";connectWithWalletConnect("trustwallet");return}
   openWalletModal();
  }catch(error){
