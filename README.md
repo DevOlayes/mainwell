@@ -65,11 +65,16 @@ Mainwell is a security-first EVM wallet monitoring and scoped recovery applicati
 
 ## Production configuration and readiness
 
-The recovery engine and monitoring service are deployed. Persistent production switches currently remain:
-- automation_enabled = false
-- execution_enabled = false
+The recovery engine and monitoring service are deployed. Production D1 currently reports:
+- automation_enabled = true
+- execution_enabled = true
+- One source-wallet network registered (Ethereum).
+- No verified owner recovery grants, recovery jobs or recovery transactions recorded.
+- The registered source wallet is not yet admin-locked.
+- The seven network RPC bindings and seven locked destination records are present.
+- MAINWELL_EVM_ASSETS is not configured, so allowance monitoring has no configured spender set.
 
-These switches are separate from owner grants. A transfer requires both the appropriate global switch and a valid owner grant. Do not enable them until the operator is ready to submit transactions and has funded the corresponding operator wallet with network gas.
+The global switches only permit the relevant workflow to run; they do not create owner grants, deploy executors, approve tokens, lock source wallets, or fund operators. No transfer is possible without the full chain-specific owner authorization and execution prerequisites. The current production state is therefore configured but not recovery-ready.
 
 The supported EVM networks are Ethereum, Polygon, BNB Smart Chain, Avalanche, Arbitrum, Optimism and Base. Native-coin recovery, NFT recovery, Bitcoin, TRON and other non-EVM networks are not implemented.
 
