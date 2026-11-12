@@ -209,7 +209,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
             decimals: observed?.decimals ?? null, estimatedValueUsd: observed?.estimatedValueUsd ?? null,
             observedAt: observed?.observedAt ?? null, discoverySource: observed?.discoverySource ?? null,
             tokenVerified: Number(observed?.tokenVerified ?? 0) === 1,
-            registryActive, policyActive, sourceWalletLocked: Boolean(wallet && wallet.status !== "revoked"),
+            registryActive, policyActive, sourceWalletVerified: Boolean(wallet && wallet.status !== "revoked"),
             status, grantId: currentGrant?.grantId ?? null,
             executorAddress: currentGrant?.executorAddress ?? null,
             allowanceRaw: permission?.allowanceRaw ?? null,
@@ -226,11 +226,11 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
             observedAt: row.observedAt, discoverySource: row.discoverySource,
             tokenVerified: Number(row.tokenVerified ?? 0) === 1,
             registryActive: false, policyActive: false,
-            sourceWalletLocked: Boolean(wallet && wallet.status !== "revoked"),
+            sourceWalletVerified: Boolean(wallet && wallet.status !== "revoked"),
             status: row.tokenAddress ? "token_not_registered" : "native_asset_observed", grantId: null, executorAddress: null,
             allowanceRaw: null, allowanceStatus: null, permissions: [],
             maxAmountRaw: null, destinationAddress: null }));
-        return { network, chainId, walletRegistered: Boolean(wallet), sourceWalletLocked: Boolean(wallet && wallet.status !== "revoked"),
+        return { network, chainId, walletRegistered: Boolean(wallet), sourceWalletVerified: Boolean(wallet && wallet.status !== "revoked"),
           monitoringStatus: wallet?.monitoring_status ?? (wallet ? "not_scanned" : "not_registered"),
           monitoringError: wallet?.monitoring_error ?? null, lastMonitorAt: wallet?.last_monitor_at ?? null,
           assets: [...assets, ...unregistered] };
@@ -271,7 +271,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     if (!wallet) return reply({
       network, chainId: session.chainId, ownerWallet: owner,
       sourceWallet: null, assets: [], policies: [],
-      readiness: { sourceWalletLocked: false, rpcConfigured: Boolean(env[GRANT_RPC[network] as keyof OwnerApiEnv]),
+      readiness: { sourceWalletVerified: false, rpcConfigured: Boolean(env[GRANT_RPC[network] as keyof OwnerApiEnv]),
         executorCodeHashConfigured: !missingWalletConfiguredHash || missingWalletConfiguredHash.toLowerCase() === EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase(),
         automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
         adminOperatorConfigured: Boolean(env.MAINWELL_ADMIN_OPERATOR),
@@ -303,7 +303,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     if (!policyRows.success) return reply({ error: "Unable to load locked asset destination policies." }, 503);
     const rpcName = GRANT_RPC[network], hashName = GRANT_HASH[network];
     const readiness = {
-      sourceWalletLocked: wallet.status !== "revoked",
+      sourceWalletVerified: wallet.status !== "revoked",
       rpcConfigured: Boolean(rpcName && env[rpcName]),
       executorCodeHashConfigured: !((hashName ? env[hashName] as string | undefined : undefined)) || (hashName ? (env[hashName] as string | undefined)?.toLowerCase() : undefined) === EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase(),
       automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
@@ -322,7 +322,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       return { ...asset, policy: policy ?? null, authorizationEligible: Boolean(isToken && policy && cap && modes) };
     });
     const blockers: string[] = [];
-    if (!readiness.sourceWalletLocked) blockers.push("The connected owner wallet has not been registered on this network.");
+    if (!readiness.sourceWalletVerified) blockers.push("The connected owner wallet has not been registered on this network.");
     if (!readiness.rpcConfigured) blockers.push("The trusted RPC endpoint is not configured for this network.");
 
     if (!readiness.automationOperatorConfigured || !readiness.adminOperatorConfigured) blockers.push("Trusted automatic and administrator operator identities are not fully configured.");
@@ -331,7 +331,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     if (!readiness.executorArtifactAvailable) blockers.push("The reproducible executor deployment artifact is unavailable.");
     return reply({
       network, chainId: session.chainId, ownerWallet: owner,
-      sourceWallet: { id: wallet.id, status: wallet.status, adminLocked: readiness.sourceWalletLocked },
+      sourceWallet: { id: wallet.id, status: wallet.status, adminLocked: readiness.sourceWalletVerified },
       assets: scopedAssets,
       policies: policyRows.results,
       readiness, blockers
@@ -517,7 +517,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     const lockedWallet = await env.DB.prepare(
       "SELECT id FROM recovery_wallets WHERE owner_address = ? AND network = ? AND status != 'revoked' LIMIT 1"
     ).bind(owner, grant.network).first<{ id: string }>();
-    if (!lockedWallet) return reply({ error: "This wallet is not registered for monitoring on the active network. Reconnect and refresh the wallet registration.", code: "source_wallet_not_locked" }, 409);
+    if (!lockedWallet) return reply({ error: "This wallet is not registered for monitoring on the active network. Reconnect and refresh the wallet registration.", code: "source_wallet_not_registered" }, 409);
     if (grant.assets.length === 0 || grant.assets.length > 20 ||
         grant.assets.some(asset => !asset || typeof asset.assetId !== "string" || asset.assetId.length > 160)) {
       return reply({ error: "Grant must contain between 1 and 20 valid policy-bound assets." }, 400);
