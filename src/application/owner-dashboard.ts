@@ -78,7 +78,7 @@ async function connectWithWalletConnect(brand="trustwallet"){
   const existing=client.session.getAll().find(session=>getWalletConnectAccounts(session).length&&getWalletConnectChains(session).length);
   let session=existing;
   if(!session){
-   const {uri,approval}=await client.connect({optionalNamespaces:{eip155:{methods:["personal_sign","eth_chainId","eth_accounts"],chains:WALLETCONNECT_CHAINS,events:["chainChanged","accountsChanged"]}}});
+   const {uri,approval}=await client.connect({optionalNamespaces:{eip155:{methods:["personal_sign","eth_chainId","eth_accounts","eth_sendTransaction","eth_call","eth_getTransactionReceipt","eth_getBlockByNumber","wallet_sendCalls","wallet_getCallsStatus"],chains:WALLETCONNECT_CHAINS,events:["chainChanged","accountsChanged"]}}});
    if(uri){showWalletConnectLink(uri);setStatus("connectStatus","A WalletConnect request is ready. Open Trust Wallet from the connection prompt and approve it.");}
    session=await approval();
   }
