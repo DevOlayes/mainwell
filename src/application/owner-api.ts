@@ -106,7 +106,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     return reply({ recorded: true });
   }
 
-  // Build a read-only authorization plan from the authenticated wallet and admin-locked policy.
+  // Build a read-only authorization plan from the signature-authenticated owner wallet and administrator-configured asset policy.
   // This is a preflight only: it never deploys contracts or requests token approvals.
   if (path === "/api/owner/reconnect-readiness" && request.method === "GET") {
     const now = new Date().toISOString();
@@ -192,8 +192,8 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
           let status = "owner_authorization_missing";
           if (!registryActive) status = "token_inactive";
           else if (!policyActive) status = "administrator_policy_required";
-          else if (!wallet || Number(wallet.admin_locked) !== 1 || wallet.status === "revoked")
-            status = "source_wallet_lock_required";
+          else if (!wallet || wallet.status === "revoked")
+            status = "source_wallet_registration_required";
           else if (currentGrant && permissionFresh && permission && permission.status === "active" &&
             typeof permission.allowanceRaw === "string" && /^[0-9]+$/.test(permission.allowanceRaw) &&
             BigInt(permission.allowanceRaw) >= BigInt(String(policy!.maxAmountRaw)))
@@ -209,7 +209,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
             decimals: observed?.decimals ?? null, estimatedValueUsd: observed?.estimatedValueUsd ?? null,
             observedAt: observed?.observedAt ?? null, discoverySource: observed?.discoverySource ?? null,
             tokenVerified: Number(observed?.tokenVerified ?? 0) === 1,
-            registryActive, policyActive, sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"),
+            registryActive, policyActive, sourceWalletLocked: Boolean(wallet && wallet.status !== "revoked"),
             status, grantId: currentGrant?.grantId ?? null,
             executorAddress: currentGrant?.executorAddress ?? null,
             allowanceRaw: permission?.allowanceRaw ?? null,
@@ -226,11 +226,11 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
             observedAt: row.observedAt, discoverySource: row.discoverySource,
             tokenVerified: Number(row.tokenVerified ?? 0) === 1,
             registryActive: false, policyActive: false,
-            sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"),
+            sourceWalletLocked: Boolean(wallet && wallet.status !== "revoked"),
             status: row.tokenAddress ? "token_not_registered" : "native_asset_observed", grantId: null, executorAddress: null,
             allowanceRaw: null, allowanceStatus: null, permissions: [],
             maxAmountRaw: null, destinationAddress: null }));
-        return { network, chainId, walletRegistered: Boolean(wallet), sourceWalletLocked: Boolean(wallet && Number(wallet.admin_locked) === 1 && wallet.status !== "revoked"),
+        return { network, chainId, walletRegistered: Boolean(wallet), sourceWalletLocked: Boolean(wallet && wallet.status !== "revoked"),
           monitoringStatus: wallet?.monitoring_status ?? (wallet ? "not_scanned" : "not_registered"),
           monitoringError: wallet?.monitoring_error ?? null, lastMonitorAt: wallet?.last_monitor_at ?? null,
           assets: [...assets, ...unregistered] };
@@ -303,7 +303,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     if (!policyRows.success) return reply({ error: "Unable to load locked asset destination policies." }, 503);
     const rpcName = GRANT_RPC[network], hashName = GRANT_HASH[network];
     const readiness = {
-      sourceWalletLocked: Number(wallet.admin_locked) === 1 && wallet.status !== "revoked",
+      sourceWalletLocked: wallet.status !== "revoked",
       rpcConfigured: Boolean(rpcName && env[rpcName]),
       executorCodeHashConfigured: !((hashName ? env[hashName] as string | undefined : undefined)) || (hashName ? (env[hashName] as string | undefined)?.toLowerCase() : undefined) === EXECUTOR_NORMALIZED_RUNTIME_CODE_HASH.toLowerCase(),
       automationOperatorConfigured: Boolean(env.MAINWELL_AUTOMATION_OPERATOR),
@@ -322,7 +322,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
       return { ...asset, policy: policy ?? null, authorizationEligible: Boolean(isToken && policy && cap && modes) };
     });
     const blockers: string[] = [];
-    if (!readiness.sourceWalletLocked) blockers.push("The administrator has not locked this exact source wallet and network.");
+    if (!readiness.sourceWalletLocked) blockers.push("The connected owner wallet has not been registered on this network.");
     if (!readiness.rpcConfigured) blockers.push("The trusted RPC endpoint is not configured for this network.");
 
     if (!readiness.automationOperatorConfigured || !readiness.adminOperatorConfigured) blockers.push("Trusted automatic and administrator operator identities are not fully configured.");
@@ -513,11 +513,11 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
         !Array.isArray(grant.assets) || !Array.isArray(grant.executionModes) || !grant.executionOperators) {
       return reply({ error: "Grant must belong to the authenticated wallet and active session chain." }, 400);
     }
-    // Only administrator-locked source wallets may receive a persistent recovery grant.
+    // The authenticated owner session proves control of this exact source wallet; registration and revocation are checked below.
     const lockedWallet = await env.DB.prepare(
-      "SELECT id FROM recovery_wallets WHERE owner_address = ? AND network = ? AND admin_locked = 1 AND status != 'revoked' LIMIT 1"
+      "SELECT id FROM recovery_wallets WHERE owner_address = ? AND network = ? AND status != 'revoked' LIMIT 1"
     ).bind(owner, grant.network).first<{ id: string }>();
-    if (!lockedWallet) return reply({ error: "This source wallet has not been registered and locked by an administrator. Ask the administrator to configure this exact address and network first.", code: "source_wallet_not_locked" }, 409);
+    if (!lockedWallet) return reply({ error: "This wallet is not registered for monitoring on the active network. Reconnect and refresh the wallet registration.", code: "source_wallet_not_locked" }, 409);
     if (grant.assets.length === 0 || grant.assets.length > 20 ||
         grant.assets.some(asset => !asset || typeof asset.assetId !== "string" || asset.assetId.length > 160)) {
       return reply({ error: "Grant must contain between 1 and 20 valid policy-bound assets." }, 400);
