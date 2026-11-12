@@ -22,6 +22,7 @@ test("wallet dashboard uses one guarded sign-in path and no inline duplicate per
   assert.doesNotMatch(html, /type="text\/plain" id="owner-dashboard-source"/);
   assert.match(script, /window\.mainwellConnect=connect/);
   assert.match(script, /connectWithAppKit\(\)/);
+  assert.equal((script.match(/deps=ox@0\.14\.29/g) || []).length, 2, "Reown AppKit entry points must pin ox to a version exporting MultisigConfig");
   assert.match(script, /Never deeplink from inside a wallet browser/);
   assert.doesNotMatch(script, /location\.href="https:\/\/link\.trustwallet\.com\/open_url/);
   assert.match(script, /connectWithAppKit\(\)/);
