@@ -36,13 +36,13 @@ Automatic execution retains its fee ceiling, fee-to-value ratio, operator reserv
 
 Alchemy-based ERC-20 discovery, balances, metadata and prices are implemented across Ethereum, Polygon, BNB Smart Chain, Avalanche, Arbitrum, Optimism and Base. The scheduled monitor processes one due wallet per invocation. Discovered tokens are not automatically whitelisted or authorized.
 
-Permission monitoring currently checks configured known spenders only. MAINWELL_EVM_ASSETS is intentionally not configured yet, so the implementation must not be described as global allowance discovery.
+Permission monitoring checks configured known spenders only. MAINWELL_EVM_ASSETS is currently absent from production Worker bindings, so there is no configured spender set and allowance coverage is not operational.
 
 ## Current implementation status
 
 Phases One through Four have implementation in the repository and production deployment. The deployed recovery engine includes owner/grant validation, simulation, gas estimation, operator signing, transaction submission, reconciliation, confirmation checks, automatic-priority planning and administrator-initiated job management. Monitoring includes ERC-20 discovery, balances, metadata, fresh prices and scheduled scans.
 
-Production runtime switches currently remain automation_enabled=false and execution_enabled=false. This is an intentional operational safeguard, not a missing implementation. The admin UI must expose clear status and authorized controls for these persistent switches; neither switch may be silently enabled by deployment or migration.
+Production D1 currently reports automation_enabled=true and execution_enabled=true. These switches are only global gates; they do not supply owner grants or chain-specific permissions. The live database snapshot has one registered source wallet on Ethereum, no verified recovery grants, no recovery jobs or transactions, and that source wallet is not admin-locked. Seven network RPC bindings and seven locked destination records exist, but they do not establish end-to-end recovery readiness. Operator key/address matches, per-chain executor deployments and live gas funding still require verification.
 
 ## Explicitly unsupported scope
 
