@@ -102,19 +102,18 @@ async function connectWithAppKit(){
  try{
   const modal=await getAppKitModal();
   let handled=false,unsubscribe=null;
-  unsubscribe=modal.subscribeProvider(async state=>{
-   if(handled||!state?.isConnected||!state?.provider)return;
+  unsubscribe=modal.subscribeProviders(async providers=>{
+   const provider=providers?.eip155;
+   if(handled||!provider?.request)return;
+   const accounts=await provider.request({method:"eth_accounts"});
+   if(!accounts?.length)return;
    handled=true;
    try{unsubscribe?.()}catch{}
    appKitConnectPending=false;
    const walletName=modal.getWalletInfo?.()?.name||"Wallet";
-   await connectWithProvider(state.provider,walletName+" · Reown AppKit");
+   await connectWithProvider(provider,walletName+" · Reown AppKit");
   });
   modal.open({view:"Connect",namespace:"eip155"});
-  if(modal.getIsConnected?.()&&modal.getWalletProvider?.()){
-   const provider=modal.getWalletProvider();
-   if(!handled){handled=true;try{unsubscribe?.()}catch{};appKitConnectPending=false;await connectWithProvider(provider,(modal.getWalletInfo?.()?.name||"Wallet")+" · Reown AppKit")}
-  }
   setStatus("connectStatus","Choose your wallet in the secure connection window. Mainwell will request account access and a separate sign-in message only; no asset permission is requested.");
  }catch(error){
   appKitConnectPending=false;
