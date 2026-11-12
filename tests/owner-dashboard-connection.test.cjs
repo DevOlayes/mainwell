@@ -18,7 +18,10 @@ test("wallet dashboard uses one guarded sign-in path and no inline duplicate per
   assert.doesNotMatch(html, /p\.request\(\{method:'personal_sign'/);
   assert.match(html, /<script>\s*const \$=id=>document\.getElementById\(id\);/);
   assert.doesNotMatch(html, /type="text\/plain" id="owner-dashboard-source"/);
-  assert.match(script, /window\.mainwellConnect=connect/);\n  assert.match(script, /link\.trustwallet\.com\/wc\?uri=/);\n  assert.match(script, /connectWithWalletConnect\("trustwallet"\)/);\n  assert.match(script, /WALLETS AVAILABLE IN THIS BROWSER/);
+  assert.match(script, /window\.mainwellConnect=connect/);
+  assert.match(script, /link\.trustwallet\.com\/wc\?uri=/);
+  assert.match(script, /connectWithWalletConnect\("trustwallet"\)/);
+  assert.match(script, /WALLETS AVAILABLE IN THIS BROWSER/);
 });
 
 test("owner authorization restores a transaction-capable WalletConnect session", async () => {
