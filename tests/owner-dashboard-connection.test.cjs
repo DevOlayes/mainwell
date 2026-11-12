@@ -19,16 +19,16 @@ test("wallet dashboard uses one guarded sign-in path and no inline duplicate per
   assert.match(html, /<script>\s*const \$=id=>document\.getElementById\(id\);/);
   assert.doesNotMatch(html, /type="text\/plain" id="owner-dashboard-source"/);
   assert.match(script, /window\.mainwellConnect=connect/);
-  assert.match(script, /link\.trustwallet\.com\/open_url\?coin_id=60/);
-  assert.match(script, /Trust Wallet browser is open, but its EVM provider is not available/);
-  assert.match(script, /location\.href="https:\/\/link\.trustwallet\.com\/open_url\?coin_id=60&url="/);
-  assert.match(script, /if\(isMobileBrowser\(\)\)/);
-  assert.match(script, /if\(isTrustWalletBrowser\(\)\)/);
   assert.match(script, /connectWithAppKit\(\)/);
-  assert.match(script, /location\.href="https:\/\/link\.trustwallet\.com\/open_url/);
+  assert.match(script, /Never deeplink from inside a wallet browser/);
+  assert.doesNotMatch(script, /location\.href="https:\/\/link\.trustwallet\.com\/open_url/);
+  assert.match(script, /connectWithAppKit\(\)/);
+  assert.match(script, /modal\.open\(\{view:"Connect",namespace:"eip155"\}\)/);
+  assert.match(script, /connectWithAppKit\(\)/);
+  assert.doesNotMatch(script, /location\.href="https:\/\/link\.trustwallet\.com\/open_url/);
   assert.doesNotMatch(script, /returned_without_provider/);
   assert.doesNotMatch(script, /Do not select Trust Wallet again/);
-  assert.match(script, /Open Mainwell in Trust Wallet/);
+  assert.match(html, /Connect wallet/);
 });
 
 test("owner authorization restores a transaction-capable WalletConnect session", async () => {
