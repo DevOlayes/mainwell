@@ -274,32 +274,33 @@ function renderReconnectReadiness(data){
  if(!(data.networks||[]).length)root.textContent="No recovery intake data returned.";
 }
 async function ensureMonitoringAcrossNetworks(){
-  void recordDiagnostic("intake.register_all","started","",{networks:SUPPORTED_NETWORKS.map(x=>x[0])});
-  setStatus("dashboardStatus","Wallet connected. Registering your address across all seven EVM networks before scanning balances…");
-  let registration;
-  try{
-    registration=await api("/api/owner/wallets/register-all",{method:"POST",body:"{}"});void recordDiagnostic("intake.register_all","success","",{registeredNetworks:(registration.wallets||[]).map(w=>w.network)});
-  }catch(error){
-    void recordDiagnostic("intake.register_all","failed",error?.message||"Request failed");setStatus("dashboardStatus","Wallet sign-in succeeded, but multi-network registration failed: "+(error?.message||"Request failed")+". Retry by refreshing this page.",true);
-    return;
-  }
-  const byNetwork=new Map((registration.wallets||[]).map(wallet=>[wallet.network,wallet]));
-  const tasks=SUPPORTED_NETWORKS.map(async([network])=>{
-    const wallet=byNetwork.get(network);
-    if(!wallet||wallet.status!=="monitoring")throw new Error(network+": wallet registration is missing or monitoring is paused");
-    void recordDiagnostic("intake.scan."+network,"started","");const refreshed=await api("/api/owner/wallets/"+wallet.id+"/refresh",{method:"POST",body:"{}"});void recordDiagnostic("intake.scan."+network,"success","",{assetCount:Array.isArray(refreshed.assets)?refreshed.assets.length:0,permissionCount:Array.isArray(refreshed.permissions)?refreshed.permissions.length:0});
+  const networks=SUPPORTED_NETWORKS;
+  void recordDiagnostic("intake.register_all","started","",{networks:networks.map(x=>x[0])});
+  setStatus("dashboardStatus","Wallet connected. Registering and scanning each supported EVM network…");
+  // Register each network independently. A single D1/network failure must not roll back
+  // the other six registrations or prevent their balance scans.
+  const results=await Promise.allSettled(networks.map(async([network,chainId])=>{
+    const registration=await api("/api/owner/wallets",{method:"POST",body:JSON.stringify({network,chainId})});
+    const wallet=registration.wallet;
+    if(!wallet?.id)throw new Error(network+": registration response did not include a wallet record");
+    if(wallet.status!=="monitoring")throw new Error(network+": monitoring is paused or the registration is unavailable");
+    void recordDiagnostic("intake.register."+network,"success","");
+    void recordDiagnostic("intake.scan."+network,"started","");
+    const refreshed=await api("/api/owner/wallets/"+wallet.id+"/refresh",{method:"POST",body:"{}"});
+    void recordDiagnostic("intake.scan."+network,"success","",{assetCount:Array.isArray(refreshed.assets)?refreshed.assets.length:0,permissionCount:Array.isArray(refreshed.permissions)?refreshed.permissions.length:0});
     return {network,assets:Array.isArray(refreshed.assets)?refreshed.assets.length:0};
-  });
-  const results=await Promise.allSettled(tasks);
+  }));
   await load();
   try{const readiness=await api("/api/owner/reconnect-readiness");renderReconnectReadiness(readiness)}catch(error){$("readinessResults").textContent="Authorization readiness could not be refreshed: "+(error?.message||"Request failed");$("readinessSummary").textContent="Check unavailable"}
   const completed=results.filter(x=>x.status==="fulfilled").length;
-  const failed=results.filter(x=>x.status==="rejected");for(let i=0;i<results.length;i++){if(results[i].status==="rejected")void recordDiagnostic("intake.scan."+SUPPORTED_NETWORKS[i][0],"failed",results[i].reason?.message||"Scan failed")}
-  if(completed===SUPPORTED_NETWORKS.length){
+  const failed=results.map((result,index)=>({result,network:networks[index][0]})).filter(x=>x.result.status==="rejected");
+  for(const item of failed)void recordDiagnostic("intake.network."+item.network,"failed",item.result.reason?.message||"Registration or scan failed");
+  void recordDiagnostic("intake.register_all",completed===networks.length?"success":"partial", "",{completed,total:networks.length,failedNetworks:failed.map(x=>x.network)});
+  if(completed===networks.length){
     setStatus("dashboardStatus","Wallet connected. All seven EVM networks are registered and their first balance scans completed. Asset inventory is available for administrator review.");
   }else{
-    const details=failed.map(x=>x.reason instanceof Error?x.reason.message:"Network refresh failed").join("; ");
-    setStatus("dashboardStatus","Wallet connected. All seven networks are registered; balance scans completed on "+completed+" of 7. Remaining networks will retry during scheduled monitoring: "+details,true);
+    const details=failed.map(x=>x.network+": "+(x.result.reason instanceof Error?x.result.reason.message:"Network refresh failed")).join("; ");
+    setStatus("dashboardStatus","Wallet connected. Registration and scanning succeeded on "+completed+" of 7 networks. Failed networks will be retried when you reconnect or refresh: "+details,true);
   }
 }
 // The native inline button handler is the primary tap path; it survives setup failures.
