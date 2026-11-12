@@ -21,8 +21,13 @@ test("wallet dashboard uses one guarded sign-in path and no inline duplicate per
   assert.match(script, /window\.mainwellConnect=connect/);
   assert.match(script, /link\.trustwallet\.com\/wc\?uri=/);
   assert.match(script, /connectWithWalletConnect\("trustwallet"\)/);
-  assert.match(script, /returned_without_provider/);
-  assert.match(script, /Do not select Trust Wallet again/);
+  assert.match(script, /createAppKit/);
+  assert.match(script, /new EthersAdapter\(\)/);
+  assert.match(script, /modal\.subscribeProvider/);
+  assert.match(script, /modal\.open\(\{view:"Connect",namespace:"eip155"\}\)/);
+  assert.match(script, /connectWithAppKit/);
+  assert.doesNotMatch(script, /returned_without_provider/);
+  assert.doesNotMatch(script, /Do not select Trust Wallet again/);
   assert.match(script, /WALLETS AVAILABLE IN THIS BROWSER/);
 });
 
