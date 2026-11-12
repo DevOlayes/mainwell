@@ -103,7 +103,8 @@ async function queueAutomaticJobs(env:EngineEnv):Promise<number>{
     LEFT JOIN recovery_destinations d ON d.network=g.network AND lower(d.address)=lower(a.destination_address)
     WHERE g.verification_status='verified' AND g.revoked_at IS NULL AND g.expires_at>?
       AND a.revoked_at IS NULL AND w.status='monitoring' AND w.admin_locked=1
-      AND d.locked=1 AND d.is_active=1 AND a.amount_kind='capped'
+      AND d.locked=1 AND d.is_active=1 AND a.amount_kind IN ('capped','unlimited-allowance')
+      AND (a.amount_kind!='unlimited-allowance' OR a.owner_acknowledged=1)
       AND NOT EXISTS (SELECT 1 FROM recovery_jobs j WHERE j.grant_id=g.grant_id AND j.asset_id=a.asset_id
         AND j.status IN ('queued','simulating','ready','submitted','blocked','failed','cancelled'))
     ORDER BY g.expires_at ASC LIMIT 50
@@ -150,7 +151,7 @@ async function processOne(env:EngineEnv):Promise<boolean>{
   try{
     const scope=await env.DB.prepare(`
       SELECT g.network,g.owner_wallet,g.executor_address,g.expires_at,g.revoked_at,g.verification_status,w.id AS wallet_id,
-             a.token_address,a.amount_kind,a.max_amount_raw,a.destination_address,a.revoked_at AS asset_revoked_at,
+             a.token_address,a.amount_kind,a.max_amount_raw,a.owner_acknowledged,a.destination_address,a.revoked_at AS asset_revoked_at,
              w.status AS wallet_status,w.admin_locked,d.locked AS destination_locked,d.is_active AS destination_active,
              s.is_active AS token_active,s.decimals AS registered_decimals
       FROM recovery_grants g
@@ -162,7 +163,8 @@ async function processOne(env:EngineEnv):Promise<boolean>{
     `).bind(job.asset_id,job.grant_id).first<Record<string,unknown>>();
     if(!scope||scope.verification_status!=="verified"||scope.revoked_at||String(scope.expires_at)<=now)throw new Error("grant_inactive");
     if(scope.wallet_status!=="monitoring"||Number(scope.admin_locked)!==1)throw new Error("source_wallet_not_locked");
-    if(scope.asset_revoked_at||scope.amount_kind!=="capped"||!scope.token_address||!ADDRESS.test(String(scope.token_address)))throw new Error("asset_not_authorized");
+    if(scope.asset_revoked_at||!["capped","unlimited-allowance"].includes(String(scope.amount_kind))||
+      (scope.amount_kind==="unlimited-allowance"&&Number(scope.owner_acknowledged)!==1)||!scope.token_address||!ADDRESS.test(String(scope.token_address)))throw new Error("asset_not_authorized");
     if(Number(scope.destination_locked)!==1||Number(scope.destination_active)!==1||!ADDRESS.test(String(scope.destination_address)))throw new Error("destination_not_locked");
     if(Number(scope.token_active)!==1)throw new Error("token_not_active");
     const network=String(scope.network) as Network;
