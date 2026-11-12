@@ -1,11 +1,13 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const vm = require("node:vm");
 const { ownerDashboardResponse, ownerDashboardScriptResponse } = require("../dist/application/owner-dashboard.js");
 const { ownerAuthorizationResponse } = require("../dist/application/owner-authorization.js");
 
 test("wallet dashboard uses one guarded sign-in path and no inline duplicate personal_sign fallback", async () => {
   const html = await ownerDashboardResponse().text();
   const script = await ownerDashboardScriptResponse().text();
+  assert.doesNotThrow(() => new vm.Script(script), "owner dashboard inline JavaScript must parse before serving");
   assert.match(script, /walletConnectionInFlight/);
   assert.match(script, /A wallet connection is already in progress/);
   assert.match(script, /recordDiagnostic\("owner.api"/);
@@ -29,6 +31,7 @@ test("wallet dashboard uses one guarded sign-in path and no inline duplicate per
   assert.doesNotMatch(script, /returned_without_provider/);
   assert.doesNotMatch(script, /Do not select Trust Wallet again/);
   assert.match(html, /Connect wallet/);
+  assert.match(html, /Wallet connection did not initialize/);
 });
 
 test("owner authorization restores a transaction-capable WalletConnect session", async () => {
