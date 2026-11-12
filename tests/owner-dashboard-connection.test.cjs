@@ -27,6 +27,8 @@ test("wallet dashboard pins the ox Tempo module and uses one guarded sign-in pat
   assert.doesNotMatch(script, /location\.href="https:\/\/link\.trustwallet\.com\/open_url/);
   assert.match(script, /connectWithAppKit\(\)/);
   assert.match(script, /modal\.open\(\{view:"Connect",namespace:"eip155"\}\)/);
+  assert.match(script, /modal\.subscribeProviders\(/);
+  assert.doesNotMatch(script, /modal\.subscribeProvider\(/);
   assert.match(script, /connectWithAppKit\(\)/);
   assert.doesNotMatch(script, /location\.href="https:\/\/link\.trustwallet\.com\/open_url/);
   assert.doesNotMatch(script, /returned_without_provider/);
