@@ -4,7 +4,7 @@ const vm = require("node:vm");
 const { ownerDashboardResponse, ownerDashboardScriptResponse } = require("../dist/application/owner-dashboard.js");
 const { ownerAuthorizationResponse } = require("../dist/application/owner-authorization.js");
 
-test("wallet dashboard uses one guarded sign-in path and no inline duplicate personal_sign fallback", async () => {
+test("wallet dashboard pins the ox Tempo module and uses one guarded sign-in path", async () => {
   const html = await ownerDashboardResponse().text();
   const script = await ownerDashboardScriptResponse().text();
   assert.doesNotThrow(() => new vm.Script(script), "owner dashboard inline JavaScript must parse before serving");
