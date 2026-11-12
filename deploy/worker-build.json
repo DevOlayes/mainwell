@@ -1,8 +1,8 @@
 {
-  "sourceCommit": "7924d92f2a925a092df5b89e974b55cbe5dfb392",
+  "sourceCommit": "4c1dd6c842be68df4db234fb846c325c758de20e",
   "sourceEntrypoint": "src/worker.ts",
   "generatedBy": "wrangler deploy --dry-run",
   "bundleFile": "worker.js",
-  "byteLength": 722643,
-  "sha256": "95948503cb41db41a359ddf97948ff1f8fb9ef9cf565aecf21387d036346ccd8"
+  "byteLength": 722751,
+  "sha256": "d05510182edf6a4c7e430c9ce47eb4f112b09d70ee9843b0df958766f9c10ed3"
 }
