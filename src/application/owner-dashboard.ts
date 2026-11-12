@@ -17,6 +17,8 @@ const OWNER_HTML = `<!doctype html>
 <button class="secondary" id="logout" style="margin-top:14px;width:100%">Disconnect session</button><p id="dashboardStatus" class="status" role="status"></p></aside></div>
 </section><script>
 const $=id=>document.getElementById(id);
+// Publish the tap handler before optional wallet discovery or session restoration can fail.
+window.mainwellConnect=()=>connect();
 const NETWORKS={1:"Ethereum",137:"Polygon",56:"BNB Smart Chain",43114:"Avalanche",42161:"Arbitrum",10:"Optimism",8453:"Base"};
 let account="",chainId=0,wallets=[],activeProvider=null,walletConnectionInFlight=false;
 const discoveredProviders=new Map();
