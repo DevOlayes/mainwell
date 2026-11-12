@@ -31,6 +31,8 @@ test("wallet dashboard uses one guarded sign-in path and no inline duplicate per
   assert.doesNotMatch(script, /location\.href="https:\/\/link\.trustwallet\.com\/open_url/);
   assert.doesNotMatch(script, /returned_without_provider/);
   assert.doesNotMatch(script, /Do not select Trust Wallet again/);
+  assert.match(html, /type="importmap"/);
+  assert.match(html, /https:\/\/esm\.sh\/ox@0\.14\.29\//);
   assert.match(html, /Connect wallet/);
   assert.match(html, /Wallet connection did not initialize/);
 });
