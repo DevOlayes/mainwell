@@ -26,5 +26,5 @@ test("owner authorization restores a transaction-capable WalletConnect session",
   assert.match(html, /eth_sendTransaction/);
   assert.match(html, /wallet_sendCalls/);
   assert.match(html, /link\.trustwallet\.com\/wc/);
-  assert.match(html, /script-src 'unsafe-inline' https:\/\/esm\.sh; connect-src/);
+  assert.match(response.headers.get("content-security-policy"), /script-src 'unsafe-inline' https:\/\/esm\.sh; connect-src/);
 });
