@@ -15,7 +15,7 @@ const OWNER_HTML = `<!doctype html>
 <aside><section class="card panel"><h2>Network</h2><p class="muted">Switch your connected wallet to a supported network, then reconnect to open a session on that chain.</p><select id="networkSelect" class="network"><option value="1">Ethereum</option><option value="137">Polygon</option><option value="56">BNB Smart Chain</option><option value="43114">Avalanche</option><option value="42161">Arbitrum</option><option value="10">Optimism</option><option value="8453">Base</option></select><div class="actions"><button class="secondary" id="switchNetwork">Switch network in wallet</button></div></section>
 <section class="notice"><b>Authorization is not active yet.</b><br>Monitoring does not give Mainwell permission to move assets. Recovery authorization will only be offered after the executor contract has completed independent review and on-chain verification. You remain in control of approvals and revocations.</section>
 <button class="secondary" id="logout" style="margin-top:14px;width:100%">Disconnect session</button><p id="dashboardStatus" class="status" role="status"></p></aside></div>
-</section><script type="importmap">{"imports":{"ox":"https://esm.sh/ox@0.14.29","ox/":"https://esm.sh/ox@0.14.29/","https://esm.sh/ox/":"https://esm.sh/ox@0.14.29/"}}</script><script>
+</section><script type="importmap">{"imports":{"ox":"https://esm.sh/ox@0.14.40","ox/":"https://esm.sh/ox@0.14.40/","https://esm.sh/ox/":"https://esm.sh/ox@0.14.40/"}}</script><script>
 const $=id=>document.getElementById(id);
 // Publish the tap handler before optional wallet discovery or session restoration can fail.
 window.mainwellConnect=()=>connect();
@@ -71,8 +71,8 @@ async function getAppKitModal(){
  if(appKitModal)return appKitModal;
  if(!appKitInitPromise)appKitInitPromise=(async()=>{
   const [core,adapterModule,networkModule]=await Promise.all([
-   import("https://esm.sh/@reown/appkit@1.8.24?bundle&target=es2022&deps=ox@0.14.29"),
-   import("https://esm.sh/@reown/appkit-adapter-ethers@1.8.24?bundle&target=es2022&deps=ox@0.14.29"),
+   import("https://esm.sh/@reown/appkit@1.8.24?bundle&target=es2022&deps=ox@0.14.40"),
+   import("https://esm.sh/@reown/appkit-adapter-ethers@1.8.24?bundle&target=es2022&deps=ox@0.14.40"),
    import("https://esm.sh/@reown/appkit@1.8.24/networks?bundle&target=es2022")
   ]);
   const createAppKit=core.createAppKit||core.default?.createAppKit;
