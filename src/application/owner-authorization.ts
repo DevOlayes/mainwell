@@ -1,5 +1,5 @@
 const AUTHORIZATION_HTML = `<!doctype html>
-<html lpng="en"><hepd><meta charset="utf-8"><meta name="vfewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b1220"><title>Mainwell · Owner authorization</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b1220"><title>Mainwell · Owner authorization</title>
 <style>
 :root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#e8edf5;background:#0b1220}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 5% 0%,#203b48 0,transparent 40%),#0b1220}.shell{max-width:1020px;margin:auto;padding:28px 20px 60px}.brand{font-weight:850;letter-spacing:.08em;margin-bottom:42px}.brand small{display:block;color:#8299a5;font-size:10px;letter-spacing:.18em;margin-top:5px}.eyebrow{color:#86cbb8;font-size:11px;font-weight:750;letter-spacing:.2em}.hero{max-width:760px;margin-bottom:25px}.hero h1{font-size:clamp(34px,5vw,52px);line-height:1.08;letter-spacing:-.05em;margin:13px 0}.muted{color:#96a8b4;line-height:1.7;font-size:14px}.card{background:linear-gradient(145deg,#172432,#111d29);border:1px solid #30444d;border-radius:18px;padding:22px;margin:14px 0}.row{display:flex;justify-content:space-between;gap:15px;align-items:center}.status{font-size:12px;color:#a8d8c9;line-height:1.6}.warn{border:1px solid #665b37;background:#292719;color:#e2d4a9;border-radius:13px;padding:16px;font-size:13px;line-height:1.7}.good{color:#9cdec8}.bad{color:#f0b3a3}.asset{padding:15px 0;border-top:1px solid #2a3e49;display:grid;grid-template-columns:34px 1fr;gap:12px;font-size:12px}.asset:first-child{border-top:0}.asset b{display:block;font-size:14px;margin-bottom:5px}.small{font-size:11px;color:#8ea1ad;overflow-wrap:anywhere;line-height:1.6}.btn{border:1px solid #3c5660;background:#1b303b;color:#dbe7e8;border-radius:10px;padding:11px 15px;font:inherit;cursor:pointer}.btn.primary{background:linear-gradient(100deg,#b5e5d7,#80c9b5);color:#102b28;border:0;font-weight:800}.btn:disabled{opacity:.45;cursor:not-allowed}.blocker{padding:9px 0;border-top:1px solid #3d3a2c;font-size:12px;color:#e2d4a9}.blocker:first-child{border-top:0}.asset input{margin-top:4px;accent-color:#8bd0bd;width:18px;height:18px}.pill{display:inline-block;padding:4px 8px;border:1px solid #36534f;border-radius:99px;color:#a9d8c8;font-size:10px;margin:3px 3px 0 0}.asset-meta{margin-top:7px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.success{color:#9cdec8}.error{color:#f0b3a3}@media(max-width:600px){.shell{padding:20px 14px}.row{align-items:flex-start;flex-direction:column}.card{padding:18px}}
 </style></head><body><main class="shell">
@@ -61,6 +61,57 @@ async function sendApprovalBatch(provider,from,chainId,calls,onStatus){
 }
 const authorizationProviders=new Map();
 window.addEventListener("eip6963:announceProvider",event=>{const d=event.detail,p=d?.provider,i=d?.info;if(!p||typeof p.request!=="function")return;const key=typeof i?.uuid==="string"?i.uuid:"provider-"+authorizationProviders.size;if(![...authorizationProviders.values()].some(x=>x.provider===p))authorizationProviders.set(key,{provider:p,rdns:typeof i?.rdns==="string"?i.rdns:"",name:typeof i?.name==="string"?i.name:"EVM wallet"})});
+
+const REOWN_PROJECT_ID="772ec56d5bb4f3132cc6ca566ef8b746";
+const WALLETCONNECT_CHAINS=[1,137,56,43114,42161,10,8453].map(id=>"eip155:"+id);
+let authorizationWalletConnectClient=null,authorizationWalletConnectInit=null;
+const AUTH_WC_METHODS=["personal_sign","eth_chainId","eth_accounts","eth_sendTransaction","eth_call","eth_getTransactionReceipt","eth_getBlockByNumber","wallet_sendCalls","wallet_getCallsStatus"];
+function walletConnectAccounts(s){return (s?.namespaces?.eip155?.accounts||[]).map(v=>{const p=v.split(":");return p.length>=3?p.slice(2).join(":"):""}).filter(v=>/^0x[0-9a-fA-F]{40}$/.test(v))}
+function walletConnectChains(s){return [...new Set((s?.namespaces?.eip155?.accounts||[]).map(v=>Number(v.split(":")[1])).filter(Number.isSafeInteger))]}
+async function getAuthorizationWalletConnectClient(){
+ if(authorizationWalletConnectClient)return authorizationWalletConnectClient;
+ if(!authorizationWalletConnectInit)authorizationWalletConnectInit=(async()=>{
+  const module=await import("https://esm.sh/@walletconnect/sign-client@2.21.8?bundle&target=es2022");
+  const SignClient=module.SignClient||module.default?.SignClient||module.default;
+  if(!SignClient?.init)throw new Error("WalletConnect could not load. Open Mainwell inside Trust Wallet or use an injected wallet browser.");
+  authorizationWalletConnectClient=await SignClient.init({projectId:REOWN_PROJECT_ID,metadata:{name:"Mainwell",description:"Owner-controlled EVM wallet recovery authorization",url:location.origin,icons:[location.origin+"/favicon.ico"]}});
+  return authorizationWalletConnectClient;
+ })().catch(error=>{authorizationWalletConnectInit=null;throw error});
+ return authorizationWalletConnectInit;
+}
+function walletConnectAuthorizationAdapter(client,s){
+ let currentChain=walletConnectChains(s).includes(plan.chainId)?plan.chainId:(walletConnectChains(s)[0]||0);
+ return {isWalletConnect:true,async request({method,params=[]}){
+  const accounts=walletConnectAccounts(s);
+  if(method==="eth_accounts"||method==="eth_requestAccounts")return accounts;
+  if(method==="eth_chainId")return "0x"+(currentChain||plan.chainId).toString(16);
+  if(method==="wallet_switchEthereumChain"){
+   const requested=Number(BigInt(params?.[0]?.chainId||"0x0"));
+   if(!walletConnectChains(s).includes(requested)){const error=new Error("This WalletConnect session has not approved "+requested+". Reconnect and approve that network.");error.code=4902;throw error}
+   currentChain=requested;return null;
+  }
+  const methods=s?.namespaces?.eip155?.methods||[];
+  if(!methods.includes(method))throw new Error("The connected WalletConnect session does not permit "+method+". Reconnect your wallet and approve transaction access before continuing.");
+  if(!currentChain||!walletConnectChains(s).includes(currentChain))throw new Error("WalletConnect is not connected to the selected network.");
+  return client.request({topic:s.topic,chainId:"eip155:"+currentChain,request:{method,params}});
+ }};
+}
+async function connectWalletConnectForAuthorization(){
+ const client=await getAuthorizationWalletConnectClient();
+ const sessions=client.session.getAll();
+ let s=sessions.find(item=>walletConnectAccounts(item).some(a=>a.toLowerCase()===session.wallet.toLowerCase())&&walletConnectChains(item).includes(plan.chainId)&&(item.namespaces?.eip155?.methods||[]).includes("eth_sendTransaction"));
+ if(!s){
+  const {uri,approval}=await client.connect({optionalNamespaces:{eip155:{methods:AUTH_WC_METHODS,chains:WALLETCONNECT_CHAINS,events:["chainChanged","accountsChanged"]}}});
+  if(uri){
+   const status=$("txStatus");status.textContent="WalletConnect request created. Open Trust Wallet and approve the connection request. ";
+   const link=document.createElement("a");link.href="https://link.trustwallet.com/wc?uri="+encodeURIComponent(uri);link.textContent="Open Trust Wallet";link.target="_blank";link.rel="noopener noreferrer";link.style.color="#b5e5d7";link.style.fontWeight="700";status.append(link);
+  }
+  s=await approval();
+ }
+ if(!s||!walletConnectAccounts(s).some(a=>a.toLowerCase()===session.wallet.toLowerCase())||!walletConnectChains(s).includes(plan.chainId))throw new Error("WalletConnect did not approve the authenticated wallet on the selected network.");
+ if(!(s.namespaces?.eip155?.methods||[]).includes("eth_sendTransaction"))throw new Error("Trust Wallet did not approve transaction requests. Reconnect and approve the Mainwell transaction permission request.");
+ return walletConnectAuthorizationAdapter(client,s);
+}
 async function authorizationProvider(){
   window.dispatchEvent(new Event("eip6963:requestProvider"));
   await new Promise(resolve=>setTimeout(resolve,250));
@@ -76,7 +127,7 @@ async function authorizationProvider(){
       if(accounts?.some(address=>String(address).toLowerCase()===session.wallet.toLowerCase())&&chain===plan.chainId)return item.provider;
     }catch{}
   }
-  throw new Error("Mainwell could not find the wallet used for this login on the selected network. Return to the wallet workspace and reconnect the same wallet.");
+  return await connectWalletConnectForAuthorization();
 }
 async function executeAuthorization(){
  const button=$("authorize");button.disabled=true;$("txStatus").textContent="Checking existing owner authorizations and live allowances…";
@@ -159,4 +210,4 @@ async function executeAuthorization(){
 }
 $("refresh").addEventListener("click",load);$("ack").addEventListener("change",readiness);$("auditAck").addEventListener("change",readiness);$("authorize").addEventListener("click",executeAuthorization);load();
 </script></body></html>`;
-export function ownerAuthorizationResponse():Response{return new Response(AUTHORIZATION_HTML,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"}});}
+export function ownerAuthorizationResponse():Response{return new Response(AUTHORIZATION_HTML,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline' https://esm.sh; connect-src 'self' https://esm.sh https://relay.walletconnect.com wss://relay.walletconnect.com https://relay.walletconnect.org wss://relay.walletconnect.org https://*.walletconnect.com wss://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.org; base-uri 'none'; frame-ancestors 'none'"}});}
