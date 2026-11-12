@@ -139,7 +139,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
                g.executor_address AS executorAddress, g.destination_address AS destinationAddress,
                g.verification_status AS verificationStatus, g.revoked_at AS revokedAt,
                g.expires_at AS expiresAt, a.asset_id AS assetId, a.token_address AS tokenAddress,
-               a.max_amount_raw AS maxAmountRaw, a.owner_acknowledged AS ownerAcknowledged,
+               a.max_amount_raw AS maxAmountRaw, a.amount_kind AS amountKind, a.owner_acknowledged AS ownerAcknowledged,
                a.revoked_at AS assetRevokedAt, a.destination_address AS assetDestinationAddress
         FROM recovery_grants g
         INNER JOIN recovery_grant_assets a ON a.grant_id = g.grant_id
@@ -172,7 +172,7 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
           );
           const currentGrant = matchingGrants.find(grant =>
             Date.parse(String(grant.expiresAt)) > Date.parse(now) &&
-            policy && String(grant.maxAmountRaw) === String(policy.maxAmountRaw) &&
+            policy && grant.amountKind === "unlimited-allowance" &&
             String(grant.assetDestinationAddress || grant.destinationAddress).toLowerCase() === String(policy.destinationAddress || "").toLowerCase()
           );
           const permission = currentGrant ? permissionRows.results.find(row =>
@@ -544,14 +544,13 @@ export async function handleOwnerApi(request: Request, env: OwnerApiEnv, session
     let maximumExpirySeconds = Number.MAX_SAFE_INTEGER;
     for (const asset of grant.assets) {
       const policy = configuredPolicies.results.find(row => String(row.assetId) === asset.assetId);
-      const policyCapValid = typeof policy?.maxAmountRaw === "string" &&
-        /^[1-9][0-9]{0,77}$/.test(policy.maxAmountRaw) &&
-        BigInt(policy.maxAmountRaw) <= ((1n << 256n) - 1n);
-      if (!policy || !policyCapValid || typeof policy.tokenAddress !== "string" || !ADDRESS.test(policy.tokenAddress) ||
+      const balanceBasedPolicy = typeof policy?.maxAmountRaw === "string" &&
+        policy.maxAmountRaw === ((1n << 256n) - 1n).toString();
+      if (!policy || !balanceBasedPolicy || typeof policy.tokenAddress !== "string" || !ADDRESS.test(policy.tokenAddress) ||
           !asset.tokenAddress || asset.tokenAddress.toLowerCase() !== policy.tokenAddress.toLowerCase() ||
-          !asset.amount || asset.amount.kind !== "capped" || asset.amount.maxAmountRaw !== policy.maxAmountRaw ||
+          !asset.amount || asset.amount.kind !== "unlimited-allowance" || asset.amount.ownerAcknowledged !== true ||
           typeof asset.destinationAddress !== "string" || asset.destinationAddress.toLowerCase() !== String(policy.destinationAddress).toLowerCase()) {
-        return reply({ error: "The token, cap or destination in the grant does not exactly match the administrator's current asset policy." }, 409);
+        return reply({ error: "The token, explicit balance-based authorization and destination must exactly match the administrator's current asset policy." }, 409);
       }
       if (grant.executionModes.includes("automatic-priority") && Number(policy.automaticPriorityEnabled) !== 1) {
         return reply({ error: "Automatic-priority execution is not enabled for every selected asset." }, 409);
